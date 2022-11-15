@@ -75,8 +75,10 @@ class ModelScanItem(ModelBase):
         self.mode = mode
         self.target = target
         self.target_section_id = target_section_id
-        self.callback = callback_id.rsplit('_', 1)[0]
+        
         self.callback_id = callback_id
+        if self.callback_id != None:
+            self.callback = callback_id.rsplit('_', 1)[0]
         self.callback_url = callback_url
 
         self.created_time = datetime.now()
