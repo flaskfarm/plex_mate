@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block content %}
+
+<form id="form_search" class="form-inline" style="text-align:left">
+  <div class="container-fluid">
+    <div class="row show-grid">
+      <span class="col-md-6">
+        <select id="order" name="order" class="form-control form-control-sm">
+          <option value="desc">최근순</option>
+          <option value="asc">오래된순</option>
+        </select>
+        <select id="option1" name="option1" class="form-control form-control-sm">
+          <option value="all" selected>전체</option>
+          <option value="fp_ktv" selected>국내TV 파일처리</option>
+        </select>
+        <select id="option2" name="option2" class="form-control form-control-sm">
+          <option value="all" selected>전체</option>
+          <option value="READY">READY</option>
+          <option value="ENQUEUE_ADD_FIND">ENQUEUE_ADD_FIND</option>
+          <option value="SCANNING">SCANNING</option>
+          <option value="FINISH_ADD">FINISH_ADD</option>
+          <option value="FINISH_ADD_ALREADY_IN_DB">FINISH_ADD_ALREADY_IN_DB</option>
+          <option value="FINISH_ALREADY_IN_QUEUE">FINISH_ALREADY_IN_QUEUE</option>
+          <option value="FINISH_NOT_FIND_LIBRARY">FINISH_NOT_FIND_LIBRARY</option>
+          <option value="FINISH_TIMEOVER">FINISH_TIMEOVER</option>
+        </select>
+      </span>
+      <span class="col-md-6">
+        <input id="keyword" name="keyword" class="form-control form-control-sm w-50" type="text" placeholder="" aria-label="Search">
+        {{ macros.m_button_group([['globalSearchSearchBtn', '검색'], ['globalSearchResetBtn', '리셋']])}}
+      </span>
+    </div>
+  </div>
+</form>
+<div id='page1'></div>
+{{ macros.m_hr_head_top() }}
+{{ macros.m_row_start('0') }}
+{{ macros.m_col(1,  macros.m_strong('ID'), 'center') }}
+{{ macros.m_col(10,  macros.m_strong('Info')) }}
+{{ macros.m_row_end() }}
+{{ macros.m_hr_head_bottom() }}
+<div id="list_div"></div>
+<div id='page2'></div>
+
+<script type="text/javascript">
+var last_list_option = "{{arg['scan_item_last_list_option']}}";
+var machine = "{{arg['base_machine']}}";
+
+$(document).ready(function(){
+  tmp = last_list_option.split('|');
+  if (tmp.length == 5) {
+    $("#order").val(tmp[0]);
+    $("#keyword").val(tmp[2]);
+    $("#option1").val(tmp[3]);
+    //document.getElementById("option2").value = tmp[4];
+    globalRequestSearch(tmp[1]);
+  } else {
+    globalRequestSearch('1');
+  }
+});
+
+
+
+$("body").on('change', '#order', function(e){
+  globalRequestSearch(1);
+});
+
+$("body").on('change', '#option1', function(e){
+  globalRequestSearch(1);
+});
+
+$("body").on('change', '#option2', function(e){
+  globalRequestSearch(1);
+});
+
+
+
+function make_list(data) {
+  str = '';
+  for (i in data) {
+    str += j_row_start();
+    tmp = '모드 : ';
+    str += j_col(1, data[i].id, 'center');
+    tmp += (data[i].mode  == 'ADD') ? "추가" : "삭제";
+    tmp += '<br>상태 : ';
+    if (data[i].status == 'READY') tmp += "준비";
+    else if (data[i].status == 'FINISH_ADD') tmp += text_color("정상 추가", 'blue');
+    else if (data[i].status == 'FINISH_ADD_ALREADY_IN_DB') tmp += "DB에 이미 있음";
+    else if (data[i].status == 'FINISH_ALREADY_IN_QUEUE') tmp += "큐에 이미 있음";
+    else if (data[i].status == 'FINISH_NOT_FIND_LIBRARY') tmp += "라이브러리 폴더 ✖️";
+    else if (data[i].status == 'FINISH_TIMEOVER') tmp += "대기시간 오버";
+    else tmp += data[i].status;
+
+    //str += j_col(1, data[i].mode);
+    str += j_col(2, tmp);
+    
+    right = j_row_start();
+    tmp = '';
+    tmp += j_info_text_left("경로", data[i].target, 2, 10);
+    tmp += j_info_text_left("섹션", data[i].target_section_id, 2, 10);
+    tmp += j_info_text_left("파일체크", data[i].filecheck_count, 2, 10);
+    right += j_col(9, tmp);
+
+    tmp = data[i].created_time + ' (생성)'
+    if (data[i].filecheck_time != null) tmp += '<br>' + data[i].filecheck_time + ' (파일체크)';
+    if (data[i].process_start_time != null) tmp += '<br>' + data[i].process_start_time + ' (스캔시작)';
+    if (data[i].process_finish_time != null) tmp += '<br>' + data[i].process_finish_time + ' (스캔종료)';
+    if (data[i].process_duration != null) tmp += '<br>' + data[i].process_duration + ' (스캔시간)';
+    if (data[i].completed_time != null) tmp += '<br>' + data[i].completed_time + ' (완료)'
+    right += j_col(3, tmp);
+    right += j_row_end();
+
+    right += j_row_start(0);
+    tmp = ''
+    tmp += j_button('globalDbDeleteItemBtn', 'DB 삭제', {'id':data[i].id}, 'danger', true, true);
+    tmp += j_button('globalJsonBtn', 'JSON', {'idx':i}, 'info', true, true);
+    tmp = j_button_group(tmp)
+    right += j_col(12, tmp)
+    right += j_row_end();
+    str += j_col(9, right)
+    str += j_row_end();
+    if (i != data.length -1) str += j_hr();
+  }
+  $("#list_div").html(str);
+}
+
+
+
+$("body").on('click', '#all_append_files_show_btn', function(e){
+  e.preventDefault();
+  $('.collapse').collapse('show');
+
+});
+
+$("body").on('click', '#all_append_files_hide_btn', function(e){
+  e.preventDefault();
+  $('.collapse').collapse('hide');
+});
+
+$("body").on('click', '#kill_btn', function(e){
+  e.preventDefault();
+  id = $(this).data('id');
+  global_send_command2('kill', id);
+  
+  // 확장, 축소 방지
+  return false;
+});
+
+$("body").on('click', '#remove_no_append_data_btn', function(e){
+  e.preventDefault();
+  global_send_command2('remove_no_append_data', null, null, null, null, function(ret){
+    $('#reset_btn').click();
+  });
+});
+
+
+
+
+</script> 
+
+{% endblock %}

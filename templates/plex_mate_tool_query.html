@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class='row' style="padding-top: 5px; padding-bottom:5px; align-items: center;">
+  <div class='col-sm-1 set-left'>
+    <strong>Library</strong>
+  </div>
+  <div class="input-group col-sm-3">
+    <select id="library_select" name="library_select" class="form-control form-control-sm">
+      {% if arg['library_list'] is not none %}
+      {% for item in arg['library_list'] %}
+        {% if loop.counter == 0 %}
+        <option value="{{ item['id'] }}" selected>{{item['name']}}</option>
+        {% else %}
+        <option value="{{ item['id'] }}">{{item['name']}}</option>
+        {% endif %}
+      {% endfor %}
+      {% endif %}
+    </select>
+  </div>
+  <div class='col-sm-1 set-left'>
+    <strong>프리셋</strong>
+  </div>
+  <div class="input-group col-sm-5">
+    <select id="preset" name="preset" class="form-control form-control-sm">
+      <div id="preset_options"></div>
+    </select>
+  </div>
+  <div class='col-sm-1 set-left'>
+    <strong>Wide</strong>
+  </div>
+  <div class="input-group col-sm-1">
+    <input id="wide_checkbox" name="wide_checkbox" class="form-control form-control-sm" type="checkbox" data-toggle="toggle">
+  </div>
+</div>
+
+<div class='row' style="padding-top: 5px; padding-bottom:5px; align-items: center;">
+  <div class='col-sm-1 set-left'>
+    <strong>Query</strong>
+  </div>
+  <div class="input-group col-sm-10">
+    <textarea id="query" name="query" rows="5" class="form-control form-control-sm">{{ arg['tool_query_query'] }}</textarea>
+  </div>
+  <div class="input-group col-sm-1">
+    <button id="execute_btn" class="btn btn-sm btn-outline-info">실행</button>
+  </div>
+</div>
+
+<table id="result_table" class="table table-sm  tableRowHover">
+  <thead class="thead-dark" id=table_head>
+  </thead>
+  <tbody id="list" >
+  </tbody>
+</table>
+
+
+
+<script type="text/javascript">
+var package_name = "{{arg['package_name'] }}";
+var sub = "{{arg['sub'] }}";
+var sub2 = "{{arg['sub2'] }}";
+var preset = null;
+var current_data = null;
+var query_library = '';
+var query_preset = '';
+
+$(function(){ 
+  $.ajax({
+    url: '/' + package_name + '/ajax/' + sub + '/' + sub2 + '/get_preset',
+    type: "POST",
+    cache: false,
+    data:{},
+    dataType: "json",
+    success: function (data) {
+      preset = data['preset'];
+      var str = '';
+      for (i in preset) {
+        str += '<option value="'+i+'">'+preset[i][0]+'</option>'
+      }
+      $('#preset').html(str);
+    }
+  });
+});
+
+$("body").on('change', '#wide_checkbox', function(e){
+  e.preventDefault();
+  if ($(this).prop('checked') === false) {
+    $('#main_container').attr('class', 'container');  
+  } else {
+    $('#main_container').attr('class', 'container-fluid');  
+  }
+});
+
+
+
+$("body").on('change', '#library_select', function(e){
+  e.preventDefault();
+  value = $(this).val();
+  query_library = 'WHERE metadata_items.library_section_id = ' + value;
+  tmp = $('#query').val();
+  $('#query').val(tmp + ' ' + query_library);
+});
+
+
+$("body").on('change', '#preset', function(e){
+  e.preventDefault();
+  value = $(this).val();
+  query_preset = preset[value][1];
+  $('#query').val(query_preset);
+});
+
+
+
+
+//global_send_command_sub(command, arg1, arg2, arg3, modal_title, callback) {
+$("body").on('click', '#execute_btn', function(e){
+  e.preventDefault();
+  global_send_command_sub('execute', $('#query').val(), '', '', '', process_select);
+  
+});
+
+function process_select(ret) {
+  if (ret.mode == 'select') {
+    current_data = ret.select;
+    make_list(current_data);
+  }
+}
+
+
+function make_list(data) {
+  current_data = data;
+  str = ''
+  if (data.length == 0) {
+    notify("검색된 데이터가 없습니다.", 'warning');
+  } else {
+
+    if ( data.length > 0 ) {
+      str = '';
+      count = Object.keys(data[0]).length;
+      width = parseInt(100 / count);
+      for (var key in data[0]) { 
+        str += '<th style="width:'+width+'%">'+key+'</th>'
+      } 
+      $('#table_head').html('<tr>' + str + '</tr>');
+      str = '';
+      for (i in data) {
+        str += make_one(i, data[i]);
+      }
+    }
+  }
+  document.getElementById("list").innerHTML = str;
+}
+
+
+
+
+function make_one(idx, data) {
+  str = '<tr class="chover" style="cursor: pointer;" data-index="'+ idx + '">';
+  count = Object.keys(data).length;
+  width = parseInt(100 / count);
+  for (var key in data) { 
+    str += '<td scope="col" style="width:'+width+'%">'+ data[key]; + '</td>';
+  } 
+  str += '</tr>'
+  return str
+}
+
+</script>    
+{% endblock %}

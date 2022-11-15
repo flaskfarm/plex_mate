@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+
+{{ macros.m_button_group([['globalSettingSaveBtn', '설정 저장']])}}
+{{ macros.m_row_start('5') }}
+{{ macros.m_row_end() }}
+{{ macros.m_hr() }}  
+<form id='setting'>
+{{ macros.setting_input_int('scan_max_scan_count', '최대 실행 프로세스 수', min=1, max=20, value=arg['scan_max_scan_count']) }}
+{{ macros.setting_input_int('scan_max_wait_time', '파일체크 대기 시간', value=arg['scan_max_wait_time'], desc=['파일(폴더) 대기 시간. 분단위', '추가 모드 : 파일이 나타날 때까지 대기 시작.', '삭제 모드 : 파일이 없어질 때까지 대기 시간']) }}
+{{ macros.setting_input_int('scan_filecheck_thread_interval', '파일체크 주기', value=arg['scan_filecheck_thread_interval'], desc=['단위 : 초']) }}
+{{ macros.setting_radio_with_value('scan_mode', '스캔 방식', [['bin', '바이너리'], ['web', '웹']], value=arg['scan_mode'], desc=['바이너리 모드로 사용 하다 Plex가 지원하지 않는 경우 변경']) }}
+
+{{ macros.m_hr_head_bottom() }}
+{{ macros.info_text_big('', '<테스트>', '')}}
+{{ macros.setting_input_text('scan_manual_target', '스캔 타겟 파일 또는 폴더',  value=arg['scan_manual_target']) }}
+{{ macros.setting_buttons([['select_target_btn', '선택'], ['add_btn', '추가 모드'], ['remove_btn', '삭제 모드']]) }}
+{{ macros.m_hr_head_bottom() }}
+
+</form>
+
+<script type="text/javascript">
+
+$("body").on('click', '#select_target_btn', function(e){
+  e.preventDefault();
+  var path = $('#scan_manual_target').val().trim();
+  if (path == '') path = '/';
+  globalSelectLocalFile("스캔 파일(폴더)", path, function(result){
+    $('#scan_manual_target').val(result);
+  });
+});
+
+$("body").on('click', '#add_btn', function(e){
+  e.preventDefault();
+  globalSendCommand('manual', 'add', $('#scan_manual_target').val().trim());
+});
+
+$("body").on('click', '#remove_btn', function(e){
+  e.preventDefault();
+  globalSendCommand('manual', 'remove', $('#scan_manual_target').val().trim());
+});
+
+</script>    
+{% endblock %}
