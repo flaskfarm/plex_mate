@@ -13,7 +13,7 @@ class ModuleScan(PluginModuleBase):
         super(ModuleScan, self).__init__(P, name=name, first_menu='setting')
         self.db_default = {
             f"sacn_item_last_list_option": "",
-            f"{self.name}_db_version": "4",
+            f"{self.name}_db_version": "6",
             f"{self.name}_max_scan_count": "2",
             #f"{self.name}_incompleted_rescan": "False",
             f"{self.name}_max_wait_time": "10",

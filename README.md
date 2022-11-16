@@ -3,7 +3,7 @@
 
 #### (개발중) 메뉴는 동작하지 않습니다.
 
-
+socat TCP-LISTEN:32400,reuseaddr,fork TCP:172.17.0.1:32400
 ----
 
 #### Change Log

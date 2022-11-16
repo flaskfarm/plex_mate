@@ -147,10 +147,15 @@ class Task:
             if mode == 'START':
                 db_item.set_status('SCANNING', save=True)
             elif mode == 'END':
-                if Task.__check_media_part_data(db_item):
-                    db_item.set_status('FINISH_ADD', save=True)
+                if db_item.target_type == 'FOLDER':
+                    db_item.set_status('FINISH_ADD_FOLDER', save=True)
                     PlexDBHandle.update_show_recent()
-                Task.current_scan_count += -1
+                    Task.current_scan_count += -1
+                else:
+                    if Task.__check_media_part_data(db_item):
+                        db_item.set_status('FINISH_ADD', save=True)
+                        PlexDBHandle.update_show_recent()
+                    Task.current_scan_count += -1
         except Exception as e: 
             logger.error('Exception:%s', e)
             logger.error(traceback.format_exc())
