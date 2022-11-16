@@ -20,6 +20,7 @@ setting = {
                 'list': [
                     {'uri': 'setting', 'name': '설정'},
                     {'uri': 'list', 'name': '스캔 목록'},
+                    {'uri': 'manual/files/스캔.md', 'name': '매뉴얼'},
                 ]
             },
             
