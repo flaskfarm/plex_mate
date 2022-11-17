@@ -30,8 +30,8 @@ $(document).ready(function(){
 $("body").on('click', '#select_dbcopy_copy_path_source_db_btn', function(e){
   e.preventDefault();
   var path = $('#dbcopy_copy_path_source_db').val().trim();
-  if (path == '') path = '/'
-  m_select_local_file_modal("저장 폴더 선택", path, false, function(result){
+  if (path == '') path = '/';
+  globalSelectLocalFolder("저장 폴더 선택", path, function(result){
     $('#dbcopy_copy_path_source_db').val(result);
   });
 });

@@ -42,8 +42,8 @@ $(document).ready(function(){
 $("body").on('click', '#select_dbcopy_make_path_create_btn', function(e){
   e.preventDefault();
   var path = $('#dbcopy_make_path_create').val().trim();
-  if (path == '') path = '/'
-  m_select_local_file_modal("저장 폴더 선택", path, true, function(result){
+  if (path == '') path = '/';
+  globalSelectLocalFolder("저장 폴더 선택", path, function(result){
     $('#dbcopy_make_path_create').val(result);
   });
 });
