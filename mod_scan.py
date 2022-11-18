@@ -13,7 +13,7 @@ class ModuleScan(PluginModuleBase):
         super(ModuleScan, self).__init__(P, name=name, first_menu='setting')
         self.db_default = {
             f"sacn_item_last_list_option": "",
-            f"{self.name}_db_version": "6",
+            f"{self.name}_db_version": "1",
             f"{self.name}_max_scan_count": "2",
             #f"{self.name}_incompleted_rescan": "False",
             f"{self.name}_max_wait_time": "10",
@@ -56,61 +56,4 @@ class ModuleScan(PluginModuleBase):
         #Task.start()
 
         
-    def migration(self):
-        try:
-            with F.app.app_context():
-                import sqlite3
-                db_file = F.app.config['SQLALCHEMY_BINDS'][P.package_name].split('?')[0].replace('sqlite:///', '')
-                if P.ModelSetting.get(f'{name}_db_version') == '1':
-                    connection = sqlite3.connect(db_file)
-                    cursor = connection.cursor()
-                    query = f'ALTER TABLE scan_item ADD metadata_type VARCHAR'
-                    cursor.execute(query)
-                    query = f'ALTER TABLE scan_item ADD mediapart_id VARCHAR'
-                    cursor.execute(query)
-                    query = f'ALTER TABLE scan_item ADD metadata_item_id VARCHAR'
-                    cursor.execute(query)
-                    query = f'ALTER TABLE scan_item ADD show_metadata_item_id VARCHAR'
-                    cursor.execute(query)
-                    query = f'ALTER TABLE scan_item ADD metadata_title VARCHAR'
-                    cursor.execute(query)
-                    connection.close()
-                    P.ModelSetting.set(f'{name}_db_version', '2')
-                    db.session.flush()
-                if P.ModelSetting.get(f'{name}_db_version') == '2':
-                    connection = sqlite3.connect(db_file)
-                    cursor = connection.cursor()
-                    query = f'ALTER TABLE scan_item ADD metadata_title VARCHAR'
-                    cursor.execute(query)
-                    connection.close()
-                    P.ModelSetting.set(f'{name}_db_version', '3')
-                    db.session.flush()
-                if P.ModelSetting.get(f'{name}_db_version') == '3':
-                    connection = sqlite3.connect(db_file)
-                    cursor = connection.cursor()
-                    query = f'ALTER TABLE scan_item ADD meta_info VARCHAR'
-                    cursor.execute(query)
-                    connection.close()
-                    P.ModelSetting.set(f'{name}_db_version', '4')
-                    db.session.flush()
-                if P.ModelSetting.get(f'{name}_db_version') == '4':
-                    connection = sqlite3.connect(db_file)
-                    cursor = connection.cursor()
-                    query = f'ALTER TABLE scan_item ADD section_id VARCHAR'
-                    cursor.execute(query)
-                    query = f'ALTER TABLE scan_item ADD section_type VARCHAR'
-                    cursor.execute(query)
-                    connection.close()
-                    P.ModelSetting.set(f'{name}_db_version', '5')
-                    db.session.flush()
-                if P.ModelSetting.get(f'{name}_db_version') == '5':
-                    connection = sqlite3.connect(db_file)
-                    cursor = connection.cursor()
-                    query = f'ALTER TABLE scan_item ADD callback VARCHAR'
-                    cursor.execute(query)
-                    connection.close()
-                    P.ModelSetting.set(f'{name}_db_version', '6')
-                    db.session.flush()
-        except Exception as e:
-            logger.error('Exception:%s', e)
-            logger.error(traceback.format_exc())
+    
