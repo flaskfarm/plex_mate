@@ -1,28 +1,42 @@
 # -*- coding: utf-8 -*-
 #########################################################
 # python
-import os, sys, traceback, re, json, threading, time, shutil, platform
+import json
+import os
+import platform
+import re
+import shutil
+import sys
+import threading
+import time
+import traceback
 from datetime import datetime
+
 # third-party
-import requests, xmltodict
-from flask import request, render_template, jsonify, redirect
+import requests
+import xmltodict
+from flask import jsonify, redirect, render_template, request
 # sjva 공용
-from framework import db, scheduler, path_data, socketio, SystemModelSetting, app, celery, Util
-from plugin import default_route_socketio_sub, LogicSubModuleBase
-from tool_base import ToolBaseFile, d, ToolSubprocess
+from framework import (SystemModelSetting, Util, app, celery, db, path_data,
+                       scheduler, socketio)
+from plugin import LogicSubModuleBase, default_route_socketio_sub
+from tool_base import ToolBaseFile, ToolSubprocess, d
+
 # 패키지
 from .plugin import P
+
 logger = P.logger
 package_name = P.package_name
 ModelSetting = P.ModelSetting
 
 
-from .task_pm_clear_movie import Task as TaskMovie
-from .task_pm_clear_show import Task as TaskShow
-from .task_pm_clear_music import Task as TaskMusic
+from .logic_pm_base import LogicPMBase
 from .plex_db import PlexDBHandle
 from .plex_web import PlexWebHandle
-from .logic_pm_base import LogicPMBase
+from .task_pm_clear_movie import Task as TaskMovie
+from .task_pm_clear_music import Task as TaskMusic
+from .task_pm_clear_show import Task as TaskShow
+
 #########################################################
 
 
@@ -145,6 +159,6 @@ class LogicPMClearLibrary(LogicSubModuleBase):
                 result['index'] = len(self.data['list'])
                 self.data['list'].append(result)
                 self.refresh_data(index=result['index'])
-        except Exception as exception: 
-            logger.error('Exception:%s', exception)
+        except Exception as e: 
+            logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())

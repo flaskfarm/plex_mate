@@ -74,8 +74,8 @@ class PlexBinaryScanner(object):
                 if scan_item is not None:
                     scan_item.status = 'finish_timeout'
 
-        except Exception as exception: 
-            logger.error('Exception:%s', exception)
+        except Exception as e: 
+            logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())
             logger.error('command : %s', command)
         finally:
@@ -142,8 +142,8 @@ class PlexBinaryScanner(object):
                 process.kill()
                 if db_item is not None:
                     db_item.status = 'timeout'
-        except Exception as exception: 
-            logger.error('Exception:%s', exception)
+        except Exception as e: 
+            logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())
             logger.error('command : %s', command)
 
@@ -186,8 +186,8 @@ class PlexBinaryScanner(object):
                 for proc in process.children(recursive=True):
                     proc.kill()
                 process.kill()
-        except Exception as exception: 
-            logger.error('Exception:%s', exception)
+        except Exception as e: 
+            logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())
             logger.error('command : %s', command)
         finally:

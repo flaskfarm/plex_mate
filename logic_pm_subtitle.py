@@ -1,12 +1,20 @@
-from .plugin import P, logger, package_name, ModelSetting, os, sys, traceback, re, datetime, timedelta, render_template, jsonify, redirect, app, path_data, path_app_root, db, scheduler, SystemModelSetting, socketio, celery, LogicModuleBase, PluginUtil
-import threading, time
+import threading
+import time
+
 from plugin import default_route_socketio
+
+from .plugin import (LogicModuleBase, ModelSetting, P, PluginUtil,
+                     SystemModelSetting, app, celery, datetime, db, jsonify,
+                     logger, os, package_name, path_app_root, path_data, re,
+                     redirect, render_template, scheduler, socketio, sys,
+                     timedelta, traceback)
+
 name = 'subtitle'
+from .logic_pm_base import LogicPMBase
 from .plex_db import PlexDBHandle
 from .plex_web import PlexWebHandle
-from .logic_pm_base import LogicPMBase
-
 from .task_pm_subtitle import Task
+
 
 class LogicPMSubtitle(LogicModuleBase):
     db_default = {
@@ -134,6 +142,6 @@ class LogicPMSubtitle(LogicModuleBase):
                     self.refresh_data(index=result['index'])
                 else:
                     self.socketio_callback('refresh_status', self.data['status'])
-        except Exception as exception: 
-            logger.error('Exception:%s', exception)
+        except Exception as e: 
+            logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())

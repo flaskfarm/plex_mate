@@ -1,10 +1,16 @@
-import os, sys, traceback, re
+import os
+import re
+import sys
+import traceback
 from datetime import datetime, timedelta
-from flask import Blueprint, render_template, jsonify, redirect
-from framework import app, path_data, path_app_root, db, scheduler, SystemModelSetting, socketio, celery
+
+from flask import Blueprint, jsonify, redirect, render_template
+from framework import (SystemModelSetting, app, celery, db, path_app_root,
+                       path_data, scheduler, socketio)
 from framework.logger import get_logger
 from framework.util import Util
-from plugin import LogicModuleBase, get_model_setting, Logic, default_route, PluginUtil
+from plugin import (Logic, LogicModuleBase, PluginUtil, default_route,
+                    get_model_setting)
 
 # 패키지
 #########################################################
@@ -74,6 +80,7 @@ class P(object):
 
 
 from tool_base import d
+
 logger = P.logger
 package_name = P.package_name
 ModelSetting = P.ModelSetting
@@ -86,17 +93,17 @@ def initialize():
 
         from .logic_pm_base import LogicPMBase
         from .logic_pm_clear import LogicPMClear
-        from .logic_pm_tool import LogicPMTool
-        from .logic_pm_periodic import LogicPMPeriodic
         from .logic_pm_dbcopy import LogicPMDbCopy
+        from .logic_pm_periodic import LogicPMPeriodic
         from .logic_pm_scan import LogicPMScan
         from .logic_pm_subtitle import LogicPMSubtitle
+        from .logic_pm_tool import LogicPMTool
         from .logic_pm_webhook import LogicPMWebhook
         P.module_list = [LogicPMBase(P), LogicPMClear(P), LogicPMPeriodic(P), LogicPMTool(P), LogicPMDbCopy(P), LogicPMScan(P), LogicPMSubtitle(P), LogicPMWebhook(P)]
         P.logic = Logic(P)
         default_route(P)
     except Exception as e: 
-        P.logger.error('Exception:%s', e)
+        P.logger.error(f"Exception:{str(e)}")
         P.logger.error(traceback.format_exc())
 
 initialize()

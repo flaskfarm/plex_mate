@@ -1,28 +1,40 @@
 # -*- coding: utf-8 -*-
 #########################################################
 # python
-import os, sys, traceback, re, json, threading, time, shutil, platform
+import json
+import os
+import platform
+import re
+import shutil
+import sys
+import threading
+import time
+import traceback
 from datetime import datetime
+
 # third-party
-import requests, xmltodict
-from flask import request, render_template, jsonify, redirect
+import requests
+import xmltodict
+from flask import jsonify, redirect, render_template, request
 # sjva 공용
-from framework import db, scheduler, path_data, socketio, SystemModelSetting, app, celery, Util, path_app_root
-from plugin import LogicModuleBase, default_route_socketio
-from tool_base import ToolBaseFile, d, ToolSubprocess
+from framework import (SystemModelSetting, Util, app, celery, db,
+                       path_app_root, path_data, scheduler, socketio)
 from framework.job import Job
+from plugin import LogicModuleBase, default_route_socketio
+from tool_base import ToolBaseFile, ToolSubprocess, d
 
 # 패키지
 from .plugin import P
+
 logger = P.logger
 package_name = P.package_name
 ModelSetting = P.ModelSetting
 name = 'periodic'
+from .logic_pm_base import LogicPMBase
+from .model_periodic import ModelPeriodicItem
 from .plex_db import PlexDBHandle
 from .plex_web import PlexWebHandle
-from .logic_pm_base import LogicPMBase
 from .task_pm_periodic import Task
-from .model_periodic import ModelPeriodicItem
 
 #########################################################
 
@@ -227,7 +239,7 @@ class LogicPMPeriodic(LogicModuleBase):
                 t.start()
                 ret = 'thread'
         except Exception as e: 
-            logger.error('Exception:%s', e)
+            logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())
             ret = 'fail'
         return ret

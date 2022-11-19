@@ -84,7 +84,7 @@ class Task:
                                 item.set_status("FINISH_TIMEOVER")
                     
                 except Exception as e: 
-                    logger.error('Exception:%s', e)
+                    logger.error(f"Exception:{str(e)}")
                     logger.error(traceback.format_exc())
                 finally:
                     item.save()
@@ -113,7 +113,7 @@ class Task:
                 
                 Task.scan_queue.task_done() 
             except Exception as e: 
-                logger.error('Exception:%s', e)
+                logger.error(f"Exception:{str(e)}")
                 logger.error(traceback.format_exc())
 
     """
@@ -136,7 +136,7 @@ class Task:
             PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.scan_folder, callback_function=Task.subprcoess_callback_function, call_id=f"pm_scan_{db_item.id}")
         
         except Exception as e: 
-            logger.error('Exception:%s', e)
+            logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())
 
 
@@ -157,7 +157,7 @@ class Task:
                         PlexDBHandle.update_show_recent()
                     Task.current_scan_count += -1
         except Exception as e: 
-            logger.error('Exception:%s', e)
+            logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())
  
  
