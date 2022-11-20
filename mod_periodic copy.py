@@ -1,24 +1,5 @@
-# -*- coding: utf-8 -*-
-#########################################################
-# python
-import json
-import os
-import platform
-import re
-import shutil
-import sys
-import threading
-import time
-import traceback
-from datetime import datetime
-
-# third-party
-import requests
-import xmltodict
-from flask import jsonify, redirect, render_template, request
-# sjva 공용
-from framework import (SystemModelSetting, Util, app, celery, db,
-                       path_app_root, path_data, scheduler, socketio)
+from framework import (app, celery, db, path_app_root, path_data, scheduler,
+                       socketio)
 from framework.job import Job
 from plugin import LogicModuleBase, default_route_socketio
 from tool_base import ToolBaseFile, ToolSubprocess, d
@@ -34,19 +15,20 @@ from .logic_pm_base import LogicPMBase
 from .model_periodic import ModelPeriodicItem
 from .plex_db import PlexDBHandle
 from .plex_web import PlexWebHandle
+from .setup import *
 from .task_pm_periodic import Task
 
 #########################################################
 
-class LogicPMPeriodic(LogicModuleBase):
+class ModulePeriodic(PluginModuleBase):
     db_default = {
         f'{name}_db_version' : '1',
         f'{name}_last_list_option' : '',
     }
 
     def __init__(self, P):
-        super(LogicPMPeriodic, self).__init__(P, 'list')
-        self.name = name
+        super(ModulePeriodic, self).__init__(P, name='periodic', first_menu='list')
+
 
     def process_menu(self, sub, req):
         arg = P.ModelSetting.to_dict()

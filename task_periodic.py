@@ -1,34 +1,31 @@
-# python
-import os, sys, traceback, re, json, threading, time, shutil, fnmatch, glob, subprocess
-from datetime import datetime, timedelta
-# third-party
-import requests
+from support import SupportYaml, d
+from tool import ToolUtil
 
-# sjva 공용
-from framework import db, scheduler, path_data, socketio, SystemModelSetting, app, celery, Util
-from plugin import LogicModuleBase, default_route_socketio
-from tool_expand import ToolExpandFileProcess
-from tool_base import ToolShutil, d, ToolUtil, ToolBaseFile, ToolOSCommand
-
-
-from .plugin import P
 from .model_periodic import ModelPeriodicItem
-from .plex_db import PlexDBHandle
 from .plex_bin_scanner import PlexBinaryScanner
-
-logger = P.logger
-package_name = P.package_name
-ModelSetting = P.ModelSetting
+from .plex_db import PlexDBHandle
+from .setup import *
 
 
 class Task(object):
+    @classmethod
+    def get_jobs(cls):
+        config = SupportYaml.read_yaml(ToolUtil.make_path(P.ModelSetting.get('base_path_config')))
+        data = config.get('라이브러리 주기적 스캔 목록', None)
+        if data is None or type(data) != type([]):
+            return []
+        for idx, item in enumerate(data):
+            item['job_id'] = f'{P.package_name}_periodic_{idx}'
+            item['설명'] = item.get('설명', f"섹션: {item['섹션ID']}")
+            item['is_include_scheduler'] = str(F.scheduler.is_include(item['job_id']))
+        return data
+
     
     @staticmethod
-    @celery.task()
+    @F.celery.task()
     def start(idx, mode):
         try:
-            from .logic_pm_periodic import LogicPMPeriodic
-            yaml = LogicPMPeriodic.get_jobs()[idx]
+            yaml = Task.get_jobs()[idx]
 
             db_item = ModelPeriodicItem()
             db_item.mode = mode
@@ -44,7 +41,7 @@ class Task(object):
             WHERE metadata_items.id = media_items.metadata_item_id AND media_items.id = media_parts.media_item_id AND media_parts.file != '' AND metadata_items.library_section_id = ?"""
 
 
-            tmp = PlexDBHandle.select2(query, (db_item.section_id,))[0]
+            tmp = PlexDBHandle.execute_arg(query, (db_item.section_id,))[0]
             #logger.error(f"시작 : {tmp}")
             db_item.part_before_max = tmp['max_part_id']
             db_item.part_before_count = tmp['cnt']
@@ -53,12 +50,22 @@ class Task(object):
             if timeout is not None:
                 timeout = int(timeout)*60 
             
-            PlexBinaryScanner.scan_refresh2(db_item.section_id, db_item.folder, timeout=timeout, db_item=db_item)
+            db_item.start_time = datetime.now()
+            db_item.status = "working"
+            db_item.save()
+
+
+            
+            #process = PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.folder, timeout=timeout, join=False, callback_function=Task.subprcoess_callback_function, callback_id=f"pm_periodic_{db_item.id}")
+            process = PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.folder, timeout=timeout, join=False)
+            db_item.process_pid = process.process.pid
+            process.thread.join()
+            db_item.status = "finished"
             db_item.finish_time = datetime.now()
             delta = db_item.finish_time - db_item.start_time
             db_item.duration = delta.seconds
             
-            tmp = PlexDBHandle.select2(query, (db_item.section_id,))[0]
+            tmp = PlexDBHandle.execute_arg(query, (db_item.section_id,))[0]
             #logger.error(f"종료 : {tmp}")
             db_item.part_after_max = tmp['max_part_id']
             db_item.part_after_count = tmp['cnt']
@@ -68,7 +75,7 @@ class Task(object):
             SELECT media_parts.file as filepath, metadata_items.id as metadata_items_id
             FROM metadata_items, media_items, media_parts 
             WHERE metadata_items.id = media_items.metadata_item_id AND media_items.id = media_parts.media_item_id AND media_parts.file != '' AND metadata_items.library_section_id = ? AND media_parts.id > ? ORDER BY media_parts.id ASC"""
-            tmp = PlexDBHandle.select2(query, (db_item.section_id, db_item.part_before_max))
+            tmp = PlexDBHandle.execute_arg(query, (db_item.section_id, db_item.part_before_max))
             append_files = []
             for t in tmp:
                 append_files.append(f"{t['metadata_items_id']}|{t['filepath']}")
@@ -77,10 +84,23 @@ class Task(object):
             db_item.save()
 
             if section_data['section_type'] == 2 and db_item.part_append_count > 0:
-                query = 'UPDATE metadata_items SET added_at = (SELECT max(added_at) FROM metadata_items mi WHERE mi.parent_id = metadata_items.id OR mi.parent_id IN(SELECT id FROM metadata_items mi2 WHERE mi2.parent_id = metadata_items.id)) WHERE metadata_type = 2;'
-                result = PlexDBHandle.execute_query(query)
+                PlexDBHandle.update_show_recent()
 
         except Exception as e:
             logger.error(f'Exception:{str(e)}')
             logger.error(traceback.format_exc())
 
+
+    def subprcoess_callback_function(call_id, mode, log):
+        logger.error(f"[{mode}] [{log}]")
+        try:
+            
+            if mode == 'START':
+                db_item = ModelPeriodicItem.get_by_id(call_id.split('_')[-1])
+                db_item.start_time = datetime.now()
+                db_item.status = "working"
+                db_item.save()
+            
+        except Exception as e: 
+            logger.error(f"Exception:{str(e)}")
+            logger.error(traceback.format_exc())

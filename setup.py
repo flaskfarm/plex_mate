@@ -23,7 +23,14 @@ setting = {
                     {'uri': 'manual/files/스캔.md', 'name': '매뉴얼'},
                 ]
             },
-            
+            {
+                'uri': 'periodic',
+                'name': '주기적 스캔',
+                'list': [
+                    {'uri': 'task', 'name': '작업 관리'},
+                    {'uri': 'list', 'name': '스캔 결과'},
+                ]
+            },
             {
                 'uri': 'manual',
                 'name': '매뉴얼',
@@ -48,11 +55,16 @@ P = create_plugin_instance(setting)
 
 try:
     from .mod_base import ModuleBase
-    from .mod_scan import ModuleScan
-    
+    from .mod_periodic import ModulePeriodic
+    from .mod_scan import ModelScanItem, ModuleScan
 
-    P.set_module_list([ModuleBase, ModuleScan])
-    from .model_scan import ModelScanItem
+    P.set_module_list([ModuleBase, ModuleScan, ModulePeriodic])
+    
+    # 외부 호출
+    from .plex_db import PlexDBHandle
+    from .plex_web import PlexWebHandle
+    P.PlexDBHandle = PlexDBHandle
+    P.PlexWebHandle = PlexWebHandle
     P.ModelScanItem = ModelScanItem
 except Exception as e:
     P.logger.error(f'Exception:{str(e)}')
@@ -82,14 +94,7 @@ logger = P.logger
                     {'uri': 'query', 'name': 'SQL Query'},
                 ]
             },
-            {
-                'uri': 'periodic',
-                'name': '라이브러리 주기적 스캔',
-                'list': [
-                    {'uri': 'task', 'name': '작업 관리'},
-                    {'uri': 'list', 'name': '스캔 결과'},
-                ]
-            },
+            
             {
                 'uri': 'subtitle',
                 'name': '자막 처리',
