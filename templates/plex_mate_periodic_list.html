@@ -106,7 +106,7 @@ function make_list(data) {
     str += '<td scope="col" style="width:10%; text-align:center;">'+ tmp + '</td>';
     str += '<td scope="col" style="width:20%; text-align:left;">'+ data[i].section_title + '</td>';
     tmp = data[i].status;
-    if (data[i].status == 'working' && data[i].finish_time != null) {
+    if (data[i].status == 'working' && data[i].finish_time == null) {
       tmp = text_color('실행중', 'blue');
       tmp += '<span style="margin-left:10px"></span></span><input type="button" id="kill_btn" value="KILL" class="btn btn-sm btn-outline-danger py-0" style="font-size: 0.8em;" data-id="'+data[i].id+'">';
     }

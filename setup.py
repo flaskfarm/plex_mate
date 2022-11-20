@@ -32,6 +32,15 @@ setting = {
                 ]
             },
             {
+                'uri': 'tool',
+                'name': 'DB 툴',
+                'list': [
+                    {'uri': 'simple', 'name': '간단 명령'},
+                    {'uri': 'select', 'name': 'DB Select'},
+                    {'uri': 'query', 'name': 'SQL Query'},
+                ]
+            },
+            {
                 'uri': 'manual',
                 'name': '매뉴얼',
                 'list': [
@@ -57,8 +66,9 @@ try:
     from .mod_base import ModuleBase
     from .mod_periodic import ModulePeriodic
     from .mod_scan import ModelScanItem, ModuleScan
+    from .mod_tool import ModuleTool
 
-    P.set_module_list([ModuleBase, ModuleScan, ModulePeriodic])
+    P.set_module_list([ModuleBase, ModuleScan, ModulePeriodic, ModuleTool])
     
     # 외부 호출
     from .plex_db import PlexDBHandle
@@ -85,15 +95,7 @@ logger = P.logger
                     {'uri': 'cache', 'name': '캐시(PhotoTranscoder) 삭제'},
                 ]
             },
-            {
-                'uri': 'tool',
-                'name': 'DB 툴',
-                'list': [
-                    {'uri': 'simple', 'name': '간단 명령'},
-                    {'uri': 'select', 'name': 'DB Select'},
-                    {'uri': 'query', 'name': 'SQL Query'},
-                ]
-            },
+            
             
             {
                 'uri': 'subtitle',

@@ -56,29 +56,18 @@
 
 
 <script type="text/javascript">
-var package_name = "{{arg['package_name'] }}";
-var sub = "{{arg['sub'] }}";
-var sub2 = "{{arg['sub2'] }}";
 var preset = null;
-var current_data = null;
 var query_library = '';
 var query_preset = '';
 
 $(function(){ 
-  $.ajax({
-    url: '/' + package_name + '/ajax/' + sub + '/' + sub2 + '/get_preset',
-    type: "POST",
-    cache: false,
-    data:{},
-    dataType: "json",
-    success: function (data) {
-      preset = data['preset'];
+  globalSendCommandPage('get_preset', null, null, null, function(data){
+    preset = data['preset'];
       var str = '';
       for (i in preset) {
         str += '<option value="'+i+'">'+preset[i][0]+'</option>'
       }
       $('#preset').html(str);
-    }
   });
 });
 
@@ -110,22 +99,16 @@ $("body").on('change', '#preset', function(e){
 });
 
 
-
-
 //global_send_command_sub(command, arg1, arg2, arg3, modal_title, callback) {
 $("body").on('click', '#execute_btn', function(e){
   e.preventDefault();
-  global_send_command_sub('execute', $('#query').val(), '', '', '', process_select);
-  
+  globalSendCommandPage('execute', $('#query').val(), null, null, function(ret) {
+    if (ret.mode == 'select') {
+      current_data = ret.select;
+      make_list(current_data);
+    }
+  });
 });
-
-function process_select(ret) {
-  if (ret.mode == 'select') {
-    current_data = ret.select;
-    make_list(current_data);
-  }
-}
-
 
 function make_list(data) {
   current_data = data;

@@ -50,7 +50,7 @@ class PlexDBHandle(object):
             logger.error(f'Exception:{str(e)}')
             logger.error(traceback.format_exc())
 
-
+    """
     @classmethod
     def execute_query(cls, sql, sql_filepath=None):
         try:
@@ -70,30 +70,28 @@ class PlexDBHandle(object):
             logger.error(f'Exception:{str(e)}')
             logger.error(traceback.format_exc())
         return False   
-
+    """
 
     @classmethod
-    def execute_query2(cls, sql, sql_filepath=None):
+    def execute_query(cls, sql, sql_filepath=None):
         try:
             if sql_filepath is None:
-                sql_filepath = os.path.join(path_data, 'tmp', f"{str(time.time()).split('.')[0]}.sql")
-            SupportFile.write_file(sql, sql_filepath)
+                sql_filepath = os.path.join(F.config['path_data'], 'tmp', f"{str(time.time()).split('.')[0]}.sql")
+            sql = sql + ';\ncommit;\n'
+            SupportFile.write_file(sql_filepath, sql)
             if platform.system() == 'Windows':
-                tmp = sql_filepath.replace('\\', '\\\\')
-                cmd = f'"{P.ModelSetting.get("base_bin_sqlite")}" "{P.ModelSetting.get("base_path_db")}" ".read {tmp}"'
-                for i in range(10):
-                    ret = SupportSubprocess.execute_command_return(cmd)
-                    if ret.find('database is locked') != -1:
-                        time.sleep(5)
-                    else:
-                        break
-            else:
-                for i in range(10):
-                    ret = SupportSubprocess.execute_command_return([P.ModelSetting.get('base_bin_sqlite'), P.ModelSetting.get('base_path_db'), f".read {sql_filepath}"])
-                    if ret.find('database is locked') != -1:
-                        time.sleep(5)
-                    else:
-                        break
+                sql_filepath = sql_filepath.replace('\\', '\\\\')
+
+            cmd = [P.ModelSetting.get("base_bin_sqlite"), P.ModelSetting.get("base_path_db"), f".read {sql_filepath}"]
+            for i in range(10):
+                ret = SupportSubprocess.execute_command_return(cmd)
+                P.logger.error(ret)
+                if ret['log'].find('database is locked') != -1:
+                    time.sleep(5)
+                else:
+                    break
+
+            
             return ret
         except Exception as e: 
             logger.error(f'Exception:{str(e)}')
@@ -104,8 +102,8 @@ class PlexDBHandle(object):
     @classmethod
     def execute_query_with_db_filepath(cls, sql, db_filepath):
         try:
-            sql_filepath = os.path.join(path_data, 'tmp', f"{str(time.time()).split('.')[0]}.sql")
-            SupportFile.write_file(sql, sql_filepath)
+            sql_filepath = os.path.join(F.config['path_data'], 'tmp', f"{str(time.time()).split('.')[0]}.sql")
+            SupportFile.write_file(sql_filepath, sql)
             if platform.system() == 'Windows':
                 tmp = sql_filepath.replace('\\', '\\\\')
                 cmd = f'"{P.ModelSetting.get("base_bin_sqlite")}" "{db_filepath}" ".read {tmp}"'
@@ -118,7 +116,7 @@ class PlexDBHandle(object):
             else:
                 for i in range(10):
                     ret = SupportSubprocess.execute_command_return([P.ModelSetting.get('base_bin_sqlite'), db_filepath, f".read {sql_filepath}"])
-                    if ret.find('database is locked') != -1:
+                    if ret['log'].find('database is locked') != -1:
                         time.sleep(5)
                     else:
                         break

@@ -134,7 +134,7 @@ class Task:
             
             Task.current_scan_count += 1
             PlexDBHandle.update_show_recent()
-            PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.scan_folder, callback_function=Task.subprcoess_callback_function, call_id=f"pm_scan_{db_item.id}")
+            PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.scan_folder, callback_function=Task.subprcoess_callback_function, callback_id=f"pm_scan_{db_item.id}")
         
         except Exception as e:    
             logger.error(f"Exception:{str(e)}")

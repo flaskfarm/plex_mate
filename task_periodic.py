@@ -59,6 +59,7 @@ class Task(object):
             #process = PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.folder, timeout=timeout, join=False, callback_function=Task.subprcoess_callback_function, callback_id=f"pm_periodic_{db_item.id}")
             process = PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.folder, timeout=timeout, join=False)
             db_item.process_pid = process.process.pid
+            db_item.save()
             process.thread.join()
             db_item.status = "finished"
             db_item.finish_time = datetime.now()

@@ -6,13 +6,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-contextmenu/2.8.0/jquery.contextMenu.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-contextmenu/2.8.0/jquery.ui.position.js"></script>
 
-<!--<style>
-  .table td.fit, 
-.table th.fit {
-    white-space: nowrap;
-    width: 1%;
-}
-</style>-->
 <div class='row' style="padding-top: 5px; padding-bottom:5px; align-items: center;">
   <div class='col-sm-1 set-left'>
     <strong>Library</strong>
@@ -33,10 +26,16 @@
   <div class='col-sm-2 set-left'>
     <strong>조건문 프리셋</strong>
   </div>
-  <div class="input-group col-sm-6">
+  <div class="input-group col-sm-4">
     <select id="preset" name="preset" class="form-control form-control-sm">
       <div id="preset_options"></div>
     </select>
+  </div>
+  <div class='col-sm-1 set-left'>
+    <strong>Wide</strong>
+  </div>
+  <div class="input-group col-sm-1">
+    <input id="wide_checkbox" name="wide_checkbox" class="form-control form-control-sm" type="checkbox" data-toggle="toggle">
   </div>
 </div>
 
@@ -55,7 +54,7 @@
 <table id="result_table" class="table table-sm  tableRowHover">
   <thead class="thead-dark">
     <tr>
-      <th>IDX</th>
+      <th>NO</th>
       <th>IDs</th>
       <th></th>
       <th>Info</th>
@@ -70,32 +69,22 @@
 
 
 <script type="text/javascript">
-var package_name = "{{arg['package_name'] }}";
-var sub = "{{arg['sub'] }}";
-var sub2 = "{{arg['sub2'] }}";
 var preset = null;
-var current_data = null;
 var query_library = '';
 var query_preset = '';
 var machine = "{{arg['base_machine']}}";
 
 
 $(function(){ 
-  //$('#main_container').attr('class', 'container-fluid');  
-  $.ajax({
-    url: '/' + package_name + '/ajax/' + sub + '/' + sub2 + '/get_preset',
-    type: "POST",
-    cache: false,
-    data:{},
-    dataType: "json",
-    success: function (data) {
-      preset = data['preset'];
+  $('#wide_checkbox').bootstrapToggle('on')
+
+  globalSendCommandPage('get_preset', null, null, null, function(data){
+    preset = data['preset'];
       var str = '';
       for (i in preset) {
         str += '<option value="'+i+'">'+preset[i][0]+'</option>'
       }
       $('#preset').html(str);
-    }
   });
 
   $.contextMenu({
@@ -106,41 +95,30 @@ $(function(){
       data = current_data[index];
       filename = $(this).data('filename');
       if (key == 'refresh_web') {
-        global_send_command_sub('refresh_web', data.metadata_items_id);
+        globalSendCommandPage('refresh_web', data.metadata_items_id);
       } else if (key == 'refresh_bin') {
-        global_send_command_sub('refresh_bin', data.metadata_items_id);
+        globalSendCommandPage('refresh_bin', data.metadata_items_id);
       } else if (key == 'scan_bin') {
-        global_send_command_sub('scan_bin', data.library_section_id, data.file);
+        globalSendCommandPage('scan_bin', data.library_section_id, data.file);
       } else if (key == 'analyze_web') {
-        global_send_command_sub('analyze_web', data.metadata_items_id);
+        globalSendCommandPage('analyze_web', data.metadata_items_id);
       } else if (key == 'analyze_bin') {
-        global_send_command_sub('analyze_bin', data.library_section_id, data.metadata_items_id);
+        globalSendCommandPage('analyze_bin', data.library_section_id, data.metadata_items_id);
       } else if (key == 'remove_metadata') {
-        global_send_command_sub('remove_metadata', data.metadata_type, data.metadata_items_hash);
-      } else if (key == 'other') {
-        global_send_command2('move_file_other', index);
-      } else if (key == 'delete') {
-        cm_delete(index, filename);
+        globalSendCommandPage('remove_metadata', data.metadata_type, data.metadata_items_hash);
       } else if (key == 'plex_go') {
         url = 'https://app.plex.tv/desktop/#!/server/' + machine + '/details?key=%2Flibrary%2Fmetadata%2F' + data.metadata_items_id;
         window.open(url,'_blank');
       }
     },
     items: {
-        "refresh_web": {name: "메타데이터 새로 고침 (웹)", icon: "edit"},
-        "refresh_bin": {name: "메타데이터 새로 고침 (Bin)", icon: "edit"},
-        "scan_bin": {name: "디렉토리 스캔 (Bin)", icon: "edit"},
-        "analyze_web": {name: "분석 (웹)", icon: "edit"},
-        "analyze_bin": {name: "분석 (Bin)", icon: "edit"},
-        "remove_metadata": {name: "메타데이터 폴더 삭제", icon: "delete"},
-        "plex_go": {name: "PLEX Go", icon: "go"},
-
-        //"rename": {name: "파일명 변경", icon: "edit"},
-        //"delete": {name: "파일 삭제", icon: "delete"},
-        //"other": {name: "other 폴더로 이동", icon: "paste"},
-        //"play": {name: "Play", icon: "fa-play"},
-        //"sep1": "---------",
-        //"quit": {name: "Quit", icon: function($element, key, item){ return 'context-menu-icon context-menu-icon-quit'; }}
+      "refresh_web": {name: "메타데이터 새로 고침 (웹)", icon: "edit"},
+      "refresh_bin": {name: "메타데이터 새로 고침 (Bin)", icon: "edit"},
+      "scan_bin": {name: "디렉토리 스캔 (Bin)", icon: "edit"},
+      "analyze_web": {name: "분석 (웹)", icon: "edit"},
+      "analyze_bin": {name: "분석 (Bin)", icon: "edit"},
+      "remove_metadata": {name: "메타데이터 폴더 삭제", icon: "delete"},
+      "plex_go": {name: "PLEX Go", icon: "go"},
     }
   });
 });
@@ -192,21 +170,17 @@ function make_query() {
 //global_send_command_sub(command, arg1, arg2, arg3, modal_title, callback) {
 $("body").on('click', '#select_btn', function(e){
   e.preventDefault();
-  global_send_command_sub('select', $('#query').val(), '', '', '', process_select);
-  
+  globalSendCommandPage('select', $('#query').val(), '', '', function(ret){
+    console.log(ret);
+    if (ret.select.ret == 'success') {
+      current_data = ret.select.data;
+      make_list(current_data);
+    } else {
+      notify(ret.select.log, 'warning');
+    }
+  });
 });
 
-function process_select(ret) {
-  if (ret.select.ret == 'success') {
-    current_data = ret.select.data;
-    make_list(current_data);
-  } else {
-    notify(ret.select.log, 'warning');
-  }
-  
-
-  
-}
 
 
 function make_list(data) {
@@ -229,18 +203,30 @@ function make_list(data) {
 function make_one(idx, data) {
   str = '<tr class="chover" style="cursor: pointer;" data-index="'+ idx + '">';
   str += '<td scope="col" style="width:2%">'+ (parseInt(idx)+1) + '</td>';
-  tmp = data.metadata_items_id + '<br>' + data.media_items_id + '<br>' + data.media_parts_id;
-  str += '<td scope="col" style="width:4%">'+ tmp + '</td>';
+  
+  tmp = 'metadata_items_id: ' + data.metadata_items_id + '<br>';
+  tmp += 'media_items_id: ' + data.media_items_id + '<br>';
+  tmp += 'media_parts_id: ' + data.media_parts_id;
+  str += '<td scope="col" style="width:10%">'+ tmp + '</td>';
 
-  tmp = data.library_section_id + '<br>' + data.media_item_count + '<br>' + data.metadata_items_index;
-  str += '<td scope="col" style="width:4%">'+ tmp + '</td>';
+  tmp = 'library_section_id: ' + data.library_section_id + '<br>';
+  tmp += 'media_item_count: ' + data.media_item_count + '<br>';
+  tmp += 'metadata_items_index: ' + data.metadata_items_index;
+  str += '<td scope="col" style="width:10%">'+ tmp + '</td>';
 
   tmp = data.title;
   if (tmp != '' && data.year != null && data.year != '') {
     tmp += ' (' + data.year + ')';
   }
-  tmp = color(tmp, 'blue');
-  tmp += '<br>' + data.guid + '<br>' + data.user_thumb_url + '<br>' + data.user_art_url + '<br>' + data.file + '<br>' + data.metadata_items_hash + ' / ' + data.media_parts_hash;
+  tmp = color(tmp, 'blue') + '<br>';
+  tmp += 'guid: ' + data.guid + '<br>';
+  tmp += 'user_thumb_url: ' + data.user_thumb_url + '<br>';
+  tmp += 'user_art_url: ' + data.user_art_url + '<br>';
+  tmp += 'file: ' + data.file + '<br>';
+  tmp += 'metadata_items_hash: ' + data.metadata_items_hash + '<br>';
+  tmp += 'media_parts_hash: ' + data.media_parts_hash + '<br>';
+
+
   str += '<td scope="col" style="width:70%">'+ tmp + '</td>';
   //str += '<td scope="col" >'+ data.file + '</td>';
 
@@ -249,10 +235,10 @@ function make_one(idx, data) {
   } else {
     tmp = data.width + 'x' + data.height + '<br>' + data.video_codec + ' / ' + data.audio_codec + '<br>' + data.container;
   }
-  str += '<td scope="col" style="width:10%">'+ tmp + '</td>';
+  str += '<td scope="col" style="width:5%">'+ tmp + '</td>';
   
   tmp =  parseInt(data.bitrate/1024) + ' kbps<br>' + msToHMS(data.duration) + '<br>' + humanFileSize(data.size);
-  str += '<td scope="col" style="width:10%">'+ tmp + '</td>';
+  str += '<td scope="col" style="width:5%">'+ tmp + '</td>';
 
   str += '</tr>'
   
@@ -261,10 +247,13 @@ function make_one(idx, data) {
 
 
 
-
-
-
-
-
+$("body").on('change', '#wide_checkbox', function(e){
+  e.preventDefault();
+  if ($(this).prop('checked') === false) {
+    $('#main_container').attr('class', 'container');  
+  } else {
+    $('#main_container').attr('class', 'container-fluid');  
+  }
+});
 </script>    
 {% endblock %}

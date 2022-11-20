@@ -22,8 +22,6 @@ class ModulePeriodic(PluginModuleBase):
 
     def process_menu(self, sub, req):
         arg = P.ModelSetting.to_dict()
-        arg['sub'] = self.name
-        arg['sub2'] = sub 
         try:
             arg['base_path_config'] = ToolUtil.make_path(P.ModelSetting.get('base_path_config'))
             arg['library_list'] = PlexDBHandle.library_sections()
