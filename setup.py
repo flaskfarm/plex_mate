@@ -49,8 +49,11 @@ P = create_plugin_instance(setting)
 try:
     from .mod_base import ModuleBase
     from .mod_scan import ModuleScan
+    
 
     P.set_module_list([ModuleBase, ModuleScan])
+    from .model_scan import ModelScanItem
+    P.ModelScanItem = ModelScanItem
 except Exception as e:
     P.logger.error(f'Exception:{str(e)}')
     P.logger.error(traceback.format_exc())

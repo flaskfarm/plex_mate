@@ -20,6 +20,8 @@ class ModuleScan(PluginModuleBase):
             f"{self.name}_mode": "bin",
             f"{self.name}_manual_target": "",
             f"{self.name}_filecheck_thread_interval": "60",
+            f"{self.name}_db_delete_day": "30",
+            f"{self.name}_db_auto_delete": "True",
         }
         self.web_list_model = ModelScanItem
         
@@ -34,6 +36,7 @@ class ModuleScan(PluginModuleBase):
                 ModelScanItem(arg2, target_mode="REMOVE").save()
             ret['msg'] = "추가하였습니다."
         return jsonify(ret)
+    
     
     def process_api(self, sub, req):
         ret = {'ret':'success'}
