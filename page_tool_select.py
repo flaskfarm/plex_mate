@@ -19,8 +19,8 @@ class PageToolSelect(PluginPageBase):
         ['메타 없는 것', 'metadata_items.guid LIKE "local://%"'],
         ['미분석', '(metadata_type BETWEEN 1 and 4 AND width is null)'],
         ['불일치 상태', "(metadata_type BETWEEN 1 and 4 AND guid LIKE 'com.plexapp.agents.none%')"],
-        ['Poster가 없거나, http가 아닌 경우', "(metadata_type BETWEEN 1 and 4 AND (user_thumb_url == '' OR user_thumb_url LIKE NOT 'http%'))"],
-        ['Art가 없거나, http가 아닌 경우', "(metadata_type BETWEEN 1 and 4 AND (user_art_url == '' OR user_art_url LIKE NOT 'http%'))"],
+        ['Poster가 없거나, http가 아닌 경우', "(metadata_type BETWEEN 1 and 4 AND (user_thumb_url == '' OR user_thumb_url NOT LIKE 'http%'))"],
+        ['Art가 없거나, http가 아닌 경우', "(metadata_type BETWEEN 1 and 4 AND (user_art_url == '' OR user_art_url NOT LIKE 'http%'))"],
     ]
 
     def __init__(self, P, parent):
