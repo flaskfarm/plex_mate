@@ -157,7 +157,7 @@ class ModulePeriodic(PluginModuleBase):
             logger.debug(data)
             return
         
-        self.start_celery(Task.start, None, (idx,'scheduler'))
+        self.start_celery(Task.start, None, *(idx,'scheduler'))
         #Task.start(idx)
         #if app.config['config']['use_celery']:
         #    result = Task.start.apply_async((idx,'scheduler'))

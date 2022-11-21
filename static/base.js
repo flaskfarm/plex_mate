@@ -1,6 +1,6 @@
 function make_log(key, value, left=2, right=10) {
-  row = m_col(left, key, aligh='right');
-  row += m_col(right, value, aligh='left');
+  row = j_col(left, key, aligh='right');
+  row += j_col(right, value, aligh='left');
   return row;
 }
 
@@ -9,11 +9,11 @@ function color(text, color='red') {
 }
 
 
-function socket_init(package_name, sub, sub2) {
-  socket = io.connect(window.location.protocol + "//" + document.domain + ":" + location.port + "/" + package_name + '/' + sub + '/' + sub2);
+function socket_init() {
+  var socket = io.connect(window.location.href);
 
   socket.on('start', function(data){
-    global_send_command_sub('refresh');
+    globalSendCommandPage('refresh');
   });
 
   socket.on('refresh_all', function(data){
@@ -30,7 +30,7 @@ function socket_init(package_name, sub, sub2) {
       current_data.list[parseInt(data.one.index)] = data.one;
     } else {
       row = '<div id="' + id + '">' + row + '</div>';
-      document.getElementById("list_div").innerHTML += m_hr() + row;
+      document.getElementById("list_div").innerHTML += j_hr() + row;
       if (current_data == null)
           current_data = []
       if (current_data.list == null)
@@ -54,7 +54,7 @@ function make_list(data2) {
     str += '<div id="data_' + data[i].index + '">';
     str += make_one(data[i]);
     str += '</div>';
-    str += m_hr();
+    str += j_hr();
     
   }
   document.getElementById("list_div").innerHTML = str;

@@ -1,50 +1,14 @@
-# -*- coding: utf-8 -*-
-#########################################################
-# python
-import json
-import os
-import platform
-import re
-import shutil
-import sys
-import threading
-import time
-import traceback
-from datetime import datetime
-
-# third-party
-import requests
-import xmltodict
-from flask import jsonify, redirect, render_template, request
-# sjva 공용
-from framework import (SystemModelSetting, Util, app, celery, db, path_data,
-                       scheduler, socketio)
-from plugin import LogicSubModuleBase, default_route_socketio_sub
-from tool_base import ToolBaseFile, ToolSubprocess, d
-
-# 패키지
-from .plugin import P
-
-logger = P.logger
-package_name = P.package_name
-ModelSetting = P.ModelSetting
-
-
-from .logic_pm_base import LogicPMBase
 from .plex_db import PlexDBHandle
-from .plex_web import PlexWebHandle
-from .task_pm_clear_movie import Task as TaskMovie
-from .task_pm_clear_music import Task as TaskMusic
-from .task_pm_clear_show import Task as TaskShow
-
-#########################################################
+from .setup import *
+#from .task_pm_clear_movie import Task as TaskMovie
+#from .task_pm_clear_music import Task as TaskMusic
+from .task_clear_show import Task as TaskShow
 
 
-
-class LogicPMClearLibrary(LogicSubModuleBase):
+class PageClearLibraryBase(PluginPageBase):
     
     def __init__(self, P, parent, name):
-        super(LogicPMClearLibrary, self).__init__(P, parent, name)
+        super(PageClearLibraryBase, self).__init__(P, parent, name=name)
         self.db_default = {
             f'{self.parent.name}_{self.name}_db_version' : '1',
             f'{self.parent.name}_{self.name}_task_stop_flag' : 'False',
@@ -53,28 +17,37 @@ class LogicPMClearLibrary(LogicSubModuleBase):
             'list' : [],
             'status' : {'is_working':'wait'}
         }
-        default_route_socketio_sub(P, parent, self)
+        default_route_socketio_page(self)
 
 
-    def process_ajax(self, sub, req):
+    def process_menu(self, req):
+        arg = P.ModelSetting.to_dict()
+        if self.name == 'movie':
+            arg['library_list'] = PlexDBHandle.library_sections(section_type=1)
+        elif self.name == 'show':
+            arg['library_list'] = PlexDBHandle.library_sections(section_type=2)
+        elif self.name == 'music':
+            arg['library_list'] = PlexDBHandle.library_sections(section_type=8) 
+        return render_template(f'{P.package_name}_{self.parent.name}_{self.name}.html', arg=arg)
+        
+
+    def process_command(self, command, arg1, arg2, arg3, req):
         try:
             ret = {}
-            if sub == 'command':
-                command = req.form['command']
-                if command.startswith('start'):
-                    if self.data['status']['is_working'] == 'run':
-                        ret = {'ret':'warning', 'msg':'실행중입니다.'}
-                    else:
-                        self.task_interface(command, req.form['arg1'], req.form['arg2'])
-                        ret = {'ret':'success', 'msg':'작업을 시작합니다.'}
-                elif command == 'stop':
-                    if self.data['status']['is_working'] == 'run':
-                        ModelSetting.set(f'{self.parent.name}_{self.name}_task_stop_flag', 'True')
-                        ret = {'ret':'success', 'msg':'잠시 후 중지됩니다.'}
-                    else:
-                        ret = {'ret':'warning', 'msg':'대기중입니다.'}
-                elif command == 'refresh':
-                    self.refresh_data()
+            if command.startswith('start'):
+                if self.data['status']['is_working'] == 'run':
+                    ret = {'ret':'warning', 'msg':'실행중입니다.'}
+                else:
+                    self.task_interface(command, arg1, arg2)
+                    ret = {'ret':'success', 'msg':'작업을 시작합니다.'}
+            elif command == 'stop':
+                if self.data['status']['is_working'] == 'run':
+                    P.ModelSetting.set(f'{self.parent.name}_{self.name}_task_stop_flag', 'True')
+                    ret = {'ret':'success', 'msg':'잠시 후 중지됩니다.'}
+                else:
+                    ret = {'ret':'warning', 'msg':'대기중입니다.'}
+            elif command == 'refresh':
+                self.refresh_data()
             return jsonify(ret)
         except Exception as e: 
             P.logger.error(f'Exception:{str(e)}')
@@ -95,15 +68,13 @@ class LogicPMClearLibrary(LogicSubModuleBase):
 
     def task_interface2(self, *args):
         logger.warning(args)
-        #if sub == 'movie':
         library_section = PlexDBHandle.library_section(args[1])
-        #logger.warning(d(library_section))
         self.data['list'] = []
         self.data['status']['is_working'] = 'run'
         self.refresh_data()
-        ModelSetting.set(f'{self.parent.name}_{self.name}_task_stop_flag', 'False')
+        P.ModelSetting.set(f'{self.parent.name}_{self.name}_task_stop_flag', 'False')
         try:
-            config = LogicPMBase.load_config()
+            config = P.load_config()
             if library_section['section_type'] == 1:
                 func = TaskMovie.start
             elif library_section['section_type'] == 2:
@@ -114,15 +85,18 @@ class LogicPMClearLibrary(LogicSubModuleBase):
                 self.list_max = config['웹페이지에 표시할 세부 정보 갯수']
             except:
                 self.list_max = 200
-            #func(*args)
-            #return
+
             logger.debug(func)
             logger.debug(library_section['section_type'])
+
+            ret = self.start_celery(func, self.receive_from_task, *args)
+            """
             if app.config['config']['use_celery']:
                 result = func.apply_async(args)
                 ret = result.get(on_message=self.receive_from_task, propagate=True)
             else:
                 ret = func(self, *args)
+            """
             self.data['status']['is_working'] = ret
         except Exception as e: 
             P.logger.error(f'Exception:{str(e)}')
@@ -150,9 +124,7 @@ class LogicPMClearLibrary(LogicSubModuleBase):
                 result = arg
             if result is not None:
                 self.data['status'] = result['status']
-                #logger.warning(result)
                 del result['status']
-                #logger.warning(result)
                 if self.list_max != 0:
                     if len(self.data['list']) == self.list_max:
                         self.data['list'] = []
@@ -162,3 +134,9 @@ class LogicPMClearLibrary(LogicSubModuleBase):
         except Exception as e: 
             logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())
+    
+
+
+class PageClearLibraryShow(PageClearLibraryBase):
+    def __init__(self, P, parent):
+        super(PageClearLibraryShow, self).__init__(P, parent, name='show')

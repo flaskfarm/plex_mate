@@ -7,7 +7,7 @@ from support import SupportFile, SupportSubprocess, SupportYaml, d
 from .plex_db import PlexDBHandle
 from .plex_web import PlexWebHandle
 from .setup import *
-from .task_pm_base import Task
+from .task_base import Task
 
 
 class ModuleBase(PluginModuleBase):
@@ -39,10 +39,10 @@ class ModuleBase(PluginModuleBase):
         config_path = ToolUtil.make_path(P.ModelSetting.get(f'{self.name}_path_config'))
         config_source_filepath = os.path.join(os.path.dirname(__file__), 'files', os.path.basename(config_path))        
         try:
-            config = self.load_config()
+            config = P.load_config()
         except FileNotFoundError:
             shutil.copyfile(config_source_filepath, config_path)
-            config = self.load_config()
+            config = P.load_config()
         if os.path.exists(config_path):
             #logger.warning(d(config))
             if '파일정리 영화 쿼리' not in config:
@@ -182,11 +182,7 @@ class ModuleBase(PluginModuleBase):
         elif command == 'clear' or command == 'clear_ret':
             func = Task.clear
         
-        if F.config['use_celery']:
-            result = func.apply_async(args)
-            ret = result.get()
-        else:
-            ret = func(*args)
+        ret = self.start_celery(func, None, *args)
 
         if command == 'size':
             modal_data = {
@@ -209,7 +205,4 @@ class ModuleBase(PluginModuleBase):
         elif command == 'clear_ret':
             return ret
 
-
-    def load_config(self):
-        return SupportYaml.read_yaml(ToolUtil.make_path(P.ModelSetting.get(f'{self.name}_path_config')))
 

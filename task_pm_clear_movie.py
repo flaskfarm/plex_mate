@@ -1,23 +1,37 @@
 # python
-import os, sys, traceback, re, json, threading, time, shutil, fnmatch, glob, platform
+import fnmatch
+import glob
+import json
+import os
+import platform
+import re
+import shutil
+import sqlite3
+import sys
+import threading
+import time
+import traceback
 from datetime import datetime, timedelta
-# third-party
-import requests, sqlite3, yaml
 
+# third-party
+import requests
+import yaml
 # sjva 공용
-from framework import db, scheduler, path_data, socketio, SystemModelSetting, app, celery, Util
+from framework import (SystemModelSetting, Util, app, celery, db, path_data,
+                       scheduler, socketio)
 from plugin import LogicModuleBase, default_route_socketio
-from tool_expand import ToolExpandFileProcess
-from tool_base import ToolShutil, d, ToolUtil, ToolBaseFile, ToolOSCommand, ToolSubprocess
-from tool_expand import EntityKtv
+from tool_base import (ToolBaseFile, ToolOSCommand, ToolShutil, ToolSubprocess,
+                       ToolUtil, d)
+from tool_expand import EntityKtv, ToolExpandFileProcess
 
 from .plugin import P
+
 logger = P.logger
 package_name = P.package_name
 ModelSetting = P.ModelSetting
 from .logic_pm_base import LogicPMBase
 from .plex_db import PlexDBHandle, dict_factory
-
+from .setup import *
 
 # tag : db에서는 구분 값 / xml info - 폴더명
 TAG = {
@@ -33,7 +47,7 @@ class Task(object):
     @staticmethod
     @celery.task(bind=True)
     def start(self, command, section_id, dryrun):
-        config = LogicPMBase.load_config()
+        config = P.load_config()
         logger.warning(command)
         logger.warning(section_id)
         dryrun = True if dryrun == 'true'  else False
@@ -180,6 +194,7 @@ class Task(object):
     @staticmethod
     def xml_analysis(combined_xmlpath, data):
         import xml.etree.ElementTree as ET
+
         #text = ToolBaseFile.read(combined_xmlpath)
         #logger.warning(text)
         tree = ET.parse(combined_xmlpath)

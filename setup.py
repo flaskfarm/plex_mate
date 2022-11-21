@@ -75,11 +75,12 @@ P = create_plugin_instance(setting)
 
 try:
     from .mod_base import ModuleBase
+    from .mod_clear import ModuleClear
     from .mod_periodic import ModulePeriodic
     from .mod_scan import ModelScanItem, ModuleScan
     from .mod_tool import ModuleTool
 
-    P.set_module_list([ModuleBase, ModuleScan, ModulePeriodic, ModuleTool])
+    P.set_module_list([ModuleBase, ModuleScan, ModulePeriodic, ModuleTool, ModuleClear])
     
     # 외부 호출
     from .plex_db import PlexDBHandle
@@ -91,13 +92,18 @@ except Exception as e:
     P.logger.error(f'Exception:{str(e)}')
     P.logger.error(traceback.format_exc())
 
+def load_config():
+    from support import SupportYaml
+    from tool import ToolUtil
+    return SupportYaml.read_yaml(ToolUtil.make_path(P.ModelSetting.get('base_path_config')))
+    
+P.load_config = load_config
+
 logger = P.logger
 
 
 """
 
-            
-            
             {
                 'uri': 'subtitle',
                 'name': '자막 처리',

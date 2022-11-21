@@ -1,55 +1,33 @@
-# python
-import fnmatch
-import glob
-import json
-import os
-import platform
-import re
-import shutil
 import sqlite3
-import sys
-import threading
-import time
-import traceback
-from datetime import datetime, timedelta
 
-# third-party
-import requests
-import yaml
-# sjva 공용
-from framework import (SystemModelSetting, Util, app, celery, db, path_data,
-                       scheduler, socketio)
-from plugin import LogicModuleBase, default_route_socketio
-from tool_base import (ToolBaseFile, ToolOSCommand, ToolShutil, ToolSubprocess,
-                       ToolUtil, d)
-from tool_expand import EntityKtv, ToolExpandDiscord, ToolExpandFileProcess
+from support import SupportDiscord, SupportFile, d
 
-from .plugin import P
-
-logger = P.logger
-package_name = P.package_name
-ModelSetting = P.ModelSetting
-from .logic_pm_base import LogicPMBase
 from .plex_db import PlexDBHandle, dict_factory
 from .plex_web import PlexWebHandle
-from .task_pm_clear_movie import TAG
-from .task_pm_clear_movie import Task as TaskMovie
+from .setup import *
 
+TAG = {
+    'poster' : ['thumb', 'posters'],
+    'art' : ['art', 'art'],
+    'banner' : ['banner', 'banners'],
+    'theme' : ['music', 'themes']
+}
 
 class Task(object):
 
     @staticmethod
-    @celery.task(bind=True)
+    @F.celery.task(bind=True)
     def start(self, command, section_id, dryrun):
-        config = LogicPMBase.load_config()
+        config = P.load_config()
         dryrun = True if dryrun == 'true'  else False
 
-        db_file = ModelSetting.get('base_path_db')
+        db_file = P.ModelSetting.get('base_path_db')
         con = sqlite3.connect(db_file)
         cur = con.cursor()
         #ce = con.execute('SELECT * FROM metadata_items WHERE metadata_type = 1 AND library_section_id = ? ORDER BY title', (section_id,))
         #ce = con.execute('SELECT * FROM metadata_items WHERE metadata_type = 1 AND library_section_id = ? AND user_thumb_url NOT LIKE "upload%" AND (user_thumb_url NOT LIKE "http%" OR refreshed_at is NULL) ORDER BY title', (section_id,))
-        query = config.get('파일정리 TV 쿼리', 'SELECT * FROM metadata_items WHERE metadata_type = 2 AND library_section_id = ? ORDER BY title')            
+        query = config.get('파일정리 TV 쿼리', 'SELECT * FROM metadata_items WHERE metadata_type = 2 AND library_section_id = ? ORDER BY title')  
+        #query = "SELECT * FROM metadata_items WHERE metadata_type = 2 AND library_section_id = ? and title like '기분%' ORDER BY title"   
         ce = con.execute(query, (section_id,))
         ce.row_factory = dict_factory
         fetch = ce.fetchall()
@@ -57,7 +35,7 @@ class Task(object):
 
         for show in fetch:
             try:
-                if ModelSetting.get_bool('clear_show_task_stop_flag'):
+                if P.ModelSetting.get_bool('clear_show_task_stop_flag'):
                     return 'stop'
                 time.sleep(0.05)
                 status['current'] += 1
@@ -79,7 +57,7 @@ class Task(object):
                     del data['remove_filepath']
                 if 'seasons' in data:
                     del data['seasons']
-                if app.config['config']['use_celery']:
+                if F.config['use_celery']:
                     self.update_state(state='PROGRESS', meta=data)
                 else:
                     self.receive_from_task(data, celery=False)
@@ -97,9 +75,9 @@ class Task(object):
     def show_process(data, con, cur):
 
         data['meta'] = {'remove':0}
-        data['meta']['metapath'] = os.path.join(ModelSetting.get('base_path_metadata'), 'TV Shows', data['db']['hash'][0], f"{data['db']['hash'][1:]}.bundle")
+        data['meta']['metapath'] = os.path.join(P.ModelSetting.get('base_path_metadata'), 'TV Shows', data['db']['hash'][0], f"{data['db']['hash'][1:]}.bundle")
 
-        data['meta']['total'] = ToolBaseFile.size(start_path=data['meta']['metapath'])
+        data['meta']['total'] = SupportFile.size(start_path=data['meta']['metapath'])
         if data['command'] == 'start0':
             return
         combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'Info.xml')
@@ -245,8 +223,11 @@ class Task(object):
                         media_part_cs.row_factory = dict_factory
                         for media_part in media_part_cs.fetchall():
                             media_hash = media_part['hash']
-                            #logger.warning(f"  파일 : {media_part['file']} {media_hash}")
-                            mediapath = os.path.join(ModelSetting.get('base_path_media'), 'localhost', media_hash[0], f"{media_hash[1:]}.bundle", 'Contents', 'Thumbnails', 'thumb1.jpg')
+                            #P.logger.warning(f"  파일 : {media_part['file']} {media_hash}")
+                            if media_hash == '':
+                                continue
+
+                            mediapath = os.path.join(P.ModelSetting.get('base_path_media'), 'localhost', media_hash[0], f"{media_hash[1:]}.bundle", 'Contents', 'Thumbnails', 'thumb1.jpg')
                             if os.path.exists(mediapath):
                                 #logger.warning("미디오 썸네일 있음")
                                 episode['media_list'].append(mediapath)
@@ -257,14 +238,14 @@ class Task(object):
                     # 2021-11-01
                     # 4단계 미디어파일을 디코에 올리고 그 url로 대체한다.
                     # 
-                    logger.info(episode['process']['thumb']['db_type'] )
+                    #logger.info(episode['process']['thumb']['db_type'] )
                     if data['command'] == 'start4' and episode['process']['thumb']['db_type'] == 'media':
-                        localpath = os.path.join(ModelSetting.get('base_path_media'), 'localhost', episode['process']['thumb']['db'].replace('media://', ''))
+                        localpath = os.path.join(P.ModelSetting.get('base_path_media'), 'localhost', episode['process']['thumb']['db'].replace('media://', ''))
                         if localpath[0] != '/':
                             localpath = localpath.replace('/', '\\')
                         if os.path.exists(localpath):
                             if data['dryrun'] == False:
-                                discord_url = ToolExpandDiscord.discord_proxy_image_localfile(localpath)
+                                discord_url = SupportDiscord.discord_proxy_image_localfile(localpath)
                                 if discord_url is not None:
                                     episode['process']['thumb']['url'] = discord_url
                                     logger.warning(discord_url)
@@ -343,6 +324,13 @@ class Task(object):
           
 
 
+
+
+
+
+
+
+
     @staticmethod
     def xml_analysis(combined_xmlpath, data, show_data, is_episode=False):
         #logger.warning(combined_xmlpath)
@@ -356,10 +344,14 @@ class Task(object):
             data['process'] = {}
             data['process']['thumb'] = {
                 'db' : data['db'][f'user_thumb_url'],
-                'db_type' : data['db'][f'user_thumb_url'].split('://')[0],
+                'db_type' : data['db'][f'user_thumb_url'].split('://')[0] if data['db'][f'user_thumb_url'] != None else None,
                 'url' : '',
                 'filename' : '',
             }
+
+            
+
+
         if os.path.exists(combined_xmlpath) == False:
             logger.info(f"xml 파일 없음 : {combined_xmlpath}")
             #logger.error(data['process']['thumb'])

@@ -50,7 +50,7 @@ class Task(object):
     @celery.task(bind=True)
     def start(self):
         try:
-            Task.config = LogicPMBase.load_config()
+            Task.config = P.load_config()
             Task.change_rule = [ModelSetting.get('dbcopy_copy_path_source_root_path'), ModelSetting.get('dbcopy_copy_path_target_root_path')]
             Task.file_change_rule = [ModelSetting.get('dbcopy_copy_path_source_root_path'), ModelSetting.get('dbcopy_copy_path_target_root_path').replace(' ', '%20')]
             Task.TARGET_SECTION_ID = ModelSetting.get('dbcopy_copy_target_section_id')
