@@ -41,6 +41,17 @@ setting = {
                 ]
             },
             {
+                'uri': 'clear',
+                'name': '파일 정리',
+                'list': [
+                    {'uri': 'movie', 'name': '영화 정리'},
+                    {'uri': 'show', 'name': 'TV 정리'},
+                    {'uri': 'music', 'name': '음악 정리'},
+                    {'uri': 'bundle', 'name': '번들 삭제'},
+                    {'uri': 'cache', 'name': '캐시(PhotoTranscoder) 삭제'},
+                ]
+            },
+            {
                 'uri': 'manual',
                 'name': '매뉴얼',
                 'list': [
@@ -84,17 +95,7 @@ logger = P.logger
 
 
 """
-{
-                'uri': 'clear',
-                'name': '파일 정리',
-                'list': [
-                    {'uri': 'movie', 'name': '영화 정리'},
-                    {'uri': 'show', 'name': 'TV 정리'},
-                    {'uri': 'music', 'name': '음악 정리'},
-                    {'uri': 'bundle', 'name': '번들 삭제'},
-                    {'uri': 'cache', 'name': '캐시(PhotoTranscoder) 삭제'},
-                ]
-            },
+
             
             
             {
