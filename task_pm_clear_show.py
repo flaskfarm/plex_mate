@@ -1,25 +1,39 @@
 # python
-import os, sys, traceback, re, json, threading, time, shutil, fnmatch, glob, platform
+import fnmatch
+import glob
+import json
+import os
+import platform
+import re
+import shutil
+import sqlite3
+import sys
+import threading
+import time
+import traceback
 from datetime import datetime, timedelta
-# third-party
-import requests, sqlite3, yaml
 
+# third-party
+import requests
+import yaml
 # sjva 공용
-from framework import db, scheduler, path_data, socketio, SystemModelSetting, app, celery, Util
+from framework import (SystemModelSetting, Util, app, celery, db, path_data,
+                       scheduler, socketio)
 from plugin import LogicModuleBase, default_route_socketio
-from tool_expand import ToolExpandFileProcess
-from tool_base import ToolShutil, d, ToolUtil, ToolBaseFile, ToolOSCommand, ToolSubprocess
-from tool_expand import EntityKtv, ToolExpandDiscord
+from tool_base import (ToolBaseFile, ToolOSCommand, ToolShutil, ToolSubprocess,
+                       ToolUtil, d)
+from tool_expand import EntityKtv, ToolExpandDiscord, ToolExpandFileProcess
 
 from .plugin import P
+
 logger = P.logger
 package_name = P.package_name
 ModelSetting = P.ModelSetting
 from .logic_pm_base import LogicPMBase
 from .plex_db import PlexDBHandle, dict_factory
-
-from .task_pm_clear_movie import TAG, Task as TaskMovie
 from .plex_web import PlexWebHandle
+from .task_pm_clear_movie import TAG
+from .task_pm_clear_movie import Task as TaskMovie
 
 
 class Task(object):
@@ -89,7 +103,9 @@ class Task(object):
         if data['command'] == 'start0':
             return
         combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'Info.xml')
+        
         if os.path.exists(combined_xmlpath) == False:
+            logger.error(combined_xmlpath)
             return 
         data['use_filepath'] = []
         data['remove_filepath'] = []
@@ -107,34 +123,52 @@ class Task(object):
             episode_cs.row_factory = dict_factory
 
             for episode in episode_cs.fetchall():
-                season_index = season['index']
-                episode_index = episode['index']
-                if episode['index'] == -1:
-                    if episode['available_at'] is not None:
-                        episode_index = episode['available_at'].split(' ')[0]
-                    else:
-                        episode_index = episode['originally_available_at'].split(' ')[0]
-                    #season_index = episode_index.split('-')[0]
-                if season_index not in data['seasons']:
-                    data['seasons'][season_index] = {'db':season}
-                    combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'seasons', f"{season_index}.xml")
-                    ret = Task.xml_analysis(combined_xmlpath, data['seasons'][season_index], data)
+                try:
+                    season_index = season['index']
+                    episode_index = episode['index']
+                    if episode['index'] == -1:
+                        logger.error(d(episode))
+                        logger.info(season_index)
+                        #logger.error(episode['available_at'])
+                        #logger.error(episode['originally_available_at'])
+                        """
+                        if episode['available_at'] is not None and type(episode['available_at']) != int:
+                            episode_index = episode['available_at'].split(' ')[0]
+                        elif episode['originally_available_at'] != None and type(episode['originally_available_at']) != int:
+                            episode_index = episode['originally_available_at'].split(' ')[0]
+                        else:
+                            #com.plexapp.agents.sjva_agent://KD58690/2011/2011-12-28?lang=ko
+
+                            logger.info(episode['guid'])
+                        """
+                        tmp = episode['guid']
+                        match = re.compile(r'\/(?P<season>\d{4})\/(?P<epi>\d{4}-\d{2}-\d{2})').search(episode['guid'])
+                        if match:
+                            episode_index = match.group('epi')
+                        #com.plexapp.agents.sjva_agent://KD58690/2011/2011-12-28?lang=ko
+                        #season_index = episode_index.split('-')[0]
+                    if season_index not in data['seasons']:
+                        data['seasons'][season_index] = {'db':season}
+                        combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'seasons', f"{season_index}.xml")
+                        ret = Task.xml_analysis(combined_xmlpath, data['seasons'][season_index], data)
+                        if ret == False:
+                            logger.warning(combined_xmlpath)
+                            logger.warning(f"{data['db']['title']} 시즌 분석 실패 : season_index - {season_index}")
+                            #logger.warning(combined_xmlpath)
+                            #return
+                        data['seasons'][season_index]['episodes'] = {}
+                    data['seasons'][season_index]['episodes'][episode_index] = {'db':episode}
+                    combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'seasons', f"{season_index}", "episodes", f"{episode_index}.xml")
+                    ret = Task.xml_analysis(combined_xmlpath, data['seasons'][season_index]['episodes'][episode_index], data, is_episode=True)
                     if ret == False:
                         logger.warning(combined_xmlpath)
-                        logger.warning(f"{data['db']['title']} 시즌 분석 실패 : season_index - {season_index}")
-                        #logger.warning(combined_xmlpath)
+                        #logger.warning(d(episode))
+                        logger.warning(f"{data['db']['title']} 에피소드 분석 실패")
+                        #del data['seasons'][season_index]['episodes'][episode_index]
                         #return
-                    data['seasons'][season_index]['episodes'] = {}
-                data['seasons'][season_index]['episodes'][episode_index] = {'db':episode}
-                combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'seasons', f"{season_index}", "episodes", f"{episode_index}.xml")
-                ret = Task.xml_analysis(combined_xmlpath, data['seasons'][season_index]['episodes'][episode_index], data, is_episode=True)
-                if ret == False:
-                    logger.warning(combined_xmlpath)
-                    #logger.warning(d(episode))
-                    logger.warning(f"{data['db']['title']} 에피소드 분석 실패")
-                    #del data['seasons'][season_index]['episodes'][episode_index]
-                    #return
-        
+                except Exception as e:
+                    logger.error(f'Exception:{str(e)}')
+                    logger.error(traceback.format_exc())
         #logger.warning(d(data['use_filepath']))
         #logger.warning(d(data))
 
@@ -223,6 +257,7 @@ class Task(object):
                     # 2021-11-01
                     # 4단계 미디어파일을 디코에 올리고 그 url로 대체한다.
                     # 
+                    logger.info(episode['process']['thumb']['db_type'] )
                     if data['command'] == 'start4' and episode['process']['thumb']['db_type'] == 'media':
                         localpath = os.path.join(ModelSetting.get('base_path_media'), 'localhost', episode['process']['thumb']['db'].replace('media://', ''))
                         if localpath[0] != '/':
@@ -312,6 +347,7 @@ class Task(object):
     def xml_analysis(combined_xmlpath, data, show_data, is_episode=False):
         #logger.warning(combined_xmlpath)
         import xml.etree.ElementTree as ET
+
         #text = ToolBaseFile.read(combined_xmlpath)
         #logger.warning(text)
         # 2021-12-11 4단계로 media파일을 디코 이미로 대체할때 시즌0 같이 아예 0.xml 파일이 없을 때도 동작하도록 추가
@@ -327,8 +363,8 @@ class Task(object):
         if os.path.exists(combined_xmlpath) == False:
             logger.info(f"xml 파일 없음 : {combined_xmlpath}")
             #logger.error(data['process']['thumb'])
-            logger.debug(data)
-            logger.debug(is_episode)
+            #logger.debug(data)
+            #logger.debug(is_episode)
             return False
         if combined_xmlpath not in show_data['use_filepath']:
             show_data['use_filepath'].append(combined_xmlpath)
