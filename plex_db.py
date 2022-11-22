@@ -77,7 +77,9 @@ class PlexDBHandle(object):
         try:
             if sql_filepath is None:
                 sql_filepath = os.path.join(F.config['path_data'], 'tmp', f"{str(time.time()).split('.')[0]}.sql")
-            sql = sql + ';\ncommit;\n'
+            #sql = sql + ';\ncommit;\n'
+            print(sql)
+            
             SupportFile.write_file(sql_filepath, sql)
             if platform.system() == 'Windows':
                 sql_filepath = sql_filepath.replace('\\', '\\\\')

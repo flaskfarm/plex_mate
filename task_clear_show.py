@@ -62,10 +62,10 @@ class Task(object):
                 else:
                     self.receive_from_task(data, celery=False)
             except Exception as e:
-                logger.error(f'Exception:{str(e)}')
-                logger.error(traceback.format_exc())
-                logger.error(show['title'])
-        logger.warning(f"종료")
+                P.logger.error(f'Exception:{str(e)}')
+                P.logger.error(traceback.format_exc())
+                P.logger.error(show['title'])
+        P.logger.warning(f"종료")
         return 'wait'
 
 
@@ -73,7 +73,7 @@ class Task(object):
 
     @staticmethod
     def show_process(data, con, cur):
-
+      try:   
         data['meta'] = {'remove':0}
         data['meta']['metapath'] = os.path.join(P.ModelSetting.get('base_path_metadata'), 'TV Shows', data['db']['hash'][0], f"{data['db']['hash'][1:]}.bundle")
 
@@ -83,7 +83,7 @@ class Task(object):
         combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'Info.xml')
         
         if os.path.exists(combined_xmlpath) == False:
-            logger.error(combined_xmlpath)
+            P.logger.error(f"Info.xml 없음 : {combined_xmlpath}")
             return 
         data['use_filepath'] = []
         data['remove_filepath'] = []
@@ -91,7 +91,7 @@ class Task(object):
         data['media'] = {'total':0, 'remove':0}
         ret = Task.xml_analysis(combined_xmlpath, data, data)
         if ret == False:
-            logger.warning(f"{data['db']['title']} 쇼 분석 실패")
+            P.logger.warning(f"{data['db']['title']} 쇼 분석 실패")
             return
         
         season_cs = con.execute('SELECT * FROM metadata_items WHERE metadata_type = 3 and parent_id = ? ORDER BY "index"', (data['db']['id'],))
@@ -105,10 +105,10 @@ class Task(object):
                     season_index = season['index']
                     episode_index = episode['index']
                     if episode['index'] == -1:
-                        logger.error(d(episode))
-                        logger.info(season_index)
-                        #logger.error(episode['available_at'])
-                        #logger.error(episode['originally_available_at'])
+                        #P.logger.error(d(episode))
+                        #P.logger.info(season_index)
+                        #P.logger.error(episode['available_at'])
+                        #P.logger.error(episode['originally_available_at'])
                         """
                         if episode['available_at'] is not None and type(episode['available_at']) != int:
                             episode_index = episode['available_at'].split(' ')[0]
@@ -117,7 +117,7 @@ class Task(object):
                         else:
                             #com.plexapp.agents.sjva_agent://KD58690/2011/2011-12-28?lang=ko
 
-                            logger.info(episode['guid'])
+                            P.logger.info(episode['guid'])
                         """
                         tmp = episode['guid']
                         match = re.compile(r'\/(?P<season>\d{4})\/(?P<epi>\d{4}-\d{2}-\d{2})').search(episode['guid'])
@@ -130,23 +130,23 @@ class Task(object):
                         combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'seasons', f"{season_index}.xml")
                         ret = Task.xml_analysis(combined_xmlpath, data['seasons'][season_index], data)
                         if ret == False:
-                            logger.warning(combined_xmlpath)
-                            logger.warning(f"{data['db']['title']} 시즌 분석 실패 : season_index - {season_index}")
+                            P.logger.warning(combined_xmlpath)
+                            P.logger.warning(f"{data['db']['title']} 시즌 분석 실패 : season_index - {season_index}")
                             #logger.warning(combined_xmlpath)
                             #return
                         data['seasons'][season_index]['episodes'] = {}
                     data['seasons'][season_index]['episodes'][episode_index] = {'db':episode}
                     combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'seasons', f"{season_index}", "episodes", f"{episode_index}.xml")
                     ret = Task.xml_analysis(combined_xmlpath, data['seasons'][season_index]['episodes'][episode_index], data, is_episode=True)
-                    if ret == False:
-                        logger.warning(combined_xmlpath)
-                        #logger.warning(d(episode))
-                        logger.warning(f"{data['db']['title']} 에피소드 분석 실패")
+                    #if ret == False:
+                        #P.logger.warning(combined_xmlpath)
+                        #P.logger.warning(d(episode))
+                        #P.logger.warning(f"{data['db']['title']} 에피소드 분석 실패")
                         #del data['seasons'][season_index]['episodes'][episode_index]
                         #return
                 except Exception as e:
-                    logger.error(f'Exception:{str(e)}')
-                    logger.error(traceback.format_exc())
+                    P.logger.error(f'Exception:{str(e)}')
+                    P.logger.error(traceback.format_exc())
         #logger.warning(d(data['use_filepath']))
         #logger.warning(d(data))
 
@@ -213,7 +213,7 @@ class Task(object):
             
             for season_index, season in data['seasons'].items():
                 for episode_index, episode in season['episodes'].items():
-                    #logger.warning(episode['process']['thumb'])
+                    #P.logger.warning(episode['process']['thumb'])
                     media_item_cs = con.execute('SELECT * FROM media_items WHERE metadata_item_id = ? ORDER BY id', (episode['db']['id'],))
                     media_item_cs.row_factory = dict_factory
                     episode['media_list'] = []
@@ -229,7 +229,7 @@ class Task(object):
 
                             mediapath = os.path.join(P.ModelSetting.get('base_path_media'), 'localhost', media_hash[0], f"{media_hash[1:]}.bundle", 'Contents', 'Thumbnails', 'thumb1.jpg')
                             if os.path.exists(mediapath):
-                                #logger.warning("미디오 썸네일 있음")
+                                #P.logger.warning("미디오 썸네일 있음")
                                 episode['media_list'].append(mediapath)
                                 data['media']['total'] = os.path.getsize(mediapath)
                                 #data['remove_size'] += os.stat(mediapath).st_size
@@ -238,7 +238,7 @@ class Task(object):
                     # 2021-11-01
                     # 4단계 미디어파일을 디코에 올리고 그 url로 대체한다.
                     # 
-                    #logger.info(episode['process']['thumb']['db_type'] )
+                    #P.logger.info(episode['process']['thumb']['db_type'] )
                     if data['command'] == 'start4' and episode['process']['thumb']['db_type'] == 'media':
                         localpath = os.path.join(P.ModelSetting.get('base_path_media'), 'localhost', episode['process']['thumb']['db'].replace('media://', ''))
                         if localpath[0] != '/':
@@ -248,14 +248,16 @@ class Task(object):
                                 discord_url = SupportDiscord.discord_proxy_image_localfile(localpath)
                                 if discord_url is not None:
                                     episode['process']['thumb']['url'] = discord_url
-                                    logger.warning(discord_url)
+                                    P.logger.warning(discord_url)
                         else:
-                            #logger.warning(episode)
-                            logger.warning(f"썸네일 없음 1: {episode['db']['id']}")
+                            #P.logger.warning(episode)
+                            P.logger.warning(f"썸네일 없음 1 분석 실행: {episode['db']['id']}")
                             PlexWebHandle.analyze_by_id(episode['db']['id'])
+                            continue
                     if data['command'] == 'start4' and episode['process']['thumb']['db'] == '':
-                        logger.warning(f"썸네일 없음 분석 2: {episode['db']['id']}")
+                        P.logger.warning(f"썸네일 없음 분석 2: {episode['db']['id']}")
                         PlexWebHandle.analyze_by_id(episode['db']['id'])
+                        continue
 
 
 
@@ -285,33 +287,119 @@ class Task(object):
                                     os.removedirs(base)
 
 
-        #logger.error(data['command'])
-        #logger.error(query)
+        #P.logger.error(data['command'])
+        #P.logger.error(query)
         if query != '' and data['dryrun'] == False:
             PlexDBHandle.execute_query(query)
 
 
-        #logger.error(data['meta']['remove'] )
+        # 2022-11-22 
+        # 에피소드 user_thumb_url 이 metadata나 media이면 디코로 전환
+        not_http_count = 0
+        if data['command'] in ['start4']:
+            season_cs = con.execute('SELECT * FROM metadata_items WHERE metadata_type = 3 and parent_id = ? ORDER BY "index"', (data['db']['id'],))
+            season_cs.row_factory = dict_factory
+            for season in season_cs.fetchall():
+                episode_cs = con.execute('SELECT * FROM metadata_items WHERE metadata_type = 4 and parent_id = ? ORDER BY "index"', (season['id'],))
+                episode_cs.row_factory = dict_factory
+
+                for episode in episode_cs.fetchall():
+                    if episode['user_thumb_url'].startswith('http'):
+                        continue
+                    not_http_count += 1
+
+                    if episode['user_thumb_url'] == None:
+                        PlexWebHandle.analyze_by_id(episode['db']['id'])
+                        continue
+                    localpath = None
+                    if episode['user_thumb_url'].startswith('media://'):
+                        localpath = os.path.join(P.ModelSetting.get('base_path_media'), 'localhost', episode['user_thumb_url'].replace('media://', ''))
+
+                    elif episode['user_thumb_url'].startswith('metadata://'):
+                        tmp = combined_xmlpath.split('/_combined/')
+                        tmp2 = episode['user_thumb_url'].split('metadata://')
+                        localpath = f"{tmp[0]}/_combined/{tmp2[1]}"
+                    if localpath == None:
+                        continue
+                    if localpath[0] != '/':
+                        localpath = localpath.replace('/', '\\')
+                    
+                    if os.path.exists(localpath):
+                        if data['dryrun'] == False:
+                            discord_url = SupportDiscord.discord_proxy_image_localfile(localpath)
+                            if discord_url is not None:
+                                P.logger.warning(discord_url)
+                                sql = 'UPDATE metadata_items SET '
+                                sql += ' user_thumb_url = "{}" '.format(discord_url)
+                                sql += '  WHERE id = {} ;\n'.format(episode['id'])
+                                ret = PlexDBHandle.execute_query(sql)
+                                if ret['log'].find('database is locked') == -1:
+                                    data['meta']['remove'] += os.path.getsize(localpath)
+                                    os.remove(localpath)
+                    else:
+                        P.logger.warning(f"파일 없음. 메타 새로고침 필요. {data['db']['title']}")
+
+
+
+
+
+        #P.logger.error(data['meta']['remove'] )
+        #P.logger.error(data['use_filepath'] )
+
         for base, folders, files in os.walk(data['meta']['metapath']):
             for f in files:
+                
+                if f.endswith('.xml'):
+                    continue
+                print(f)
                 data['file_count'] += 1
                 filepath = os.path.join(base, f)
                 #if filepath.find('themes') == -1:
                 #    continue
-                if filepath not in data['use_filepath']:
-                    if os.path.exists(filepath):
-                        data['remove_count'] += 1
-                        if filepath not in data['remove_filepath']:
-                            data['remove_filepath'].append(filepath)
-                        if os.path.islink(filepath) == False:
-                            data['meta']['remove'] += os.path.getsize(filepath)
-                        #logger.error(filepath)
-                        if data['dryrun'] == False:
-                            os.remove(filepath)
+                # 2022-11-22
+                
 
-        for base, folders, files in os.walk(data['meta']['metapath']):
-            if not folders and not files:
-                os.removedirs(base)
+                print(filepath)
+                if os.path.islink(filepath):
+                    if os.path.exists(os.path.realpath(filepath)) == False:
+                        P.logger.info("링크제거")
+                        os.remove(filepath)
+                        continue
+                
+                if not_http_count == 0:
+                    if data['dryrun'] == False:
+                        print('삭제')
+                        os.remove(filepath)
+                else:
+                    tmp = f.split('.')[-1]
+                    print(tmp)
+                    using = PlexDBHandle.select(f"SELECT id FROM metadata_items WHERE user_thumb_url LIKE '%{tmp}' OR user_art_url LIKE '%{tmp}';")
+                    P.logger.error(using)
+                    if len(using) == 0:
+                    #if filepath not in data['use_filepath']:
+                        
+                        if os.path.exists(filepath):
+                            data['remove_count'] += 1
+                            if filepath not in data['remove_filepath']:
+                                data['remove_filepath'].append(filepath)
+                            data['meta']['remove'] += os.path.getsize(filepath)
+                            if data['dryrun'] == False:
+                                print('삭제')
+                                os.remove(filepath)
+                        else:
+                            P.logger.error('aaaaaaaaaaaaaaaaaaa')
+                    else:
+                        P.logger.error('bbbbbbbbbbbbbbbbbbbbbbbbbb')
+
+        while True:
+            count = 0
+            for base, folders, files in os.walk(data['meta']['metapath']):
+                if not folders and not files:
+                    os.removedirs(base)
+                    P.logger.debug(f"빈 폴더 삭제: {base} ")
+                    count += 1
+            if count == 0:
+                break
 
 
         
@@ -319,8 +407,10 @@ class Task(object):
         if data['command'] == 'start1':
             return                  
 
-
-                        
+      except Exception as e:
+        P.logger.error(f'Exception:{str(e)}')
+        P.logger.error(traceback.format_exc())
+                
           
 
 
@@ -333,11 +423,11 @@ class Task(object):
 
     @staticmethod
     def xml_analysis(combined_xmlpath, data, show_data, is_episode=False):
-        #logger.warning(combined_xmlpath)
+        #P.logger.warning(combined_xmlpath)
         import xml.etree.ElementTree as ET
 
         #text = ToolBaseFile.read(combined_xmlpath)
-        #logger.warning(text)
+        #P.logger.warning(text)
         # 2021-12-11 4단계로 media파일을 디코 이미로 대체할때 시즌0 같이 아예 0.xml 파일이 없을 때도 동작하도록 추가
         
         if is_episode:
@@ -353,10 +443,10 @@ class Task(object):
 
 
         if os.path.exists(combined_xmlpath) == False:
-            logger.info(f"xml 파일 없음 : {combined_xmlpath}")
-            #logger.error(data['process']['thumb'])
-            #logger.debug(data)
-            #logger.debug(is_episode)
+            #P.logger.info(f"xml 파일 없음 : {combined_xmlpath}")
+            #P.logger.error(data['process']['thumb'])
+            #P.logger.debug(data)
+            #P.logger.debug(is_episode)
             return False
         if combined_xmlpath not in show_data['use_filepath']:
             show_data['use_filepath'].append(combined_xmlpath)
@@ -400,11 +490,11 @@ class Task(object):
         for tag, value in tags.items():
             if value[1] in data['xml_info']:
                 if data['process'][tag]['db'] != '':
-                    #logger.error(data['process'][tag]['db'])
+                    #P.logger.error(data['process'][tag]['db'])
                     data['process'][tag]['db_type'] = data['process'][tag]['db'].split('://')[0]
                     if data['process'][tag]['db_type'] != 'metadata':
-                        #logger.warning(combined_xmlpath)
-                        #logger.warning(data['process'][tag]['db_type'])
+                        #P.logger.warning(combined_xmlpath)
+                        #P.logger.warning(data['process'][tag]['db_type'])
                         continue
                     
                     data['process'][tag]['filename'] = data['process'][tag]['db'].split('/')[-1]
