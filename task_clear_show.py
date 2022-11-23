@@ -83,7 +83,7 @@ class Task(object):
         combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'Info.xml')
         
         if os.path.exists(combined_xmlpath) == False:
-            P.logger.error(f"Info.xml 없음 : {combined_xmlpath}")
+            P.logger.error(f"Info.xml 없음 {data['db']['title']} : {combined_xmlpath}")
             return 
         data['use_filepath'] = []
         data['remove_filepath'] = []
@@ -129,9 +129,9 @@ class Task(object):
                         data['seasons'][season_index] = {'db':season}
                         combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'seasons', f"{season_index}.xml")
                         ret = Task.xml_analysis(combined_xmlpath, data['seasons'][season_index], data)
-                        if ret == False:
-                            P.logger.warning(combined_xmlpath)
-                            P.logger.warning(f"{data['db']['title']} 시즌 분석 실패 : season_index - {season_index}")
+                        #if ret == False:
+                            #P.logger.warning(combined_xmlpath)
+                            #P.logger.warning(f"{data['db']['title']} 시즌 분석 실패 : season_index - {season_index}")
                             #logger.warning(combined_xmlpath)
                             #return
                         data['seasons'][season_index]['episodes'] = {}
@@ -308,8 +308,8 @@ class Task(object):
                         continue
                     not_http_count += 1
 
-                    if episode['user_thumb_url'] == None:
-                        PlexWebHandle.analyze_by_id(episode['db']['id'])
+                    if episode['user_thumb_url'] == None or episode['user_thumb_url'] == '':
+                        PlexWebHandle.analyze_by_id(episode['id'])
                         continue
                     localpath = None
                     if episode['user_thumb_url'].startswith('media://'):
@@ -348,18 +348,10 @@ class Task(object):
 
         for base, folders, files in os.walk(data['meta']['metapath']):
             for f in files:
-                
                 if f.endswith('.xml'):
                     continue
-                print(f)
                 data['file_count'] += 1
                 filepath = os.path.join(base, f)
-                #if filepath.find('themes') == -1:
-                #    continue
-                # 2022-11-22
-                
-
-                print(filepath)
                 if os.path.islink(filepath):
                     if os.path.exists(os.path.realpath(filepath)) == False:
                         P.logger.info("링크제거")
@@ -372,24 +364,21 @@ class Task(object):
                         os.remove(filepath)
                 else:
                     tmp = f.split('.')[-1]
-                    print(tmp)
                     using = PlexDBHandle.select(f"SELECT id FROM metadata_items WHERE user_thumb_url LIKE '%{tmp}' OR user_art_url LIKE '%{tmp}';")
-                    P.logger.error(using)
                     if len(using) == 0:
                     #if filepath not in data['use_filepath']:
-                        
                         if os.path.exists(filepath):
                             data['remove_count'] += 1
                             if filepath not in data['remove_filepath']:
                                 data['remove_filepath'].append(filepath)
                             data['meta']['remove'] += os.path.getsize(filepath)
                             if data['dryrun'] == False:
-                                print('삭제')
+                                P.logger.debug(f"안쓰는 파일 삭제 : {filepath}")
                                 os.remove(filepath)
                         else:
-                            P.logger.error('aaaaaaaaaaaaaaaaaaa')
+                            P.logger.error('.................. 파일 없음')
                     else:
-                        P.logger.error('bbbbbbbbbbbbbbbbbbbbbbbbbb')
+                        P.logger.debug(f"파일 사용: {filepath}")
 
         while True:
             count = 0
