@@ -16,7 +16,7 @@ class Task(object):
             root_path = os.path.join(P.ModelSetting.get('base_path_media'), 'localhost')
        
         if folder == 'all':
-            folders = os.listdir(root_path)
+            folders = sorted(os.listdir(root_path))
         else:
             folders = [folder]
         
@@ -61,11 +61,12 @@ class Task(object):
                                 status['remove_count'] += 1
                                 if dryrun == False:
                                     SupportFile.rmtree(bundle_path)
-                            if mode == 'step3' and data['metadata_type'] == 2 and dryrun == False:
+                            if mode == 'step3' and data['metadata_type'] in [1,2] and dryrun == False:
                                 data = Task.meta_step2(bundle_path, data)
                             Task.remove_empty_folder(bundle_path)
                         else:
                             data['file'] = fetch[0]['file']
+                            data = Task.media_step2(bundle_path, data)
                             Task.remove_empty_folder(bundle_path)
                     elif len(fetch) == 0:
                         tmp = SupportFile.size(start_path=bundle_path)
@@ -111,6 +112,37 @@ class Task(object):
                     else:
                         P.logger.debug(f"파일 사용: {filepath}")
         return data
+
+
+    def media_step2(bundle_path, data):
+        data['remove'] = 0
+        for base, folders, files in os.walk(bundle_path):
+            for f in files:
+                if f.endswith('.xml'):
+                    continue
+                filepath = os.path.join(base, f)
+                if os.path.islink(filepath):
+                    if os.path.exists(os.path.realpath(filepath)) == False:
+                        P.logger.info("링크제거")
+                        os.remove(filepath)
+                        continue
+                    
+                    print(tmp) 
+                    
+                    tmp = f.split('.')[-1]
+                    #using = PlexDBHandle.select(f"SELECT id FROM metadata_items WHERE user_thumb_url LIKE '%{tmp}' OR user_art_url LIKE '%{tmp}';")
+                    using = 0
+                    if len(using) == 0:
+                        if os.path.exists(filepath):
+                            data['remove'] += os.path.getsize(filepath)
+                            P.logger.debug(f"안쓰는 파일 삭제 : {filepath}")
+                            os.remove(filepath)
+                        else:
+                            P.logger.error('.................. 파일 없음')
+                    else:
+                        P.logger.debug(f"파일 사용: {filepath}")
+        return data
+
 
     def remove_empty_folder(bundle_path):
         while True:

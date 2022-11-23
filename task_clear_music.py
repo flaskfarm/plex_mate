@@ -1,40 +1,7 @@
-# python
-import fnmatch
-import glob
-import json
-import os
-import platform
-import re
-import shutil
 import sqlite3
-import sys
-import threading
-import time
-import traceback
-from datetime import datetime, timedelta
-
-# third-party
-import requests
-import yaml
-# sjva 공용
-from framework import (SystemModelSetting, Util, app, celery, db, path_data,
-                       scheduler, socketio)
-from plugin import LogicModuleBase, default_route_socketio
-from support.base import d
-from tool_base import (ToolBaseFile, ToolOSCommand, ToolShutil, ToolSubprocess,
-                       ToolUtil, d)
-from tool_expand import EntityKtv, ToolExpandDiscord, ToolExpandFileProcess
-
-from .plugin import P
-
-logger = P.logger
-package_name = P.package_name
-ModelSetting = P.ModelSetting
-from .logic_pm_base import LogicPMBase
+from support import SupportDiscord, SupportFile, d
 from .plex_db import PlexDBHandle, dict_factory
-from .task_pm_clear_movie import TAG
-from .task_pm_clear_movie import Task as TaskMovie
-
+from .setup import *
 
 class Task(object):
 
@@ -44,13 +11,10 @@ class Task(object):
         config = P.load_config()
         dryrun = True if dryrun == 'true'  else False
 
-        db_file = ModelSetting.get('base_path_db')
+        db_file = P.ModelSetting.get('base_path_db')
         con = sqlite3.connect(db_file)
         cur = con.cursor()
-        #ce = con.execute('SELECT * FROM metadata_items WHERE metadata_type = 1 AND library_section_id = ? ORDER BY title', (section_id,))
-        #ce = con.execute('SELECT * FROM metadata_items WHERE metadata_type = 1 AND library_section_id = ? AND user_thumb_url NOT LIKE "upload%" AND (user_thumb_url NOT LIKE "http%" OR refreshed_at is NULL) ORDER BY title', (section_id,))
         query = config.get('파일정리 음악 쿼리', 'SELECT * FROM metadata_items WHERE metadata_type = 8 AND library_section_id = ? ORDER BY title')
-        #ce = con.execute(config['TV 쿼리'], (section_id,))
         ce = con.execute(query, (section_id,))
         ce.row_factory = dict_factory
         fetch = ce.fetchall()
@@ -58,7 +22,7 @@ class Task(object):
 
         for artist in fetch:
             try:
-                if ModelSetting.get_bool('clear_music_task_stop_flag'):
+                if P.ModelSetting.get_bool('clear_music_task_stop_flag'):
                     return 'stop'
                 time.sleep(0.05)
                 status['current'] += 1
@@ -66,22 +30,14 @@ class Task(object):
                 data['db'] = artist
 
                 Task.artist_process(data, con, cur)
-                #return
             
                 data['status']['total_size'] += data['meta']['total']
                 data['status']['remove_size'] += data['meta']['remove']
                 if 'media' in data:
                     data['status']['total_size'] += data['media']['total']
                     data['status']['remove_size'] += data['media']['remove']
-                #P.logic.get_module('clear').receive_from_task(data, celery=False)
-                #continue
-                #if 'use_filepath' in data:
-                #    del data['use_filepath']
-                #if 'remove_filepath' in data:
-                #    del data['remove_filepath']
-                #if 'albums' in data:
-                #    del data['albums']
-                if app.config['config']['use_celery']:
+
+                if F.config['use_celery']:
                     self.update_state(state='PROGRESS', meta=data)
                 else:
                     self.receive_from_task(data, celery=False)
@@ -99,9 +55,9 @@ class Task(object):
     def artist_process(data, con, cur):
 
         data['meta'] = {'remove':0}
-        data['meta']['metapath'] = os.path.join(ModelSetting.get('base_path_metadata'), 'Artists', data['db']['hash'][0], f"{data['db']['hash'][1:]}.bundle")
+        data['meta']['metapath'] = os.path.join(P.ModelSetting.get('base_path_metadata'), 'Artists', data['db']['hash'][0], f"{data['db']['hash'][1:]}.bundle")
 
-        data['meta']['total'] = ToolBaseFile.size(start_path=data['meta']['metapath'])
+        data['meta']['total'] = SupportFile.size(start_path=data['meta']['metapath'])
         if data['command'] == 'start0':
             return
         combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'Info.xml')
@@ -122,16 +78,10 @@ class Task(object):
         album_cs.row_factory = dict_factory
         data['albums'] = []
         for album in album_cs.fetchall():
-            #album_index = album['index']
-            #logger.warning(album_index)
-
-            #if album_index not in data['albums']:
-            
-            #data['albums'][album_index] = {'db':album, 'use_filepath':[], 'remove_filepath':[]}
             album_data = {'db':album, 'use_filepath':[], 'remove_filepath':[]}
             album_data['meta'] = {'remove':0}
-            album_data['meta']['metapath'] = os.path.join(ModelSetting.get('base_path_metadata'), 'Albums', album_data['db']['hash'][0], f"{album_data['db']['hash'][1:]}.bundle")
-            data['meta']['total'] += ToolBaseFile.size(start_path=album_data['meta']['metapath'])
+            album_data['meta']['metapath'] = os.path.join(P.ModelSetting.get('base_path_metadata'), 'Albums', album_data['db']['hash'][0], f"{album_data['db']['hash'][1:]}.bundle")
+            data['meta']['total'] += SupportFile.size(start_path=album_data['meta']['metapath'])
             
             combined_xmlpath = os.path.join(album_data['meta']['metapath'], 'Contents', '_combined', 'Info.xml')
 
@@ -142,10 +92,7 @@ class Task(object):
             else:
                 data['albums'].append(album_data)
 
-
         query = ""
-
-        #logger.debug(d(data))
 
         if data['command'] == 'start2':
             # 쇼 http로 
@@ -182,7 +129,7 @@ class Task(object):
                             localpath = localpath.replace('/', '\\')
                         if os.path.exists(localpath):
                             if data['dryrun'] == False:
-                                discord_url = ToolExpandDiscord.discord_proxy_image_localfile(localpath)
+                                discord_url = SupportDiscord.discord_proxy_image_localfile(localpath)
                                 if discord_url is not None:
                                     album['process']['poster']['url'] = discord_url
                                     logger.warning(discord_url)
@@ -205,14 +152,8 @@ class Task(object):
                     sql += '  WHERE id = {} ;\n'.format(album['db']['id'])
                     query += sql
 
-        
-        #logger.error(data['command'])
-        #logger.error(query)
         if query != '' and data['dryrun'] == False:
             PlexDBHandle.execute_query(query)
-
-
-        #logger.warning(data['meta']['remove'] )
 
         for base, folders, files in os.walk(data['meta']['metapath']):
             for f in files:
@@ -229,13 +170,10 @@ class Task(object):
                             data['meta']['remove'] += os.path.getsize(filepath)
                         if data['dryrun'] == False:
                             os.remove(filepath)
-
         
         for album in data['albums']:
             for base, folders, files in os.walk(album['meta']['metapath']):
                 for f in files:
-                    #logger.warning(data['file_count'])
-                    #logger.warning(f)
                     data['file_count'] += 1
                     filepath = os.path.join(base, f)
                     if filepath not in album['use_filepath']:
@@ -259,17 +197,10 @@ class Task(object):
                 if not folders and not files:
                     os.removedirs(base)
 
-                        
-          
-
 
     @staticmethod
     def xml_analysis(combined_xmlpath, data):
-        #logger.warning(combined_xmlpath)
         import xml.etree.ElementTree as ET
-
-        #text = ToolBaseFile.read(combined_xmlpath)
-        #logger.warning(text)
         if os.path.exists(combined_xmlpath) == False:
             return False
         if combined_xmlpath not in data['use_filepath']:
@@ -290,7 +221,6 @@ class Task(object):
                 continue
             data['xml_info'][value[1]] = []
             for item in root.find(value[1]).findall('item'):
-                #logger.warning(d(item))
                 entity = {}
                 if 'url' not in item.attrib:
                     continue
@@ -315,11 +245,8 @@ class Task(object):
         for tag, value in tags.items():
             if value[1] in data['xml_info']:
                 if data['process'][tag]['db'] != '':
-                    #logger.error(data['process'][tag]['db'])
                     data['process'][tag]['db_type'] = data['process'][tag]['db'].split('://')[0]
                     if data['process'][tag]['db_type'] != 'metadata':
-                        #logger.warning(combined_xmlpath)
-                        #logger.warning(data['process'][tag]['db_type'])
                         continue
                     
                     data['process'][tag]['filename'] = data['process'][tag]['db'].split('/')[-1]
@@ -342,7 +269,5 @@ class Task(object):
                                         data['use_filepath'].append(data['process'][tag]['realpath'])
                                 else:
                                     data['process'][tag]['islink'] = False
- 
                             break
-                        
         return True

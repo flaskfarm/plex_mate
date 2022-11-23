@@ -40,6 +40,7 @@ class Task(object):
     @celery.task()
     def clear(args):
         ret = SupportFile.rmtree(args[0])
+        os.makedirs(args[0], exist_ok=True)
         return Task.get_size(args)
 
 

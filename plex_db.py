@@ -79,7 +79,7 @@ class PlexDBHandle(object):
                 sql_filepath = os.path.join(F.config['path_data'], 'tmp', f"{str(time.time()).split('.')[0]}.sql")
             #sql = sql + ';\ncommit;\n'
             print(sql)
-            
+
             SupportFile.write_file(sql_filepath, sql)
             if platform.system() == 'Windows':
                 sql_filepath = sql_filepath.replace('\\', '\\\\')
@@ -106,22 +106,17 @@ class PlexDBHandle(object):
         try:
             sql_filepath = os.path.join(F.config['path_data'], 'tmp', f"{str(time.time()).split('.')[0]}.sql")
             SupportFile.write_file(sql_filepath, sql)
+            last_sql_filepath = sql_filepath
             if platform.system() == 'Windows':
-                tmp = sql_filepath.replace('\\', '\\\\')
-                cmd = f'"{P.ModelSetting.get("base_bin_sqlite")}" "{db_filepath}" ".read {tmp}"'
-                for i in range(10):
-                    ret = P.ModelSetting.execute_command_return(cmd)
-                    if ret.find('database is locked') != -1:
-                        time.sleep(5)
-                    else:
-                        break
-            else:
-                for i in range(10):
-                    ret = SupportSubprocess.execute_command_return([P.ModelSetting.get('base_bin_sqlite'), db_filepath, f".read {sql_filepath}"])
-                    if ret['log'].find('database is locked') != -1:
-                        time.sleep(5)
-                    else:
-                        break
+                last_sql_filepath = sql_filepath.replace('\\', '\\\\')
+            
+            cmd = [P.ModelSetting.get('base_bin_sqlite'), db_filepath, f".read {last_sql_filepath}"]
+            for i in range(10):
+                ret = SupportSubprocess.execute_command_return(cmd)
+                if ret['log'].find('database is locked') != -1:
+                    time.sleep(5)
+                else:
+                    break
             return ret
         except Exception as e: 
             logger.error(f'Exception:{str(e)}')

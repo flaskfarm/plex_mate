@@ -1,39 +1,10 @@
-# python
-import fnmatch
-import glob
-import json
-import os
-import platform
-import re
-import shutil
 import sqlite3
-import sys
-import threading
-import time
-import traceback
-from datetime import datetime, timedelta
-
-# third-party
-import requests
-import yaml
-# sjva 공용
-from framework import (SystemModelSetting, Util, app, celery, db, path_data,
-                       scheduler, socketio)
-from plugin import LogicModuleBase, default_route_socketio
-from tool_base import (ToolBaseFile, ToolOSCommand, ToolShutil, ToolSubprocess,
-                       ToolUtil, d)
-from tool_expand import EntityKtv, ToolExpandFileProcess
-
-from .plugin import P
-
-logger = P.logger
-package_name = P.package_name
-ModelSetting = P.ModelSetting
-from .logic_pm_base import LogicPMBase
+import platform
+from support import SupportDiscord, SupportFile, d
 from .plex_db import PlexDBHandle, dict_factory
+from .plex_web import PlexWebHandle
 from .setup import *
 
-# tag : db에서는 구분 값 / xml info - 폴더명
 TAG = {
     'poster' : ['thumb', 'posters'],
     'art' : ['art', 'art'],
@@ -53,26 +24,22 @@ class Task(object):
         dryrun = True if dryrun == 'true'  else False
         logger.warning(dryrun)
 
-
-        db_file = ModelSetting.get('base_path_db')
+        db_file = P.ModelSetting.get('base_path_db')
         con = sqlite3.connect(db_file)
         cur = con.cursor()
         query = config.get('파일정리 영화 쿼리', 'SELECT * FROM metadata_items WHERE metadata_type = 1 AND library_section_id = ? ORDER BY title')
-        #ce = con.execute('SELECT * FROM metadata_items WHERE metadata_type = 1 AND library_section_id = ? ORDER BY title', (section_id,))
-        #ce = con.execute('SELECT * FROM metadata_items WHERE metadata_type = 1 AND library_section_id = ? AND user_thumb_url NOT LIKE "upload%" AND (user_thumb_url NOT LIKE "http%" OR refreshed_at is NULL) ORDER BY title', (section_id,))
         ce = con.execute(query, (section_id,))
         ce.row_factory = dict_factory
         fetch = ce.fetchall()
         status = {'is_working':'run', 'total_size':0, 'remove_size':0, 'count':len(fetch), 'current':0}
         for movie in fetch:
             try:
-                if ModelSetting.get_bool('clear_movie_task_stop_flag'):
+                if P.ModelSetting.get_bool('clear_movie_task_stop_flag'):
                     return 'stop'
                 time.sleep(0.05)
                 status['current'] += 1
                 data = {'mode':'movie', 'status':status, 'command':command, 'section_id':section_id, 'dryrun':dryrun, 'process':{}}
                 data['db'] = movie
-                #logger.warning(movie['title'])
    
                 Task.analysis(data, con, cur)
                 data['status']['total_size'] += data['meta']['total']
@@ -80,9 +47,7 @@ class Task(object):
                 if 'media' in data:
                     data['status']['total_size'] += data['media']['total']
                     data['status']['remove_size'] += data['media']['remove']
-                #P.logic.get_module('clear').receive_from_task(data, celery=False)
-                #continue
-                if app.config['config']['use_celery']:
+                if F.config['use_celery']:
                     self.update_state(state='PROGRESS', meta=data)
                 else:
                     self.receive_from_task(data, celery=False)
@@ -97,8 +62,6 @@ class Task(object):
 
     @staticmethod
     def analysis(data, con, cur):
-        #logger.warning(f"분석시작 : {data['db']['title']}")
-
         Task.thumb_process(data)
 
         if data['command'] == 'start1':
@@ -106,12 +69,6 @@ class Task(object):
         
         # 2단계 TAG별 URL 로 세팅하고 xml 파일만 남기고 제거
         if data['dryrun'] == False:
-            #sql = 'UPDATE metadata_items SET user_thumb_url = "{}", user_art_url = "{}", user_banner_url = "{}" WHERE id = {} ;'.format(
-            #    data['process']['poster']['url'],
-            #   data['process']['art']['url'],
-            #    data['process']['banner']['url'],
-            #    data['db']['id']
-            #)
             if 'poster' not in data['process']:
                 return
             sql = 'UPDATE metadata_items SET '
@@ -129,7 +86,6 @@ class Task(object):
         
         c_metapath = os.path.join(data['meta']['metapath'], 'Contents')  
         if os.path.exists(c_metapath):
-                          
             for f in os.listdir(c_metapath):
                 _path = os.path.join(c_metapath, f)
                 if f == '_combined':
@@ -137,13 +93,13 @@ class Task(object):
                         tag_path = os.path.join(_path, value[1])
                         if os.path.exists(tag_path):
                             if data['dryrun'] == False:
-                                data['meta']['remove'] += ToolBaseFile.size(start_path=tag_path)
-                                ToolBaseFile.rmtree(tag_path)
+                                data['meta']['remove'] += SupportFile.size(start_path=tag_path)
+                                SupportFile.rmtree(tag_path)
                             
                     tmp = os.path.join(_path, 'extras')
                     if os.path.exists(tmp) and len(os.listdir(tmp)) == 0:
                         if data['dryrun'] == False:
-                            ToolBaseFile.rmtree(tmp)
+                            SupportFile.rmtree(tmp)
                     tmp = os.path.join(_path, 'extras.xml')
                     if os.path.exists(tmp):
                         if os.path.exists(tmp):
@@ -151,31 +107,59 @@ class Task(object):
                             if data['dryrun'] == False:
                                 os.remove(tmp)
                 else:
-                    tmp = ToolBaseFile.size(start_path=_path)
+                    tmp = SupportFile.size(start_path=_path)
                     if data['dryrun'] == False:
                         data['meta']['remove'] += tmp
-                        ToolBaseFile.rmtree(_path)
+                        SupportFile.rmtree(_path)
                     else:
                         if f == '_stored':
                             data['meta']['remove'] += tmp
 
+        # 메타폴더
+        for base, folders, files in os.walk(data['meta']['metapath']):
+            for f in files:
+                if f.endswith('.xml'):
+                    continue
+                filepath = os.path.join(base, f)
+                if os.path.islink(filepath):
+                    if os.path.exists(os.path.realpath(filepath)) == False:
+                        P.logger.info("링크제거")
+                        os.remove(filepath)
+                        continue
+                
+                    tmp = f.split('.')[-1]
+                    using = PlexDBHandle.select(f"SELECT id FROM metadata_items WHERE user_thumb_url LIKE '%{tmp}' OR user_art_url LIKE '%{tmp}';")
+                    
+                    if len(using) == 0:
+                        if os.path.exists(filepath):
+                            data['meta']['remove'] += os.path.getsize(filepath)
+                            P.logger.debug(f"안쓰는 파일 삭제 : {filepath}")
+                            os.remove(filepath)
+                        else:
+                            P.logger.error('.................. 파일 없음')
+                    else:
+                        P.logger.debug(f"파일 사용: {filepath}")
+        
+
+        Task.remove_empty_folder(data['meta']['metapath'])
+
+
+
+
         if data['command'] == 'start2':
             return
-
-        
 
         media_ce = con.execute('SELECT user_thumb_url, user_art_url, media_parts.file, media_parts.hash FROM metadata_items, media_items, media_parts WHERE metadata_items.id = media_items.metadata_item_id AND media_items.id = media_parts.media_item_id AND metadata_items.id = ?;', (data['db']['id'],))
         media_ce.row_factory = dict_factory
         data['media'] = {'total':0, 'remove':0}
 
         for item in media_ce.fetchall():
-            #logger.warning(d(item))
             if item['hash'] == '':
                 continue
-            mediapath = os.path.join(ModelSetting.get('base_path_media'), 'localhost', item['hash'][0], f"{item['hash'][1:]}.bundle")
+            mediapath = os.path.join(P.ModelSetting.get('base_path_media'), 'localhost', item['hash'][0], f"{item['hash'][1:]}.bundle")
             if os.path.exists(mediapath) == False:
                 continue
-            data['media']['total'] += ToolBaseFile.size(start_path=mediapath)
+            data['media']['total'] += SupportFile.size(start_path=mediapath)
             if item['user_thumb_url'].startswith('media') == False:
                 img = os.path.join(mediapath, 'Contents', 'Thumbnails', 'thumb1.jpg')
                 if os.path.exists(img):
@@ -188,15 +172,39 @@ class Task(object):
                     data['media']['remove'] += os.path.getsize(img)
                     if data['dryrun'] == False:
                         os.remove(img)
+            else:
+                if data['command'] == 'start4':
+                    img = os.path.join(mediapath, 'Contents', 'Art', 'art1.jpg')
+                    print(img)
+                    
+                    if data['dryrun'] == False:
+                        if os.path.exists(img):
+                            print('222')
+                            discord_url = SupportDiscord.discord_proxy_image_localfile(img)
+                            print(discord_url)
+                            if discord_url is not None:
+                                P.logger.warning(discord_url)
+                                sql = 'UPDATE metadata_items SET '
+                                sql += ' user_art_url = "{}" '.format(discord_url)
+                                sql += '  WHERE id = {} ;\n'.format(data['db']['id'])
+                                ret = PlexDBHandle.execute_query(sql)
+                                print(ret)
+                                if ret['log'].find('database is locked') == -1:
+                                    data['media']['remove'] += os.path.getsize(img)
+                                    os.remove(img)
+                        else:
+                            P.logger.debug(f"아트 파일 없음. 분석 {data['db']['title']}")
+                            PlexWebHandle.analyze_by_id(data['db']['id'])
 
-        
+
+
+
+        Task.remove_empty_folder(mediapath)
 
     @staticmethod
     def xml_analysis(combined_xmlpath, data):
         import xml.etree.ElementTree as ET
 
-        #text = ToolBaseFile.read(combined_xmlpath)
-        #logger.warning(text)
         tree = ET.parse(combined_xmlpath)
         root = tree.getroot()
         data['info'] = {}
@@ -224,15 +232,14 @@ class Task(object):
     @staticmethod
     def thumb_process(data):
         data['meta'] = {'remove':0}
-        #logger.warning(data['db'])
         if data['db']['metadata_type'] == 1:
-            data['meta']['metapath'] = os.path.join(ModelSetting.get('base_path_metadata'), 'Movies', data['db']['hash'][0], f"{data['db']['hash'][1:]}.bundle")
+            data['meta']['metapath'] = os.path.join(P.ModelSetting.get('base_path_metadata'), 'Movies', data['db']['hash'][0], f"{data['db']['hash'][1:]}.bundle")
             combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'Info.xml')
         elif data['db']['metadata_type'] == 2:
-            data['meta']['metapath'] = os.path.join(ModelSetting.get('base_path_metadata'), 'TV Shows', data['db']['hash'][0], f"{data['db']['hash'][1:]}.bundle")
+            data['meta']['metapath'] = os.path.join(P.ModelSetting.get('base_path_metadata'), 'TV Shows', data['db']['hash'][0], f"{data['db']['hash'][1:]}.bundle")
             combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'Info.xml')
             
-        data['meta']['total'] = ToolBaseFile.size(start_path=data['meta']['metapath'])
+        data['meta']['total'] = SupportFile.size(start_path=data['meta']['metapath'])
         if data['command'] == 'start0':
             return
         if os.path.exists(combined_xmlpath) == False:
@@ -270,16 +277,15 @@ class Task(object):
                 _path = os.path.join(c_metapath, f)
                 # 윈도우는 combined에 바로 데이터가 있어서 무조건 삭제?
                 if f == '_stored':
-                    tmp = ToolBaseFile.size(start_path=_path)
+                    tmp = SupportFile.size(start_path=_path)
                     data['meta']['stored'] = tmp
                     if platform.system() == 'Windows':
                         data['meta']['remove'] += tmp
                         if data['dryrun'] == False:
-                            ToolBaseFile.rmtree(_path)
+                            SupportFile.rmtree(_path)
                 elif f == '_combined':
                     for tag, value in TAG.items():
                         tag_path = os.path.join(_path, value[1])
-                        #logger.warning(tag_path)
                         if os.path.exists(tag_path) == False:
                             continue
                         for img_file in os.listdir(tag_path):
@@ -302,15 +308,54 @@ class Task(object):
                                     if data['dryrun'] == False and os.path.exists(img_path) == True:
                                         os.remove(img_path)
                     
-            #if len(not_remove_filelist) == 0:
             for f in os.listdir(c_metapath):
                 _path = os.path.join(c_metapath, f)
                 if f == '_stored' or f == '_combined':
                     continue
-                tmp = ToolBaseFile.size(start_path=_path)
+                tmp = SupportFile.size(start_path=_path)
                 data['meta']['remove'] += tmp
                 if data['dryrun'] == False:
-                    ToolBaseFile.rmtree(_path)
-        #else:
+                    SupportFile.rmtree(_path)
+
         if not_remove_filelist:
             logger.error(not_remove_filelist)
+
+
+
+    def metafolder_common(bundle_path, data):
+        data['remove'] = 0
+        for base, folders, files in os.walk(bundle_path):
+            for f in files:
+                if f.endswith('.xml'):
+                    continue
+                filepath = os.path.join(base, f)
+                if os.path.islink(filepath):
+                    if os.path.exists(os.path.realpath(filepath)) == False:
+                        P.logger.info("링크제거")
+                        os.remove(filepath)
+                        continue
+                
+                    tmp = f.split('.')[-1]
+                    using = PlexDBHandle.select(f"SELECT id FROM metadata_items WHERE user_thumb_url LIKE '%{tmp}' OR user_art_url LIKE '%{tmp}';")
+                    
+                    if len(using) == 0:
+                        if os.path.exists(filepath):
+                            data['remove'] += os.path.getsize(filepath)
+                            P.logger.debug(f"안쓰는 파일 삭제 : {filepath}")
+                            os.remove(filepath)
+                        else:
+                            P.logger.error('.................. 파일 없음')
+                    else:
+                        P.logger.debug(f"파일 사용: {filepath}")
+        return data
+
+    def remove_empty_folder(bundle_path):
+        while True:
+            count = 0
+            for base, folders, files in os.walk(bundle_path):
+                if not folders and not files:
+                    os.removedirs(base)
+                    P.logger.debug(f"빈 폴더 삭제: {base} ")
+                    count += 1
+            if count == 0:
+                break

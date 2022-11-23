@@ -352,15 +352,20 @@ class Task(object):
                     continue
                 data['file_count'] += 1
                 filepath = os.path.join(base, f)
+                
                 if os.path.islink(filepath):
                     if os.path.exists(os.path.realpath(filepath)) == False:
-                        P.logger.info("링크제거")
+                        P.logger.info(f"링크제거 : {filepath}")
                         os.remove(filepath)
+                        #file_size = os.path.getsize(filepath)
+                        #data['meta']['remove'] += file_size
                         continue
                 
                 if not_http_count == 0:
                     if data['dryrun'] == False:
-                        print('삭제')
+                        P.logger.info(f"삭제.메타에 http 0 : {filepath}")
+                        file_size = os.path.getsize(filepath)
+                        data['meta']['remove'] += file_size
                         os.remove(filepath)
                 else:
                     tmp = f.split('.')[-1]
@@ -371,9 +376,10 @@ class Task(object):
                             data['remove_count'] += 1
                             if filepath not in data['remove_filepath']:
                                 data['remove_filepath'].append(filepath)
-                            data['meta']['remove'] += os.path.getsize(filepath)
+                            data['meta']['remove'] += file_size
                             if data['dryrun'] == False:
                                 P.logger.debug(f"안쓰는 파일 삭제 : {filepath}")
+                                file_size = os.path.getsize(filepath)
                                 os.remove(filepath)
                         else:
                             P.logger.error('.................. 파일 없음')

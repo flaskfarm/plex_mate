@@ -1,60 +1,41 @@
-# -*- coding: utf-8 -*-
-#########################################################
-# python
-import os, sys, traceback, re, json, threading, time, shutil, platform
-from datetime import datetime
-# third-party
-import requests, xmltodict, sqlite3
-from flask import request, render_template, jsonify, redirect
-# sjva 공용
-from framework import db, scheduler, path_data, socketio, SystemModelSetting, app, celery, Util
-from plugin import default_route_socketio_sub, LogicSubModuleBase
-from tool_base import ToolBaseFile, d, ToolSubprocess
-# 패키지
-from .plugin import P
-logger = P.logger
-package_name = P.package_name
-ModelSetting = P.ModelSetting
+from tool import ToolUtil
 
-from .plex_db import PlexDBHandle, dict_factory
-from .plex_web import PlexWebHandle
-from .logic_pm_base import LogicPMBase
-#########################################################
+from .plex_db import PlexDBHandle
+from .setup import *
 
 
-class LogicPMDbCopyMake(LogicSubModuleBase):
-
-
-    def __init__(self, P, parent, name):
-        super(LogicPMDbCopyMake, self).__init__(P, parent, name)
+class PageCopyMake(PluginPageBase):
+    def __init__(self, P, parent):
+        super(PageCopyMake, self).__init__(P, parent, name='make')
         self.db_default = {
             f'{self.parent.name}_{self.name}_db_version' : '1',
-            f'{self.parent.name}_{self.name}_path_create' : os.path.join(path_data, package_name),
+            f'{self.parent.name}_{self.name}_path_create' : '{PATH_DATA}' + os.sep + P.package_name,
             f'{self.parent.name}_{self.name}_section_id' : '',
-            f'{self.parent.name}_{self.name}_include_info_xml' : 'False',
         }
-        
+    
+    def process_menu(self, req):
+        arg = P.ModelSetting.to_dict()
+        arg['library_list'] = PlexDBHandle.library_sections()
+        arg[f'{self.parent.name}_{self.name}_path_create'] = ToolUtil.make_path(P.ModelSetting.get(f'{self.parent.name}_{self.name}_path_create'))
+        return render_template(f'{P.package_name}_{self.parent.name}_{self.name}.html', arg=arg)
 
-    def process_ajax(self, sub, req):
+
+    def process_command(self, command, arg1, arg2, arg3, req):
         try:
             ret = {'ret':'success'}
-            if sub == 'command':
-                command = req.form['command']
-                if command.startswith('start'):
-                    ModelSetting.set(f'{self.parent.name}_{self.name}_path_create', req.form['arg1'])
-                    ModelSetting.set(f'{self.parent.name}_{self.name}_section_id', req.form['arg2'])
-                    ModelSetting.set(f'{self.parent.name}_{self.name}_include_info_xml', 'True' if (req.form['arg3']=='true') else 'False')
-                    self.task_interface()
-                    ret['msg'] = f"작업을 시작합니다.<br>완료시 팝업 창이 나타납니다."
+            if command.startswith('start'):
+                P.ModelSetting.set(f'{self.parent.name}_{self.name}_path_create', arg1)
+                P.ModelSetting.set(f'{self.parent.name}_{self.name}_section_id', arg2)
+                P.ModelSetting.set(f'{self.parent.name}_{self.name}_include_info_xml', 'True' if (arg3=='true') else 'False')
+                self.task_interface()
+                ret['msg'] = f"작업을 시작합니다.<br>완료시 팝업 창이 나타납니다."
             return jsonify(ret)
         except Exception as e: 
             P.logger.error(f'Exception:{str(e)}')
             P.logger.error(traceback.format_exc())
             return jsonify({'ret':'danger', 'msg':str(e)})
     
-    def plugin_load(self):
-        if os.path.exists(ModelSetting.get(f'{self.parent.name}_{self.name}_path_create')) == False:
-            os.makedirs(ModelSetting.get(f'{self.parent.name}_{self.name}_path_create'))
+
 
     #########################################################
     def task_interface(self):
@@ -66,43 +47,35 @@ class LogicPMDbCopyMake(LogicSubModuleBase):
         th.start()
 
     def task_interface2(self):
-        func = LogicPMDbCopyMake.start
-        if app.config['config']['use_celery']:
-            result = func.apply_async()
-            ret = result.get()
-        else:
-            ret = func()
+        func = self.start
+        ret = self.start_celery(func, None, *())
         msg = f"{ret}<br>파일 생성을 완료하였습니다."
-        socketio.emit("modal", {'title':'DB 생성 완료', 'data' : msg}, namespace='/framework', broadcast=True)  
+        F.socketio.emit("modal", {'title':'DB 생성 완료', 'data' : msg}, namespace='/framework', broadcast=True)  
+
 
     @staticmethod
-    @celery.task
+    @F.celery.task
     def start():
         try:
-            db_folderpath = ModelSetting.get(f'dbcopy_make_path_create')
-            section_id = ModelSetting.get(f'dbcopy_make_section_id')
+            db_folderpath = ToolUtil.make_path(P.ModelSetting.get('copy_make_path_create'))
+            os.makedirs(db_folderpath, exist_ok=True)
+            section_id = P.ModelSetting.get(f'copy_make_section_id')
             section = PlexDBHandle.library_section(section_id)
-            include_info_xml = ModelSetting.get_bool(f'dbcopy_make_include_info_xml')
-            #newpath = "/root/SJVA3/data/plex_mate/영화 All (중복제거)_18_20210809_152135.db"
-            #LogicPMDbCopyMake.insert_info_xml(newpath, section['section_type'])
-            #return newpath
-            db_path = ModelSetting.get(f'base_path_db')
+
+            tmp = PlexDBHandle.select(f"SELECT count(*) as cnt FROM metadata_items WHERE metadata_type = {section['section_type']} AND library_section_id = {section['id']}")
+            count = tmp[0]['cnt']
+
+            P.logger.error(tmp)
+
+            db_path = P.ModelSetting.get(f'base_path_db')
             if os.path.exists(db_path):
                 basename = os.path.basename(db_path)
                 tmp = os.path.splitext(basename)
-                newfilename = f"{section['name']}_{section['id']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{tmp[1]}"
+                newfilename = f"{section['name']}_{count}_{datetime.now().strftime('%Y%m%d_%H%M')}{tmp[1]}"
                 newpath = os.path.join(db_folderpath, newfilename)
                 shutil.copy(db_path, newpath)
             logger.debug(f"파일 : {newpath}")
-            #DELETE FROM metadata_items WHERE (not (library_section_id = {section_id} AND metadata_type = 1)) AND (id not in (SELECT related_metadata_item_id FROM metadata_relations WHERE metadata_item_id in (SELECT id FROM metadata_items WHERE library_section_id = {section_id})));
-
-            # file로된부가항목만
-            #DELETE FROM metadata_relations WHERE metadata_relations.id not in (SELECT metadata_relations.id FROM metadata_relations, metadata_items WHERE metadata_items.id = metadata_relations.related_metadata_item_id AND metadata_items.guid LIKE 'file://%');
             
-            # 영화 부가영상도 복사. 했다가 멈춤
-            # DELETE FROM metadata_relations WHERE metadata_relations.id not in (SELECT metadata_relations.id FROM metadata_relations, metadata_items WHERE metadata_items.id = metadata_relations.metadata_item_id AND metadata_items.library_section_id = {section_id})''';
-            # DELETE FROM metadata_relations WHERE metadata_relations.id not in (SELECT metadata_relations.id FROM metadata_relations, metadata_items WHERE metadata_items.id = metadata_relations.related_metadata_item_id AND metadata_items.guid LIKE 'file://%');            
-            # DELETE FROM metadata_items WHERE id not in (SELECT id FROM metadata_items WHERE (library_section_id = {section_id} AND metadata_type = 1) OR (id in (SELECT related_metadata_item_id FROM metadata_relations)));'''
             query = ''
             if section['section_type'] == 1:
                 query += f'''
@@ -238,16 +211,15 @@ DROP TRIGGER fts4_tag_titles_before_delete_icu;
 DROP TRIGGER fts4_tag_titles_before_update_icu;
 VACUUM;
             '''
-            #if include_info_xml:
-            #    query += '''
-            #        CREATE TABLE "metadata" ("id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "hash" varchar(255), "data" text); 
-            #    '''
             logger.warning("쿼리 실행 시작")
             PlexDBHandle.execute_query_with_db_filepath(query, newpath)
             logger.warning("쿼리 실행 끝")
-
-            #if include_info_xml:
-            #    LogicPMDbCopyMake.insert_info_xml(newpath, section['section_type'])
+            if os.path.exists(newpath):
+                try:
+                    os.remove(newpath.replace('.db', '.db-shm'))
+                    os.remove(newpath.replace('.db', '.db-wal'))
+                except:
+                    pass
             return newpath
         except Exception as e: 
             logger.error(f'Exception:{str(e)}')
@@ -255,29 +227,3 @@ VACUUM;
         return
 
     
-    @staticmethod
-    def insert_info_xml(db_filepath, metadata_type):
-        con = sqlite3.connect(db_filepath)
-
-        ce = con.execute('SELECT title, hash FROM metadata_items WHERE metadata_type BETWEEN 1 AND 2')
-        ce.row_factory = dict_factory
-        datas = ce.fetchall()
-        count = len(datas)
-        for idx, item in enumerate(datas):
-            row_ce = con.execute('SELECT hash FROM metadata WHERE hash = ?', (item['hash'],))
-            row_ce.row_factory = dict_factory
-            row = row_ce.fetchall()
-            if len(row) == 1:
-                logger.warning(f"{idx+1} / {count} : {item['title']} Already Info.xml saved")
-            elif len(row) == 0:
-                metapath = os.path.join(ModelSetting.get('base_path_metadata'), 'Movies' if metadata_type == 1 else 'TV Shows', item['hash'][0], f"{item['hash'][1:]}.bundle", 'Contents', '_combined', 'Info.xml')
-                #logger.debug(metapath)
-                if os.path.exists(metapath):
-                    xml = ToolBaseFile.read(metapath)
-                    insert_ce = con.execute('INSERT INTO metadata (hash, data) VALUES (?,?)', (item['hash'], xml))
-                    logger.warning(f"{idx+1} / {count} : {item['title']} insert..")
-                else:
-                    logger.warning(f"{idx+1} / {count} : {item['title']} Not exist Info.xml file")
-        con.commit()
-        con.close()
-        

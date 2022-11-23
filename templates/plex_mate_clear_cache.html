@@ -1,41 +1,35 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div>
-  {{ macros.m_button_group([['global_setting_save_btn', '설정 저장'], ['global_one_execute_sublogic_btn', '1회 실행'], ['global_immediately_execute_sublogic_btn', '바로 실행'] ])}}
-  {{ macros.m_row_start('5') }}
-  {{ macros.m_row_end() }}
-  <nav>
-    {{ macros.m_tab_head_start() }}
-      {{ macros.m_tab_head2('normal', '설정', true) }}
-      {{ macros.m_tab_head2('auto', '자동 & 기타', false) }}
-    {{ macros.m_tab_head_end() }}
-  </nav>
-  <form id='setting' name='setting'>
-  <div class="tab-content" id="nav-tabContent">
-    {{ macros.m_tab_content_start('normal', true) }}
+{{ macros.m_button_group([['globalSettingSaveBtn', '설정 저장'], ['globalOneExecuteBtn', '1회 실행'], ['globalImmediatelyExecuteBtn', '즉시 실행']])}}
+{{ macros.m_row_start('5') }}
+{{ macros.m_row_end() }}
 
-      {{ macros.setting_input_int('clear_cache_max_size', '최대 크기',  desc=['이 크기 이상일 경우 삭제', '0이면 항상 삭제', 'GB 단위'], value=arg['clear_cache_max_size']) }}
-      {{ macros.m_hr() }}
-      {{ macros.buttons([['get_size_phototranscoder_btn', '크기 확인'], ['clear_phototranscoder_btn', '비우기']]) }}
-      
-      
-    {{ macros.m_tab_content_end() }}  
+<nav>
+  {{ macros.m_tab_head_start() }}
+    {{ macros.m_tab_head('normal', '설정', true) }}
+    {{ macros.m_tab_head('auto', '자동 & 기타', false) }}
+  {{ macros.m_tab_head_end() }}
+</nav>
+<form id='setting' name='setting'>
+<div class="tab-content" id="nav-tabContent">
+  {{ macros.m_tab_content_start('normal', true) }}
+    {{ macros.setting_input_int('clear_cache_max_size', '최대 크기',  desc=['이 크기 이상일 경우 삭제', '0이면 항상 삭제', 'GB 단위'], value=arg['clear_cache_max_size']) }}
+    {{ macros.m_hr() }}
+    {{ macros.setting_buttons([['get_size_phototranscoder_btn', '크기 확인'], ['clear_phototranscoder_btn', '비우기']]) }}
+  {{ macros.m_tab_content_end() }}  
 
-    {{ macros.m_tab_content_start('auto', false) }}
-      {{ macros.setting_global_scheduler_sublogic_button(arg['scheduler'], arg['is_running']) }}
-      {{ macros.setting_input_text('clear_cache_interval', '스케쥴링 실행 정보', value=arg['clear_cache_interval'], col='3', desc=['Inverval(minute 단위)이나 Cron 설정']) }}
-      {{ macros.setting_checkbox('clear_cache_auto_start', '시작시 자동실행', value=arg['clear_cache_auto_start'], desc='On : 시작시 자동으로 스케쥴러에 등록됩니다.') }}
-    {{ macros.m_tab_content_end() }}
-  </div><!--tab-content-->
-  </form>
-</div> <!--전체-->
+  {{ macros.m_tab_content_start('auto', false) }}
+    {{ macros.setting_global_scheduler_sublogic_button(arg['scheduler'], arg['is_running']) }}
+    {{ macros.setting_input_text('clear_cache_interval', '스케쥴링 실행 정보', value=arg['clear_cache_interval'], col='3', desc=['Inverval(minute 단위)이나 Cron 설정']) }}
+    {{ macros.setting_checkbox('clear_cache_auto_start', '시작시 자동실행', value=arg['clear_cache_auto_start'], desc='On : 시작시 자동으로 스케쥴러에 등록됩니다.') }}
+  {{ macros.m_tab_content_end() }}
+</div><!--tab-content-->
+</form>
+
 
 
 <script type="text/javascript">
-var package_name = "{{arg['package_name'] }}";
-var sub = "{{arg['sub']}}";
-var sub2 = "{{arg['sub2']}}";
 var path_app_root = "{{arg['path_app_root']}}";
 
 $(document).ready(function(){
@@ -43,12 +37,12 @@ $(document).ready(function(){
 
 $("body").on('click', '#get_size_phototranscoder_btn', function(e){
   e.preventDefault();
-  global_send_command_sub('cache_size');
+  globalSendCommandPage('cache_size');
 });
 
 $("body").on('click', '#clear_phototranscoder_btn', function(e){
   e.preventDefault();
-  global_send_command_sub('cache_clear');
+  globalSendCommandPage('cache_clear');
 });
 
 </script>    

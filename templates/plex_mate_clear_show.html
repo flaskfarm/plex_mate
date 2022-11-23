@@ -57,7 +57,6 @@
 <script type="text/javascript">
 
 $(document).ready(function(){
-  //$('#main_container').attr('class', 'container-fluid');  
   socket_init();
 });
 
@@ -127,7 +126,6 @@ function make_one(data) {
   return row;
 }
 
-
 function make_status(data) {
   console.log('status_div')
   console.log(data)
@@ -141,31 +139,9 @@ function make_status(data) {
     str += ' / 전체크기 : ' + color(humanFileSize(data.total_size), 'blue');
     str += ' / 삭제크기 : ' + color(humanFileSize(data.remove_size));
   }
-    
   str += '</h4>';
   $('#status_div').html(str);
-
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 </script> 
 

@@ -49,6 +49,16 @@ setting = {
                     {'uri': 'music', 'name': '음악 정리'},
                     {'uri': 'bundle', 'name': '번들 삭제'},
                     {'uri': 'cache', 'name': '캐시(PhotoTranscoder) 삭제'},
+                    {'uri': 'manual/files/파일정리.md', 'name': '매뉴얼'},
+                ]
+            },
+            {
+                'uri': 'copy',
+                'name': '라이브러리 복사',
+                'list': [
+                    {'uri': 'make', 'name': '소스 DB 생성'},
+                    {'uri': 'copy', 'name': '복사 설정'},
+                    {'uri': 'status', 'name': '복사 상태'},
                 ]
             },
             {
@@ -76,11 +86,12 @@ P = create_plugin_instance(setting)
 try:
     from .mod_base import ModuleBase
     from .mod_clear import ModuleClear
+    from .mod_copy import ModuleCopy
     from .mod_periodic import ModulePeriodic
     from .mod_scan import ModelScanItem, ModuleScan
     from .mod_tool import ModuleTool
 
-    P.set_module_list([ModuleBase, ModuleScan, ModulePeriodic, ModuleTool, ModuleClear])
+    P.set_module_list([ModuleBase, ModuleScan, ModulePeriodic, ModuleTool, ModuleClear, ModuleCopy])
     
     # 외부 호출
     from .plex_db import PlexDBHandle
@@ -112,13 +123,5 @@ logger = P.logger
                     {'uri': 'task', 'name': '작업'},
                 ]
             },
-            {
-                'uri': 'dbcopy',
-                'name': '라이브러리 복사',
-                'list': [
-                    {'uri': 'make', 'name': '소스 DB 생성'},
-                    {'uri': 'copy', 'name': '복사 설정'},
-                    {'uri': 'status', 'name': '복사 상태'},
-                ]
-            },
+            
 """

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<script src="{{ url_for('.static', filename='base.js') }}"></script>
+{{ macros.m_button_group([['start_btn', '생성 시작']])}}
+{{ macros.m_row_start('5') }}
+{{ macros.m_row_end() }}
+
+<form id='setting'>
+  {{ macros.setting_input_text_and_buttons('copy_make_path_create', '소스 DB 파일 경로', [['select_copy_make_path_create_btn', '경로 선택']], value=arg['copy_make_path_create'], desc=['DB 파일을 저장할 폴더']) }}
+  {{ macros.setting_top('라이브러리 선택') }}
+  <div class="input-group col-sm-6">
+    <select id="library_select" name="library_select" class="form-control form-control-sm">
+      {% if arg['library_list'] is not none %}
+      {% for item in arg['library_list'] %}
+        {% set value = item['id'] | string() %}
+        {% if value == arg['copy_make_section_id'] %}
+        <option value="{{ item['id'] }}" selected>{{item['name']}}</option>
+        {% else %}
+        <option value="{{ item['id'] }}">{{item['name']}}</option>
+        {% endif %}
+      {% endfor %}
+      {% endif %}
+    </select>
+  </div>
+  {{ macros.setting_bottom('') }}
+</form>
+
+
+
+<script type="text/javascript">
+
+$(document).ready(function(){
+});
+
+
+$("body").on('click', '#select_copy_make_path_create_btn', function(e){
+  e.preventDefault();
+  var path = $('#copy_make_path_create').val().trim();
+  if (path == '') path = '/';
+  globalSelectLocalFolder("저장 폴더 선택", path, function(result){
+    $('#copy_make_path_create').val(result);
+  });
+});
+
+
+$("body").on('click', '#start_btn', function(e){
+  e.preventDefault();
+  globalSendCommandPage('start', $('#copy_make_path_create').val(), $('#library_select').val(), $('#copy_make_include_info_xml').prop('checked') === true);
+});
+
+
+</script> 
+
+{% endblock %}

@@ -52,46 +52,38 @@
 <div id="list_div"></div>
 
 <script type="text/javascript">
-var package_name = "{{arg['package_name'] }}";
-var sub = "{{ arg['sub'] }}";
-var sub2 = "{{ arg['sub2'] }}";
-var current_data = null;
-
 $(document).ready(function(){
-  //$('#main_container').attr('class', 'container-fluid');  
-  socket_init(package_name, sub, sub2);
+  socket_init();
 });
 
 $("body").on('click', '#movie_start0_btn', function(e){
   e.preventDefault();
-  global_send_command_sub('start0', $('#library_select').val(), $('#dryrun').is(":checked"));
+  globalSendCommandPage('start0', $('#library_select').val(), $('#dryrun').is(":checked"));
 });
 
 $("body").on('click', '#movie_start1_btn', function(e){
   e.preventDefault();
-  global_send_command_sub('start1', $('#library_select').val(), $('#dryrun').is(":checked"));
+  globalSendCommandPage('start1', $('#library_select').val(), $('#dryrun').is(":checked"));
 });
 
 $("body").on('click', '#movie_start2_btn', function(e){
   e.preventDefault();
-  global_send_command_sub('start2', $('#library_select').val(), $('#dryrun').is(":checked"));
+  globalSendCommandPage('start2', $('#library_select').val(), $('#dryrun').is(":checked"));
 });
 
 $("body").on('click', '#movie_start3_btn', function(e){
   e.preventDefault();
-  global_send_command_sub('start3', $('#library_select').val(), $('#dryrun').is(":checked"));
+  globalSendCommandPage('start3', $('#library_select').val(), $('#dryrun').is(":checked"));
 });
 
 $("body").on('click', '#movie_stop_btn', function(e){
   e.preventDefault();
-  global_send_command_sub('stop');
+  globalSendCommandPage('stop');
 });
 
 
-
-
 function make_one(data) {
-  row = m_row_start_hover();
+  row = j_row_start_hover();
   row += make_log("제목", data.db.title);
   row += make_log("HASH / GUID", data.db.hash + ' - ' + data.db.guid);
   str = "크기 : " + color(humanFileSize(data.meta.total), 'blue');
@@ -113,7 +105,7 @@ function make_one(data) {
   if (data.remove_filepath != null) {
     row += make_log("삭제파일", '<pre>' + data.remove_filepath.join('\n') + '</pre>');
   }
-  row += m_row_end();
+  row += j_row_end();
   return row;
 }
 
@@ -129,32 +121,9 @@ function make_status(data) {
     str += ' / 전체크기 : ' + color(humanFileSize(data.total_size), 'blue');
     str += ' / 삭제크기 : ' + color(humanFileSize(data.remove_size));
   }
-    
   str += '</h4>';
   $('#status_div').html(str);
-
-
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 </script> 
-
 {% endblock %}
