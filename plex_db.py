@@ -87,18 +87,17 @@ class PlexDBHandle(object):
             cmd = [P.ModelSetting.get("base_bin_sqlite"), P.ModelSetting.get("base_path_db"), f".read {sql_filepath}"]
             for i in range(10):
                 ret = SupportSubprocess.execute_command_return(cmd)
-                P.logger.error(ret)
+                #P.logger.error(ret)
                 if ret['log'].find('database is locked') != -1:
                     time.sleep(5)
                 else:
                     break
-
-            
-            return ret
+            return ret['log']
         except Exception as e: 
             logger.error(f'Exception:{str(e)}')
             logger.error(traceback.format_exc())
-        return '' 
+        return False
+
 
 
     @classmethod
@@ -143,11 +142,6 @@ class PlexDBHandle(object):
         return   
 
     
-
-    @classmethod
-    def select2(cls, query, args, db_file=None):
-        return cls.execute_arg(query, args, db_file=db_file)
-        
     
     @classmethod
     def execute_arg(cls, query, args, db_file=None):
@@ -243,7 +237,7 @@ class PlexDBHandle(object):
             query = """SELECT library_sections.id as section_id, name, section_type, root_path  FROM library_sections, section_locations WHERE library_sections.id == section_locations.library_section_id ORDER BY library_sections.id"""
         else:
             query = f"""SELECT library_sections.id as section_id, name, section_type, root_path  FROM library_sections, section_locations WHERE library_sections.id == section_locations.library_section_id AND library_sections.id = {library_id} ORDER BY library_sections.id"""
-        return cls.select2(query, None, db_file=db_file)
+        return cls.select(query, db_file=db_file)
 
 
     @classmethod

@@ -1,6 +1,8 @@
-import urllib
 import sqlite3
+import urllib
+
 from support import SupportFile
+
 from .plex_db import PlexDBHandle, dict_factory
 from .setup import *
 
@@ -19,7 +21,7 @@ class Task(object):
 
     @staticmethod
     @F.celery.task(bind=True)
-    def start(self):
+    def start(self, *args):
         try:
             Task.config = P.load_config()
             Task.change_rule = [P.ModelSetting.get('copy_copy_path_source_root_path'), P.ModelSetting.get('copy_copy_path_target_root_path')]
@@ -52,8 +54,8 @@ class Task(object):
                     return Task.music_start(self)
      
         except Exception as e: 
-            logger.error(f'Exception:{str(e)}')
-            logger.error(traceback.format_exc())
+            P.logger.error(f'Exception:{str(e)}')
+            P.logger.error(traceback.format_exc())
         finally:
             if Task.source_cur is not None:
                 Task.source_cur.close()
@@ -74,8 +76,8 @@ class Task(object):
             try:
                 ce = Task.source_con.execute(Task.config['라이브러리 복사 영화 쿼리'], (SOURCE_LOCATION['id'],))
             except Exception as e: 
-                logger.error(f'Exception:{str(e)}')
-                logger.error(traceback.format_exc())
+                P.logger.error(f'Exception:{str(e)}')
+                P.logger.error(traceback.format_exc())
                 ce = Task.source_con.execute('SELECT * FROM metadata_items WHERE metadata_type = 1 AND id in (SELECT metadata_item_id FROM media_items WHERE section_location_id = ?) ORDER BY title DESC', (SOURCE_LOCATION['id'],))
     
             ce.row_factory = dict_factory
@@ -116,10 +118,10 @@ class Task(object):
                     # media_item, pars, stream은 그냥 코드를 가져다 써도 되겠지만 directory를 테스트하기도 빡세다.
                     #Task.process_extra(metadata_item, metadata_item_id)
                 except Exception as e: 
-                    logger.error(f'Exception:{str(e)}')
-                    logger.error(traceback.format_exc())
+                    P.logger.error(f'Exception:{str(e)}')
+                    P.logger.error(traceback.format_exc())
                 finally:
-                    if F.app.config['use_celery']:
+                    if F.config['use_celery']:
                         celery_instance.update_state(state='PROGRESS', meta=data)
                     else:
                         celery_instance.receive_from_task(data, celery=False)
@@ -153,13 +155,12 @@ class Task(object):
                     insert_col = insert_col.rstrip(',')
                     insert_value = insert_value.rstrip(',')
                     query = f"INSERT INTO metadata_items({insert_col}) VALUES({insert_value});SELECT max(id) FROM metadata_items;" 
-                    logger.error(query)
                     insert_col = insert_value = ''
-                    ret = PlexDBHandle.execute_query2(query)
+                    ret = PlexDBHandle.execute_query(query)
                     if ret != '':
                         new_extra_metadata_item_id = int(ret)
                     else:
-                        logger.error('insert fail!!')
+                        P.logger.error('insert fail!!')
                         continue
                     for key, value in relation.items():
                         if key in ['id'] or value is None:
@@ -177,15 +178,15 @@ class Task(object):
                     insert_col = insert_col.rstrip(',')
                     insert_value = insert_value.rstrip(',')
                     query = f"INSERT INTO metadata_relations({insert_col}) VALUES({insert_value});" 
-                    ret = PlexDBHandle.execute_query2(query)
-                    logger.warning(ret)
+                    ret = PlexDBHandle.execute_query(query)
+                    P.logger.warning(ret)
                 except Exception as e: 
-                    logger.error(f'Exception:{str(e)}')
-                    logger.error(traceback.format_exc())
+                    P.logger.error(f'Exception:{str(e)}')
+                    P.logger.error(traceback.format_exc())
             return True
         except Exception as e: 
-            logger.error(f'Exception:{str(e)}')
-            logger.error(traceback.format_exc())
+            P.logger.error(f'Exception:{str(e)}')
+            P.logger.error(traceback.format_exc())
 
 
 
@@ -195,16 +196,16 @@ class Task(object):
         for SOURCE_LOCATION in Task.SOURCE_LOCATIONS:
             CURRENT_TARGET_LOCATION_ID, CURRENT_TARGET_LOCATION_FOLDERPATH = Task.get_target_location_id(SOURCE_LOCATION)
             if CURRENT_TARGET_LOCATION_ID is None:
-                logger.error(f"CURRENT_TARGET_LOCATION_ID is None. {SOURCE_LOCATION}")
+                P.logger.error(f"CURRENT_TARGET_LOCATION_ID is None. {SOURCE_LOCATION}")
                 continue
                 return 'fail'
             try:
                 ce = Task.source_con.execute(Task.config['라이브러리 복사 TV 쿼리'], (SOURCE_LOCATION['id'],))
             except Exception as e: 
-                logger.error(f'Exception:{str(e)}')
-                logger.error(traceback.format_exc())
+                P.logger.error(f'Exception:{str(e)}')
+                P.logger.error(traceback.format_exc())
                 ce = Task.source_con.execute('SELECT * FROM metadata_items WHERE id in (SELECT parent_id FROM metadata_items WHERE id in (SELECT parent_id FROM metadata_items WHERE id in (SELECT metadata_item_id FROM media_items WHERE section_location_id = ?) GROUP BY parent_id) GROUP BY parent_id) ORDER BY title DESC', (SOURCE_LOCATION['id'],))
-                ce.row_factory = dict_factory
+            ce.row_factory = dict_factory
             meta_list = ce.fetchall()
             status['count'] += len(meta_list)
             for idx, show_metadata_item in enumerate(meta_list):
@@ -213,7 +214,7 @@ class Task(object):
                 try:
                     status['current'] += 1
                     data = {'status':status, 'ret':'append', 'title':show_metadata_item['title'], 'year':show_metadata_item['year'], 'files':[]}
-                    logger.warning(f"{idx} / {len(meta_list)} {show_metadata_item['title']}")
+                    P.logger.warning(f"{idx} / {len(meta_list)} {show_metadata_item['title']}")
                     show_metadata_item_id, is_exist = Task.insert_metadata_items(show_metadata_item, Task.TARGET_SECTION_ID)
                     if is_exist:
                         data['ret'] = 'exist'
@@ -242,10 +243,10 @@ class Task(object):
                                         media_stream_id = Task.insert_media_streams(media_stream, media_item_id, media_part_id, Task.TARGET_SECTION_ID)
                     Task.insert_tag(show_metadata_item, show_metadata_item_id)
                 except Exception as e: 
-                    logger.error(f'Exception:{str(e)}')
-                    logger.error(traceback.format_exc())
+                    P.logger.error(f'Exception:{str(e)}')
+                    P.logger.error(traceback.format_exc())
                 finally:
-                    if F.app.config['use_celery']:
+                    if F.config['use_celery']:
                         celery_instance.update_state(state='PROGRESS', meta=data)
                     else:
                         celery_instance.receive_from_task(data, celery=False)
@@ -262,8 +263,8 @@ class Task(object):
             try:
                 ce = Task.source_con.execute(Task.config['라이브러리 복사 음악 쿼리'], (SOURCE_LOCATION['id'],))
             except Exception as e: 
-                logger.error(f'Exception:{str(e)}')
-                logger.error(traceback.format_exc())
+                P.logger.error(f'Exception:{str(e)}')
+                P.logger.error(traceback.format_exc())
                 ce = Task.source_con.execute('SELECT * FROM metadata_items WHERE id in (SELECT parent_id FROM metadata_items WHERE id in (SELECT parent_id FROM metadata_items WHERE id in (SELECT metadata_item_id FROM media_items WHERE section_location_id = ?) GROUP BY parent_id) GROUP BY parent_id) ORDER BY title DESC', (SOURCE_LOCATION['id'],))
             ce.row_factory = dict_factory
             meta_list = ce.fetchall()
@@ -274,7 +275,7 @@ class Task(object):
                 try:
                     status['current'] += 1
                     data = {'status':status, 'ret':'append', 'title':artist_metadata_item['title'], 'year':'', 'files':[]}
-                    logger.warning(f"{idx} / {len(meta_list)} {artist_metadata_item['title']}")
+                    P.logger.warning(f"{idx} / {len(meta_list)} {artist_metadata_item['title']}")
                     artist_metadata_item_id, is_exist = Task.insert_metadata_items(artist_metadata_item, Task.TARGET_SECTION_ID)
                     if is_exist:
                         data['ret'] = 'exist'
@@ -303,10 +304,10 @@ class Task(object):
                                         media_stream_id = Task.insert_media_streams(media_stream, media_item_id, media_part_id, Task.TARGET_SECTION_ID)
                     Task.insert_tag(artist_metadata_item, artist_metadata_item_id)
                 except Exception as e: 
-                    logger.error(f'Exception:{str(e)}')
-                    logger.error(traceback.format_exc())
+                    P.logger.error(f'Exception:{str(e)}')
+                    P.logger.error(traceback.format_exc())
                 finally:
-                    if F.app.config['use_celery']:
+                    if F.config['use_celery']:
                         celery_instance.update_state(state='PROGRESS', meta=data)
                     else:
                         celery_instance.receive_from_task(data, celery=False)
@@ -315,7 +316,7 @@ class Task(object):
 
     @staticmethod
     def insert_media_streams(media_stream, media_item_id, media_part_id, library_section_id):
-        data = PlexDBHandle.select2(f"SELECT id FROM media_streams WHERE media_item_id = ? AND media_part_id = ? AND stream_type_id = ? AND codec = ? AND language = ? AND `index` = ? AND extra_data = ?", (media_item_id, media_part_id, media_stream['stream_type_id'], media_stream['codec'], media_stream['language'], media_stream['index'], media_stream['extra_data']))
+        data = PlexDBHandle.execute_arg(f"SELECT id FROM media_streams WHERE media_item_id = ? AND media_part_id = ? AND stream_type_id = ? AND codec = ? AND language = ? AND `index` = ? AND extra_data = ?", (media_item_id, media_part_id, media_stream['stream_type_id'], media_stream['codec'], media_stream['language'], media_stream['index'], media_stream['extra_data']))
         #logger.error(data)
         if len(data) == 1:
             return data[0]['id']
@@ -342,11 +343,11 @@ class Task(object):
             insert_col = insert_col.rstrip(',')
             insert_value = insert_value.rstrip(',')
             query = f"INSERT INTO media_streams ({insert_col}) VALUES ({insert_value});SELECT max(id) FROM media_streams;" 
-            ret = PlexDBHandle.execute_query2(query)
+            ret = PlexDBHandle.execute_query(query)
             if ret != '':
                 return int(ret)
         else:
-            logger.error("동일 정보가 여러가 있음")
+            P.logger.error("동일 정보가 여러가 있음")
 
 
     @staticmethod
@@ -368,9 +369,9 @@ class Task(object):
                 if tmp2[0] != '/':
                     tmp2 = '/' + tmp2
                 Task.change_rule_extra.append(tmp2)
-                logger.warning(Task.change_rule_extra)
+                #P.logger.warning(Task.change_rule_extra)
         target = source.replace(Task.change_rule_extra[0], Task.change_rule_extra[1])
-        logger.warning(target)
+        #logger.warning(target)
         return target
 
     @staticmethod
@@ -398,7 +399,7 @@ class Task(object):
         ret = {}
         ret['new_filepath'] = new_filepath
         ret['dir_id'] = Task.make_directories(library_section_id, folderpath)
-        logger.debug(ret)
+        #logger.debug(ret)
         return ret
     
     # 2021-10-12 중대오류
@@ -416,7 +417,7 @@ class Task(object):
     # 여기서는 그 섹션의 루트 폴더를 받아서 처리
     @staticmethod
     def make_directories(library_section_id, path):
-        data = PlexDBHandle.select2(f"SELECT id FROM directories WHERE library_section_id = ? AND path = ?", (library_section_id, path))
+        data = PlexDBHandle.execute_arg(f"SELECT id FROM directories WHERE library_section_id = ? AND path = ?", (library_section_id, path))
         if len(data) == 1:
             return data[0]['id']
         elif len(data) == 0:
@@ -425,7 +426,7 @@ class Task(object):
             if path == '':
                 # '' parent 를 구하기 위해서 왔는데 DB 없다
                 query = f"INSERT INTO directories ('library_section_id','path','created_at','updated_at') VALUES ('{library_section_id}','{path}','{time_str}','{updated_str}');SELECT max(id) FROM directories;" 
-                ret = PlexDBHandle.execute_query2(query)
+                ret = PlexDBHandle.execute_query(query)
                 if ret != '':
                     return int(ret)
             else:
@@ -442,11 +443,11 @@ class Task(object):
                 if len(tmp) == 1:
                     updated_str = tmp[0]['updated_at']
             except Exception as e: 
-                logger.error(f'Exception:{str(e)}')
-                logger.error(traceback.format_exc())                
+                P.logger.error(f'Exception:{str(e)}')
+                P.logger.error(traceback.format_exc())                
             path = path.replace("'", "''")
             query = f"INSERT INTO directories ('library_section_id','parent_directory_id','path','created_at','updated_at') VALUES ('{library_section_id}',{parent_directory_id},'{path}','{time_str}','{updated_str}');SELECT max(id) FROM directories;" 
-            ret = PlexDBHandle.execute_query2(query)
+            ret = PlexDBHandle.execute_query(query)
             if ret != '':
                 return int(ret)
     
@@ -454,7 +455,7 @@ class Task(object):
 
     @staticmethod
     def insert_media_parts(media_part, media_item_id, library_section_id, current_section_folderpath):
-        data = PlexDBHandle.select2(f"SELECT id FROM media_parts WHERE hash = ? AND media_item_id = ?", (media_part['hash'], media_item_id))
+        data = PlexDBHandle.execute_arg(f"SELECT id FROM media_parts WHERE hash = ? AND media_item_id = ?", (media_part['hash'], media_item_id))
         if len(data) >= 1:
             return data[0]['id'], None
         elif len(data) == 0:
@@ -480,17 +481,17 @@ class Task(object):
             insert_col = insert_col.rstrip(',')
             insert_value = insert_value.rstrip(',')
             query = f"INSERT INTO media_parts ({insert_col}) VALUES ({insert_value});SELECT max(id) FROM media_parts;" 
-            ret = PlexDBHandle.execute_query2(query)
+            ret = PlexDBHandle.execute_query(query)
             if ret != '':
                 return int(ret), file_ret['new_filepath']
         else:
-            logger.error("동일 정보가 여러가 있음")
+            P.logger.error("동일 정보가 여러가 있음")
 
 
 
     @staticmethod
     def insert_media_items(media_item, library_section_id, section_location_id, metadata_item_id, insert=True):
-        data = PlexDBHandle.select2(f"SELECT id FROM media_items WHERE library_section_id = ? AND metadata_item_id = ? AND size = ? AND bitrate = ? AND hints = ?", (library_section_id, metadata_item_id, media_item['size'], media_item['bitrate'], media_item['hints']))
+        data = PlexDBHandle.execute_arg(f"SELECT id FROM media_items WHERE library_section_id = ? AND metadata_item_id = ? AND size = ? AND bitrate = ? AND hints = ?", (library_section_id, metadata_item_id, media_item['size'], media_item['bitrate'], media_item['hints']))
         if len(data) >= 1:
             return data[0]['id']
         elif len(data) == 0:
@@ -516,18 +517,18 @@ class Task(object):
                 insert_col = insert_col.rstrip(',')
                 insert_value = insert_value.rstrip(',')
                 query = f"INSERT INTO media_items ({insert_col}) VALUES ({insert_value});SELECT max(id) FROM media_items;" 
-                ret = PlexDBHandle.execute_query2(query)
+                ret = PlexDBHandle.execute_query(query)
                 if ret != '':
                     return int(ret)
             else:
-                logger.error("insert 했으나 정보 없음")    
+                P.logger.error("insert 했으나 정보 없음")    
         else:
-            logger.error("동일 정보가 여러가 있음")
+            P.logger.error("동일 정보가 여러가 있음")
 
 
     @staticmethod
     def insert_metadata_items(metadata_item, section_id, insert=True, parent_id=None):
-        data = PlexDBHandle.select2(f"SELECT id FROM metadata_items WHERE library_section_id = ? AND guid = ? AND hash = ?", (section_id, metadata_item['guid'], metadata_item['hash']))        
+        data = PlexDBHandle.execute_arg(f"SELECT id FROM metadata_items WHERE library_section_id = ? AND guid = ? AND hash = ?", (section_id, metadata_item['guid'], metadata_item['hash']))        
         if len(data) >= 1:
             return data[0]['id'], True
         elif len(data) == 0:
@@ -552,13 +553,13 @@ class Task(object):
                 insert_col = insert_col.rstrip(',')
                 insert_value = insert_value.rstrip(',')
                 query = f"INSERT INTO metadata_items({insert_col}) VALUES({insert_value});SELECT max(id) FROM metadata_items;" 
-                ret = PlexDBHandle.execute_query2(query)
+                ret = PlexDBHandle.execute_query(query)
                 if ret != '':
                     return int(ret), False
             else:
-                logger.error("insert 했으나 정보 없음")    
+                P.logger.error("insert 했으나 정보 없음")    
         else:
-            logger.error("동일 정보가 여러가 있음")
+            P.logger.error("동일 정보가 여러가 있음")
 
 
     @staticmethod
@@ -581,16 +582,17 @@ class Task(object):
         if len(row) == 1:
             metapath = os.path.join(P.ModelSetting.get('base_path_metadata'), 'Movies' if metadata_type == 1 else 'TV Shows', metadata_item['hash'][0], f"{metadata_item['hash'][1:]}.bundle", 'Contents', '_combined', 'Info.xml')
             if os.path.exists(metapath):
-                logger.warning(f"{metadata_item['title']} Info.xml already exist..")
+                P.logger.warning(f"{metadata_item['title']} Info.xml already exist..")
             else:
                 folder_path = os.path.dirname(metapath)
                 if os.path.exists(folder_path) == False:
                     os.makedirs(folder_path)
                     SupportFile.write_file(metapath, row[0]['data'])
-                    logger.debug(metapath)
-                    logger.warning(f"{metadata_item['title']} Info.xml write..")
+                    P.logger.debug(metapath)
+                    P.logger.warning(f"{metadata_item['title']} Info.xml write..")
         else:
-            logger.warning('info.xml data not exist')                
+            P.logger.warning('info.xml data not exist')                
+
 
     @staticmethod
     def insert_tag(metadata_item, plex_metadata_item_id):      
@@ -599,13 +601,13 @@ class Task(object):
         rows = row_ce.fetchall()
         for tag_item in rows:
             if tag_item['taggings_index'] is not None:
-                data = PlexDBHandle.select2(f"SELECT * FROM taggings, tags WHERE taggings.tag_id = tags.id AND taggings.metadata_item_id = ? AND taggings.`index` = ? AND taggings.text = ? AND taggings.extra_data = ? AND tags.tag = ? AND tags.tag_type = ?", (plex_metadata_item_id, tag_item['taggings_index'], tag_item['taggings_text'], tag_item['taggings_extra_data'], tag_item['tags_tag'], tag_item['tags_tag_type']))
+                data = PlexDBHandle.execute_arg(f"SELECT * FROM taggings, tags WHERE taggings.tag_id = tags.id AND taggings.metadata_item_id = ? AND taggings.`index` = ? AND taggings.text = ? AND taggings.extra_data = ? AND tags.tag = ? AND tags.tag_type = ?", (plex_metadata_item_id, tag_item['taggings_index'], tag_item['taggings_text'], tag_item['taggings_extra_data'], tag_item['tags_tag'], tag_item['tags_tag_type']))
             else:
-                data = PlexDBHandle.select2(f"SELECT * FROM taggings, tags WHERE taggings.tag_id = tags.id AND taggings.metadata_item_id = ? AND taggings.text = ? AND taggings.extra_data = ? AND tags.tag = ? AND tags.tag_type = ?", (plex_metadata_item_id, tag_item['taggings_text'], tag_item['taggings_extra_data'], tag_item['tags_tag'], tag_item['tags_tag_type']))
+                data = PlexDBHandle.execute_arg(f"SELECT * FROM taggings, tags WHERE taggings.tag_id = tags.id AND taggings.metadata_item_id = ? AND taggings.text = ? AND taggings.extra_data = ? AND tags.tag = ? AND tags.tag_type = ?", (plex_metadata_item_id, tag_item['taggings_text'], tag_item['taggings_extra_data'], tag_item['tags_tag'], tag_item['tags_tag_type']))
             if len(data) > 0:
                 continue
             tag_id = -1
-            data = PlexDBHandle.select2(f"SELECT * FROM tags WHERE tag = ? AND tag_type = ? AND user_thumb_url = ?", (tag_item['tags_tag'], tag_item['tags_tag_type'], tag_item['tags_user_thumb_url']))
+            data = PlexDBHandle.execute_arg(f"SELECT * FROM tags WHERE tag = ? AND tag_type = ? AND user_thumb_url = ?", (tag_item['tags_tag'], tag_item['tags_tag_type'], tag_item['tags_user_thumb_url']))
             if len(data) > 0:
                 tag_id = data[0]['id']
             elif len(data) == 0:
@@ -616,7 +618,7 @@ class Task(object):
                     insert_col += ", 'created_at'"
                     insert_value += f', "{tag_item["tags_created_at"]}"'
                 query = f"INSERT INTO tags({insert_col}) VALUES ({insert_value});SELECT max(id) FROM tags;" 
-                ret = PlexDBHandle.execute_query2(query)
+                ret = PlexDBHandle.execute_query(query)
                 if ret != '':
                     tag_id = int(ret)           
             if tag_id == -1:
@@ -636,7 +638,7 @@ class Task(object):
             insert_col += " 'thumb_url'"
             insert_value += f' ""'
             query = f"INSERT INTO taggings({insert_col}) VALUES ({insert_value});SELECT max(id) FROM taggings;" 
-            ret = PlexDBHandle.execute_query2(query)
+            ret = PlexDBHandle.execute_query(query)
             if ret != '':
                 taggins_id = int(ret)
             

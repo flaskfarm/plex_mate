@@ -333,7 +333,7 @@ class Task(object):
                                 sql += ' user_thumb_url = "{}" '.format(discord_url)
                                 sql += '  WHERE id = {} ;\n'.format(episode['id'])
                                 ret = PlexDBHandle.execute_query(sql)
-                                if ret['log'].find('database is locked') == -1:
+                                if ret.find('database is locked') == -1:
                                     data['meta']['remove'] += os.path.getsize(localpath)
                                     os.remove(localpath)
                     else:

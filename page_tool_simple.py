@@ -17,7 +17,7 @@ class PageToolSimple(PluginPageBase):
             if command == 'update_show_add':
                 query = 'UPDATE metadata_items SET added_at = (SELECT max(added_at) FROM metadata_items mi WHERE mi.parent_id = metadata_items.id OR mi.parent_id IN(SELECT id FROM metadata_items mi2 WHERE mi2.parent_id = metadata_items.id)) WHERE metadata_type = 2;'
                 result = PlexDBHandle.execute_query(query)
-                if result:
+                if result != False:
                     ret = {'ret':'success', 'msg':'정상적으로 처리되었습니다.'}
                 else:
                     ret = {'ret':'warning', 'msg':'실패'}
@@ -31,7 +31,7 @@ class PageToolSimple(PluginPageBase):
             elif command == 'remove_collection':
                 query = f"DELETE FROM metadata_items WHERE metadata_type = 18 AND library_section_id = {arg1}; commit;"
                 result = PlexDBHandle.execute_query(query)
-                if result:
+                if result != False:
                     ret = {'ret':'success', 'msg':'정상적으로 처리되었습니다.'}
                 else:
                     ret = {'ret':'warning', 'msg':'실패'}
@@ -45,7 +45,7 @@ class PageToolSimple(PluginPageBase):
             elif command == 'remove_extra':
                 query = f"DELETE FROM metadata_items WHERE metadata_type = 12 AND guid LIKE 'sjva://sjva.me%'; commit;"
                 result = PlexDBHandle.execute_query(query)
-                if result:
+                if result != False:
                     ret = {'ret':'success', 'msg':'정상적으로 처리되었습니다.'}
                 else:
                     ret = {'ret':'warning', 'msg':'실패'}
@@ -89,7 +89,7 @@ class PageToolSimple(PluginPageBase):
                 query += f'UPDATE media_streams SET url = REPLACE(url, "{ret[0]}", "{ret[1]}");'
 
                 result = PlexDBHandle.execute_query(query)
-                if result:
+                if result != False:
                     ret = {'ret':'success', 'msg':'정상적으로 처리되었습니다.'}
                 else:
                     ret = {'ret':'warning', 'msg':'실패'}
@@ -134,7 +134,7 @@ class PageToolSimple(PluginPageBase):
                 if query != '':
                     logger.warning(query)
                     result = PlexDBHandle.execute_query(query)
-                    if result:
+                    if result != False:
                         ret = {'ret':'success', 'msg':'정상적으로 처리되었습니다.'}
                     else:
                         ret = {'ret':'warning', 'msg':'실패'}
@@ -149,7 +149,7 @@ class PageToolSimple(PluginPageBase):
                 section_id = arg1
                 query = f"""UPDATE metadata_items as A SET user_thumb_url = (SELECT user_art_url FROM metadata_items WHERE id in (SELECT parent_id FROM metadata_items as B WHERE id in (SELECT parent_id FROM metadata_items WHERE A.id = b.parent_id AND library_section_id = {section_id} AND (user_thumb_url = '' or user_thumb_url LIKE 'media%')))) WHERE library_section_id = {section_id} AND (user_thumb_url = '' or user_thumb_url LIKE 'media%')"""
                 result = PlexDBHandle.execute_query(query)
-                if result:
+                if result != False:
                     ret = {'ret':'success', 'msg':'정상적으로 처리되었습니다.'}
                 else:
                     ret = {'ret':'warning', 'msg':'실패'}
@@ -160,7 +160,7 @@ class PageToolSimple(PluginPageBase):
                 UPDATE media_parts SET deleted_at = null WHERE deleted_at is not null AND media_item_id in (SELECT id FROM media_itmes WHERE library_section_id = {section_id});"""
                 result = PlexDBHandle.execute_query(query)
                 logger.error(result)
-                if result:
+                if result != False:
                     ret = {'ret':'success', 'msg':'정상적으로 처리되었습니다.'}
                 else:
                     ret = {'ret':'warning', 'msg':'실패'}

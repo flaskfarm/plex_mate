@@ -1,6 +1,8 @@
-import sqlite3
 import platform
+import sqlite3
+
 from support import SupportDiscord, SupportFile, d
+
 from .plex_db import PlexDBHandle, dict_factory
 from .plex_web import PlexWebHandle
 from .setup import *
@@ -188,8 +190,7 @@ class Task(object):
                                 sql += ' user_art_url = "{}" '.format(discord_url)
                                 sql += '  WHERE id = {} ;\n'.format(data['db']['id'])
                                 ret = PlexDBHandle.execute_query(sql)
-                                print(ret)
-                                if ret['log'].find('database is locked') == -1:
+                                if ret.find('database is locked') == -1:
                                     data['media']['remove'] += os.path.getsize(img)
                                     os.remove(img)
                         else:

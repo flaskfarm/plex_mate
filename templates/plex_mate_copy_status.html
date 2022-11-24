@@ -23,28 +23,24 @@
 <div id="list_div"></div>
 
 <script type="text/javascript">
-var package_name = "{{arg['package_name'] }}";
-var sub = "{{ arg['sub'] }}";
-var sub2 = "{{ arg['sub2'] }}";
-var current_data = null;
 
 $(document).ready(function(){
-  socket_init(package_name, sub, sub2);
+  socket_init();
 });
 
 $("body").on('click', '#start_btn', function(e){
   e.preventDefault();
-  global_send_command_sub('start');
+  globalSendCommandPage('start');
 });
 
 $("body").on('click', '#stop_btn', function(e){
   e.preventDefault();
-  global_send_command_sub('stop');
+  globalSendCommandPage('stop');
 });
 
 
 function make_one(data) {
-  row = m_row_start_hover();
+  row = j_row_start_hover();
   if (data.ret == 'exist'){
     row += make_log("제목", color(data.title + ' (' + data.year+')') , 1, 11);
     row += make_log('', 'Already exist', 1, 11);
@@ -59,7 +55,7 @@ function make_one(data) {
     }
   }
   
-  row += m_row_end();
+  row += j_row_end();
   return row;
 }
 

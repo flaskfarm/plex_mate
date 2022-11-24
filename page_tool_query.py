@@ -35,7 +35,7 @@ class PageToolQuery(PluginPageBase):
                 elif tmp.startswith('update') or tmp.startswith('delete') or tmp.startswith('insert'):
                     ret['mode'] = 'not_select'
                     result = PlexDBHandle.execute_query(query)
-                    if result:
+                    if result != False:
                         ret['msg'] = f"실행했습니다."
                     else:
                         ret['ret'] = 'warning'

@@ -29,20 +29,25 @@ class PageCopyCopy(PluginPageBase):
             ret = {'ret':'success'}
             if command == 'source_section':
                 data = PlexDBHandle.library_sections(db_file=arg1)
-                ret['modal'] = d(data)
+                ret['json'] = data
+                ret['title'] = '소스 섹션'
+                P.ModelSetting.set(f'{self.parent.name}_{self.name}_path_source_db', arg1)
             elif command == 'target_section_id':
                 data = PlexDBHandle.library_sections()
-                ret['modal'] = d(data)
+                ret['json'] = data
+                ret['title'] = 'Plex Section'
             elif command == 'target_section_location_id':
-                logger.warning(arg1)
-                data = PlexDBHandle.select2('SELECT * FROM section_locations WHERE library_section_id = ?', (arg1,))
-                ret['modal'] = d(data)
+                data = PlexDBHandle.execute_arg('SELECT * FROM section_locations WHERE library_section_id = ?', (arg1,))
+                ret['json'] = data
+                ret['title'] = 'Plex Section Location'
             elif command == 'select_source_locations':
                 data = PlexDBHandle.select('SELECT * FROM section_locations', db_file=arg1)
-                ret['modal'] = d(data)
+                ret['json'] = data
+                ret['title'] = '소스 Section Locations'
             elif command == 'select_target_locations':
                 data = PlexDBHandle.select('SELECT * FROM section_locations')
-                ret['modal'] = d(data)
+                ret['json'] = data
+                ret['title'] = '타겟 Section Locations'
             return jsonify(ret)
         except Exception as e: 
             P.logger.error(f'Exception:{str(e)}')

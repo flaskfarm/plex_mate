@@ -368,6 +368,6 @@ class TaskScan:
 
     def get_meta(self, item):
         query = """SELECT metadata_items.id as metadata_item_id, media_parts.file as file FROM metadata_items, media_items, media_parts WHERE metadata_items.id = media_items.metadata_item_id AND media_items.id = media_parts.media_item_id AND metadata_items.library_section_id = ? AND media_parts.file = ?"""
-        data = PlexDBHandle.select2(query, (item.section_id, item.target))
+        data = PlexDBHandle.execute_arg(query, (item.section_id, item.target))
         return data
         
