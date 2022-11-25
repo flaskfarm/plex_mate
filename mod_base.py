@@ -176,8 +176,6 @@ class ModuleBase(PluginModuleBase):
 
 
     def task_interface2(self, command, *args):
-        logger.warning(args)
-        logger.warning(*args)
         if command == 'size' or command == 'size_ret':
             func = Task.get_size
         elif command == 'backup':
