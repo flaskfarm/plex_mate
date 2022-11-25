@@ -80,6 +80,7 @@ $("body").on('change', '#option2', function(e){
 function make_list(data) {
   str = '';
   for (i in data) {
+    console.log(data[i])
     str += j_row_start();
     tmp = '모드 : ';
     str += j_col(1, data[i].id, 'center');
@@ -100,7 +101,7 @@ function make_list(data) {
     tmp = '';
     tmp += j_info_text_left("경로", data[i].target, 2, 10);
     tmp += j_info_text_left("파일체크", data[i].filecheck_count, 2, 10);
-    if (data[i].meta_info != null) {
+    if (data[i].meta_info != null && data[i].meta_info.length > 0) {
       tmp += j_info_text_left("섹션", data[i].meta_info[0].name, 2, 10);
 
       
@@ -123,7 +124,7 @@ function make_list(data) {
     tmp = ''
     tmp += j_button('globalDbDeleteItemBtn', 'DB 삭제', {'id':data[i].id}, 'danger', true, true);
     tmp += j_button('globalJsonBtn', 'JSON', {'idx':i}, 'info', true, true);
-    if (data[i].meta_info != null) {
+    if (data[i].meta_info != null && data[i].meta_info.length > 0 && data[i].meta_info[0].metadata_item_id != null) {
       var meta_url = plex_url + '/web/index.html#!/server/' + machine + '/details?key=%2Flibrary%2Fmetadata%2F'+data[i].meta_info[0].metadata_item_id;
       tmp += j_button('globalOpenBtn', 'PLEX GO', {'url':meta_url}, 'info', true, true);
     }
