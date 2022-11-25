@@ -1,5 +1,6 @@
-from .task_clear_bundle import Task
 from .setup import *
+from .task_clear_bundle import Task
+
 
 class PageClearBundle(PluginPageBase):
     
@@ -51,6 +52,7 @@ class PageClearBundle(PluginPageBase):
         th = threading.Thread(target=func, args=())
         th.setDaemon(True)
         th.start()
+        return th
 
 
     def task_interface2(self, *args):

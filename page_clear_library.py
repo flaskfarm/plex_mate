@@ -63,6 +63,7 @@ class PageClearLibraryBase(PluginPageBase):
         th = threading.Thread(target=func, args=())
         th.setDaemon(True)
         th.start()
+        return th
 
 
     def task_interface2(self, *args):
