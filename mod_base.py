@@ -215,7 +215,7 @@ class ModuleBase(PluginModuleBase):
                     'title' : 'Agent Update Result',
                     'data' : d(ret),
                 }
-                P.logger.error(ret)
+                #P.logger.error(ret)
                 F.socketio.emit("modal", modal_data, namespace='/framework', broadcast=True)    
 
 
