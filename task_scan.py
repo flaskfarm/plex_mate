@@ -24,10 +24,8 @@ class Task:
             Task.filecheck_thread = threading.Thread(target=Task.filecheck_thread_function, args=())
             Task.filecheck_thread.daemon = True  
             Task.filecheck_thread.start()
-        #if P.ModelSetting.get_bool(f"{name}_incompleted_rescan"):
-        #    Task.__incompleted_rescan()
-
-        Task.scan_thread.join()
+            P.logger.info("PLEX SCAN 대기")
+            Task.scan_thread.join()
  
 
     def __check_media_part_data(db_item):

@@ -20,7 +20,7 @@ $("body").on('click', '#select_copy_copy_path_source_db_btn', function(e){
   e.preventDefault();
   var path = $('#copy_copy_path_source_db').val().trim();
   if (path == '') path = '/';
-  globalSelectLocalFolder("저장 폴더 선택", path, function(result){
+  globalSelectLocalFile("파일 선택", path, function(result){
     $('#copy_copy_path_source_db').val(result);
   });
 });

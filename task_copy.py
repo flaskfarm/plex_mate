@@ -125,8 +125,7 @@ class Task(object):
                         celery_instance.update_state(state='PROGRESS', meta=data)
                     else:
                         celery_instance.receive_from_task(data, celery=False)
-
-                
+        return 'wait'                
 
     @staticmethod
     def process_extra(metadata_item, new_metadata_item_id):
@@ -250,8 +249,8 @@ class Task(object):
                         celery_instance.update_state(state='PROGRESS', meta=data)
                     else:
                         celery_instance.receive_from_task(data, celery=False)
-
-            
+        return 'wait'
+          
 
     @staticmethod
     def music_start(celery_instance):
@@ -311,7 +310,7 @@ class Task(object):
                         celery_instance.update_state(state='PROGRESS', meta=data)
                     else:
                         celery_instance.receive_from_task(data, celery=False)
-
+        return 'wait'
 
 
     @staticmethod

@@ -1,6 +1,5 @@
-from .task_copy import Task
-
 from .setup import *
+from .task_copy import Task
 
 
 class PageCopyStatus(PluginPageBase):
@@ -73,7 +72,6 @@ class PageCopyStatus(PluginPageBase):
     def refresh_data(self, index=-1):
         if index == -1:
             self.socketio_callback('refresh_all', self.data)
-            
         else:
             self.socketio_callback('refresh_one', {'one' : self.data['list'][index], 'status' : self.data['status']})
         

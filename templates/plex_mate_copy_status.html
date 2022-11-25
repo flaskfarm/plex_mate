@@ -62,6 +62,8 @@ function make_one(data) {
 
 function make_status(data) {
   str = '';
+  console.log(data.is_working)
+  tmp = '';
   if (data.is_working == 'run')  tmp = '실행중';
   else if (data.is_working == 'wait')  tmp = '대기중';
   else if (data.is_working == 'stop')  tmp = '사용자 중지';
