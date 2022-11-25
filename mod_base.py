@@ -32,6 +32,7 @@ class ModuleBase(PluginModuleBase):
             f'{self.name}_bin_scanner_uid' : '0',
             f'{self.name}_bin_scanner_gid' : '0',
             f'{self.name}_machine' : '',
+            f'{self.name}_agent_auto_update' : 'False',
         }
 
 
@@ -51,11 +52,14 @@ class ModuleBase(PluginModuleBase):
                 SupportYaml.copy_section(config_source_filepath, config_path, '라이브러리 복사')
             if '라이브러리 주기적 스캔 목록' not in config:
                 SupportYaml.copy_section(config_source_filepath, config_path, '라이브러리 주기적 스캔')
+        if P.ModelSetting.get_bool(f'{self.name}_agent_auto_update'):
+            self.task_interface('agent_update', ('SjvaAgent',False))
          
 
     def process_menu(self, sub, req):
         arg = P.ModelSetting.to_dict()
         arg['path_app'] = F.config['path_app'].replace('\\', '/')
+        arg[f'{self.name}_path_config'] = ToolUtil.make_path(P.ModelSetting.get(f'{self.name}_path_config'))
         try:
             return render_template(f'{P.package_name}_{self.name}_{sub}.html', arg=arg)
         except Exception as e:
@@ -141,17 +145,15 @@ class ModuleBase(PluginModuleBase):
         elif command == 'version':
             url = arg1
             token = arg2
-            msg = f"SJVA.bundle : {PlexWebHandle.get_sjva_version(url=url, token=token)}<br>SjvaAgent : {PlexWebHandle.get_sjva_agent_version(url=url, token=token)}<br>"
+            msg = f"SjvaAgent : {PlexWebHandle.get_sjva_agent_version(url=url, token=token)}<br>"
             regex = re.compile("VERSION\s=\s'(?P<version>.*?)'")
-            text = requests.get('https://raw.githubusercontent.com/soju6jan/SJVA.bundle/master/SJVA.bundle/Contents/Code/version.py').text
-            match = regex.search(text)
-            if match:
-                msg += u'SJVA.bundle (최신) : ' + match.group('version')
             text = requests.get('https://raw.githubusercontent.com/soju6jan/SjvaAgent.bundle/main/Contents/Code/version.py').text
             match = regex.search(text)
             if match:
                 msg += u'<br>SjvaAgent (최신) : ' + match.group('version')
             return jsonify({'title':'Agent', 'modal':msg})
+        elif command == 'agent_update':
+            self.task_interface('agent_update', ('SjvaAgent',True))
         return jsonify(ret)      
 
 
@@ -174,13 +176,16 @@ class ModuleBase(PluginModuleBase):
 
 
     def task_interface2(self, command, *args):
-        logger.warning(command)
+        logger.warning(args)
+        logger.warning(*args)
         if command == 'size' or command == 'size_ret':
             func = Task.get_size
         elif command == 'backup':
             func = Task.backup
         elif command == 'clear' or command == 'clear_ret':
             func = Task.clear
+        elif command == 'agent_update':
+            func = Task.agent_update
         
         ret = self.start_celery(func, None, *args)
 
@@ -204,5 +209,14 @@ class ModuleBase(PluginModuleBase):
             F.socketio.emit("notify", noti_data, namespace='/framework', broadcast=True) 
         elif command == 'clear_ret':
             return ret
+        elif command == 'agent_update':
+            if args[0][1]:
+                modal_data = {
+                    'title' : 'Agent Update Result',
+                    'data' : d(ret),
+                }
+                P.logger.error(ret)
+                F.socketio.emit("modal", modal_data, namespace='/framework', broadcast=True)    
+
 
 

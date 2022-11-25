@@ -19,7 +19,7 @@
       {{ macros.m_tab_content_end() }}  
       {{ macros.m_tab_content_start('auto', false) }}
         {{ macros.setting_checkbox('watchdog_setting_status', '실행상태', value=arg['watchdog_setting_status'], desc=['On : 실행중']) }}
-        {{ macros.setting_global_scheduler_sublogic_button(arg['scheduler'], arg['is_running']) }}
+        {{ macros.setting_global_scheduler_sublogic_button(arg['is_include'], arg['is_running']) }}
         {{ macros.setting_checkbox('watchdog_setting_auto_start', '시작시 자동실행', value=arg['watchdog_setting_auto_start'], desc='On : 시작시 자동으로 스케쥴러에 등록됩니다.') }}
       {{ macros.m_tab_content_end() }}
     </div>

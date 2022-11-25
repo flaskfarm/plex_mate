@@ -44,3 +44,40 @@ class Task(object):
         return Task.get_size(args)
 
 
+    @staticmethod
+    @celery.task()
+    def agent_update(args):
+        ret = {'recent_version':None, 'local_version':None, 'need_update':False}
+        # 버전
+        regex = re.compile("VERSION\s=\s'(?P<version>.*?)'")
+        text = requests.get('https://raw.githubusercontent.com/soju6jan/SjvaAgent.bundle/main/Contents/Code/version.py').text
+        match = regex.search(text)
+        if match:
+            ret['recent_version'] = match.group('version')
+
+        if ret['recent_version'] == None:
+            return "접속실패"
+
+        P.logger.error(ret['recent_version'])
+
+        agent_path = os.path.join(P.ModelSetting.get('base_path_data'), 'Plug-ins')
+        version_path = os.path.join(agent_path, 'SjvaAgent.bundle', 'Contents', 'Code', 'version.py')
+        if os.path.exists(version_path):
+            text = SupportFile.read_file(version_path)
+            match = regex.search(text)
+
+            if match:
+                ret['local_version'] = match.group('version')
+                if ret['local_version'] != ret['recent_version']:
+                    ret['need_update'] = True
+        else:
+            ret['need_update'] = True
+
+        ret['need_update'] = True
+        #if ret['need_update'] == True:
+        #    SupportFile.rmtree(agent_path)
+
+
+
+
+        return ret

@@ -1,11 +1,10 @@
-# python
-import os, sys, traceback, re, json, threading, time, shutil, fnmatch, fnmatch, sqlite3
-from .plugin import P, d, logger, package_name, ModelSetting, app, celery
-from .logic_pm_base import LogicPMBase
+import fnmatch
+import sqlite3
+
+from .plex_bin_scanner import PlexBinaryScanner
 from .plex_db import PlexDBHandle, dict_factory
 from .plex_web import PlexWebHandle
-from .plex_bin_scanner import PlexBinaryScanner
-
+from .setup import *
 
 subtitle_exts  = ['*.srt', '*.smi', '*.ass', '*.ssa']
 SUBTITLE_EXTS  = r'|'.join([fnmatch.translate(x) for x in subtitle_exts])
@@ -13,24 +12,12 @@ SUBTITLE_EXTS  = r'|'.join([fnmatch.translate(x) for x in subtitle_exts])
 
 class Task(object):
     
-
-
     @staticmethod
     @celery.task(bind=True)
     def start(self, command, section_id, section_location):
-        #config = LogicPMBase.load_config()
-
-        #logger.debug('22222222222222')
-        logger.error(section_location)
-
-        #return
-        db_file = ModelSetting.get('base_path_db')
+        db_file = P.ModelSetting.get('base_path_db')
         con = sqlite3.connect(db_file)
         cur = con.cursor()
-        #ce = con.execute('SELECT * FROM metadata_items WHERE metadata_type = 1 AND library_section_id = ? ORDER BY title', (section_id,))
-        #ce = con.execute('SELECT * FROM metadata_items WHERE metadata_type = 1 AND library_section_id = ? AND user_thumb_url NOT LIKE "upload%" AND (user_thumb_url NOT LIKE "http%" OR refreshed_at is NULL) ORDER BY title', (section_id,))
-
-        logger.error(section_id)
         
         locations = PlexDBHandle.section_location(library_id=section_id)
         if section_location != 'all':
@@ -39,15 +26,13 @@ class Task(object):
                     break
             locations = [tmp]
 
-        logger.error(d(locations))
+        P.logger.error(d(locations))
 
         status = {'is_working':'run', 'subtitle_count':0, 
             'subtitle_exist_in_meta_count':0, # 자막이 db에서 검색됨.
             'not_subtitle_exist_in_meta_count':0, # 자막이 db에서 검색되지 않음
-            
             'videofile_exist_count':0,  #자막에 맞는 비디오 파일 있음
             'not_videofile_exist_count':0, # 자막만 있고 자막 파일명에 맞는 비디오 없음
-            
             'videofile_exist_not_in_meta_count':0, # 자막에 맞는 비디오 파일이 메타에 없음. 스캔필요
             'videofile_exist_in_meta_count':0, #자막에 맞는 비디오 파일이 메타에 이미 있음. 메타새로고침 필요
             'smi_count':0, 
@@ -57,7 +42,7 @@ class Task(object):
             'meta_refresh_show_count':0,
         }
 
-        smi2srt = ModelSetting.get_bool('subtitle_use_smi_to_srt')
+        smi2srt = P.ModelSetting.get_bool('subtitle_use_smi_to_srt')
         
         for location in locations:
             section_type = 'movie' if location['section_type'] == 1 else 'show'
@@ -77,7 +62,7 @@ class Task(object):
                 files = [f for f in files if re.match(SUBTITLE_EXTS, f)]
                 #process_base = False
                 for fname in files:
-                    if ModelSetting.get_bool('subtitle_task_stop_flag'):
+                    if P.ModelSetting.get_bool('subtitle_task_stop_flag'):
                         return 'stop'
                     try:
                         status['subtitle_count'] += 1
@@ -138,14 +123,14 @@ class Task(object):
                                 data['ret']['meta_by_videofile'] = False
                                 if section_type == 'movie':
                                     logger.warning(f'영화 스캔 : {base}')
-                                    PlexBinaryScanner.scan_refresh2(section_id, base)
+                                    PlexBinaryScanner.scan_refresh(section_id, base)
                                 elif section_type == 'show':
                                     # 쇼는 쇼폴더에서 스캔해야한다.
                                     tmp = base.replace(root, '')
                                     tmps = tmp.split(os.sep)  # tmps[0] == ''
                                     if len(tmps) > 1:
                                         logger.warning(f'쇼 스캔 : {base} {os.path.join(root, tmps[1])}')
-                                        PlexBinaryScanner.scan_refresh2(section_id, os.path.join(root, tmps[1]))
+                                        PlexBinaryScanner.scan_refresh(section_id, os.path.join(root, tmps[1]))
                                 ##process_base = True
                                 #return
                             else:
@@ -184,7 +169,7 @@ class Task(object):
                         #logger.error(show['title'])
                     finally:
                         #logger.debug(d(data))
-                        if app.config['config']['use_celery']:
+                        if F.config['use_celery']:
                             self.update_state(state='PROGRESS', meta=data)
                         else:
                             self.receive_from_task(data, celery=False)
@@ -223,8 +208,8 @@ class Task(object):
     def smi2srt(data):
         try:
             if data['need_smi2srt']:
-                from smi2srt.smi2srt_handle import SMI2SRTHandle
-                ret = SMI2SRTHandle.start(data['subtitle_filepath'], remake=False, no_remove_smi=False, no_append_ko=False, no_change_ko_srt=False, fail_move_path=None)
+                PP = F.PluginManager.get_plugin_instance('subtitle_tool')
+                ret = PP.SupportSmi2srt.start(data['subtitle_filepath'], remake=False, no_remove_smi=False, no_append_ko=False, no_change_ko_srt=False, fail_move_path=None)
                 data['status']['smi2srt_count'] += 1
                 data['ret']['smi2srt'] = True
                 if ret['list']:

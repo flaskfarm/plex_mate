@@ -29,6 +29,7 @@ setting = {
                 'list': [
                     {'uri': 'task', 'name': '작업 관리'},
                     {'uri': 'list', 'name': '스캔 결과'},
+                    {'uri': 'manual/files/라이브러리 주기적 스캔.md', 'name': '매뉴얼'},
                 ]
             },
             {
@@ -59,13 +60,25 @@ setting = {
                     {'uri': 'make', 'name': '소스 DB 생성'},
                     {'uri': 'copy', 'name': '복사 설정'},
                     {'uri': 'status', 'name': '복사 상태'},
+                    {'uri': 'manual/files/라이브러리 복사.md', 'name': '매뉴얼'},
+                ]
+            },
+            {
+                'uri': 'subtitle',
+                'name': '자막 처리',
+                'list': [
+                    {'uri': 'setting', 'name': '설정'},
+                    {'uri': 'task', 'name': '작업'},
+                    {'uri': 'manual/files/자막 정리.md', 'name': '매뉴얼'},
                 ]
             },
             {
                 'uri': 'manual',
                 'name': '매뉴얼',
                 'list': [
-                    {'uri':'README.md', 'name':'README.md'}
+                    {'uri':'README.md', 'name':'README.md'},
+                    {'uri':'files/tip.md', 'name':'Tip'},
+                    {'uri':'files/config.md', 'name':'config 파일'},
                 ]
             },
             {
@@ -89,9 +102,10 @@ try:
     from .mod_copy import ModuleCopy
     from .mod_periodic import ModulePeriodic
     from .mod_scan import ModelScanItem, ModuleScan
+    from .mod_subtitle import ModuleSubtitle
     from .mod_tool import ModuleTool
 
-    P.set_module_list([ModuleBase, ModuleScan, ModulePeriodic, ModuleTool, ModuleClear, ModuleCopy])
+    P.set_module_list([ModuleBase, ModuleScan, ModulePeriodic, ModuleTool, ModuleClear, ModuleCopy, ModuleSubtitle])
     
     # 외부 호출
     from .plex_db import PlexDBHandle
@@ -111,17 +125,3 @@ def load_config():
 P.load_config = load_config
 
 logger = P.logger
-
-
-"""
-
-            {
-                'uri': 'subtitle',
-                'name': '자막 처리',
-                'list': [
-                    {'uri': 'setting', 'name': '설정'},
-                    {'uri': 'task', 'name': '작업'},
-                ]
-            },
-            
-"""
