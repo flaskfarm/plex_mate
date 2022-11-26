@@ -8,6 +8,7 @@ from .setup import *
 
 class PlexBinaryScanner(object):
     
+    # 2022-11-27 스캔은 되나 메타 갱신하지 않는다 plex 1.30 버전인듯
     @classmethod
     def scan_refresh(cls, section_id, folderpath, timeout=None, callback_function=None, callback_id=None, join=False):
         env = os.environ.copy()
@@ -15,11 +16,23 @@ class PlexBinaryScanner(object):
         
         if folderpath is None or folderpath == '':
             command = [P.ModelSetting.get("base_bin_scanner"), '--scan', '--refresh', '--section', str(section_id)]
+            process = SupportSubprocess(command, timeout=timeout,  stdout_callback=callback_function, env=env, uid=P.ModelSetting.get_int('base_bin_scanner_uid'), gid=P.ModelSetting.get_int('base_bin_scanner_gid'), call_id=callback_id)
+            process.start(join=join)
+            return process
         else:
             command = [P.ModelSetting.get("base_bin_scanner"), '--scan', '--refresh', '--section', str(section_id), '--directory', folderpath]
-        process = SupportSubprocess(command, timeout=timeout,  stdout_callback=callback_function, env=env, uid=P.ModelSetting.get_int('base_bin_scanner_uid'), gid=P.ModelSetting.get_int('base_bin_scanner_gid'), call_id=callback_id)
-        process.start(join=join)
-        return process
+            process = SupportSubprocess(command, timeout=timeout,  stdout_callback=callback_function, env=env, uid=P.ModelSetting.get_int('base_bin_scanner_uid'), gid=P.ModelSetting.get_int('base_bin_scanner_gid'), call_id=callback_id)
+            process.start(join=True)
+            from .plex_db import PlexDBHandle
+            metaid = PlexDBHandle.get_metaid_by_directory(section_id, folderpath)
+            if metaid != None:
+                return cls.meta_refresh_by_id(metaid)
+
+
+
+
+            
+        
 
 
     @classmethod

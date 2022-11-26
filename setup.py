@@ -108,10 +108,12 @@ try:
     P.set_module_list([ModuleBase, ModuleScan, ModulePeriodic, ModuleTool, ModuleClear, ModuleCopy, ModuleSubtitle])
     
     # 외부 호출
+    from .plex_bin_scanner import PlexBinaryScanner
     from .plex_db import PlexDBHandle
     from .plex_web import PlexWebHandle
     P.PlexDBHandle = PlexDBHandle
     P.PlexWebHandle = PlexWebHandle
+    P.PlexBinaryScanner = PlexBinaryScanner
     P.ModelScanItem = ModelScanItem
 except Exception as e:
     P.logger.error(f'Exception:{str(e)}')

@@ -1,7 +1,7 @@
 import platform
 import sqlite3
 
-from support import SupportFile, SupportSubprocess
+from support import SupportFile, SupportSubprocess, d
 
 from .setup import *
 
@@ -264,3 +264,36 @@ class PlexDBHandle(object):
     @classmethod
     def update_show_recent(cls):
         return PlexDBHandle.execute_arg("UPDATE metadata_items SET added_at = (SELECT max(added_at) FROM metadata_items mi WHERE mi.parent_id = metadata_items.id OR mi.parent_id IN(SELECT id FROM metadata_items mi2 WHERE mi2.parent_id = metadata_items.id)) WHERE metadata_type = 2;", ())
+
+
+    # 폴더에서 영화와 쇼 메타 키를 구한다. 이 키를 가지고 스캔
+    @classmethod
+    def get_metaid_by_directory(cls, section_id, directory):
+        section_info = cls.library_section(section_id)
+        P.logger.error(section_info)
+        query = """
+            SELECT 
+                metadata_items.id AS metadata_items_id, 
+				metadata_items.parent_id,
+                metadata_items.library_section_id AS library_section_id, 
+                metadata_items.metadata_type AS metadata_type, 
+                media_items.id AS media_items_id,
+                media_parts.id AS media_parts_id,
+                media_parts.directory_id AS media_parts_directory_id,
+                media_parts.file AS file
+            FROM metadata_items, media_items, media_parts 
+            WHERE metadata_items.id = media_items.metadata_item_id AND media_items.id = media_parts.media_item_id AND metadata_items.library_section_id = """
+        query += str(section_id) + " AND file LIKE '" + directory + "%'"
+
+        #data = cls.execute_arg(query, (section_id, directory))
+        data = cls.select(query)
+
+        P.logger.error(data)
+
+        if section_info['section_type'] == 1:
+            if len(data) == 1:
+                return data[0]['metadata_items_id']
+            else:
+                P.logger.error(d(data))
+                P.logger.error('에러 확인할것')
+            
