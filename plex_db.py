@@ -288,7 +288,7 @@ class PlexDBHandle(object):
         #data = cls.execute_arg(query, (section_id, directory))
         data = cls.select(query)
 
-        P.logger.error(data)
+        #P.logger.error(data)
 
         if section_info['section_type'] == 1:
             if len(data) == 1:
