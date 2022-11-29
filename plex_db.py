@@ -77,13 +77,9 @@ class PlexDBHandle(object):
         try:
             if sql_filepath is None:
                 sql_filepath = os.path.join(F.config['path_data'], 'tmp', f"{str(time.time()).split('.')[0]}.sql")
-            #sql = sql + ';\ncommit;\n'
-            print(sql)
-
             SupportFile.write_file(sql_filepath, sql)
             if platform.system() == 'Windows':
                 sql_filepath = sql_filepath.replace('\\', '\\\\')
-
             cmd = [P.ModelSetting.get("base_bin_sqlite"), P.ModelSetting.get("base_path_db"), f".read {sql_filepath}"]
             for i in range(10):
                 ret = SupportSubprocess.execute_command_return(cmd)
