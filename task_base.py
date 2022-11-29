@@ -54,19 +54,14 @@ class Task(object):
         match = regex.search(text)
         if match:
             ret['recent_version'] = match.group('version')
-
         if ret['recent_version'] == None:
             return "접속실패"
-
-        P.logger.error(ret['recent_version'])
-
         all_agent_path = os.path.join(P.ModelSetting.get('base_path_data'), 'Plug-ins')
         sjva_agent_path = os.path.join(all_agent_path, 'SjvaAgent.bundle')
         version_path = os.path.join(sjva_agent_path, 'Contents', 'Code', 'version.py')
         if os.path.exists(version_path):
             text = SupportFile.read_file(version_path)
             match = regex.search(text)
-
             if match:
                 ret['local_version'] = match.group('version')
                 if ret['local_version'] != ret['recent_version']:
