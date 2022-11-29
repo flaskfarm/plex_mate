@@ -41,7 +41,7 @@ class Task(object):
             WHERE metadata_items.id = media_items.metadata_item_id AND media_items.id = media_parts.media_item_id AND media_parts.file != '' AND metadata_items.library_section_id = ?"""
 
 
-            tmp = PlexDBHandle.execute_arg(query, (db_item.section_id,))[0]
+            tmp = PlexDBHandle.select_arg(query, (db_item.section_id,))[0]
             #logger.error(f"시작 : {tmp}")
             db_item.part_before_max = tmp['max_part_id']
             db_item.part_before_count = tmp['cnt']
@@ -66,7 +66,7 @@ class Task(object):
             delta = db_item.finish_time - db_item.start_time
             db_item.duration = delta.seconds
             
-            tmp = PlexDBHandle.execute_arg(query, (db_item.section_id,))[0]
+            tmp = PlexDBHandle.select_arg(query, (db_item.section_id,))[0]
             #logger.error(f"종료 : {tmp}")
             db_item.part_after_max = tmp['max_part_id']
             db_item.part_after_count = tmp['cnt']
@@ -76,7 +76,7 @@ class Task(object):
             SELECT media_parts.file as filepath, metadata_items.id as metadata_items_id
             FROM metadata_items, media_items, media_parts 
             WHERE metadata_items.id = media_items.metadata_item_id AND media_items.id = media_parts.media_item_id AND media_parts.file != '' AND metadata_items.library_section_id = ? AND media_parts.id > ? ORDER BY media_parts.id ASC"""
-            tmp = PlexDBHandle.execute_arg(query, (db_item.section_id, db_item.part_before_max))
+            tmp = PlexDBHandle.select_arg(query, (db_item.section_id, db_item.part_before_max))
             append_files = []
             for t in tmp:
                 append_files.append(f"{t['metadata_items_id']}|{t['filepath']}")

@@ -37,7 +37,7 @@ class PageCopyCopy(PluginPageBase):
                 ret['json'] = data
                 ret['title'] = 'Plex Section'
             elif command == 'target_section_location_id':
-                data = PlexDBHandle.execute_arg('SELECT * FROM section_locations WHERE library_section_id = ?', (arg1,))
+                data = PlexDBHandle.select_arg('SELECT * FROM section_locations WHERE library_section_id = ?', (arg1,))
                 ret['json'] = data
                 ret['title'] = 'Plex Section Location'
             elif command == 'select_source_locations':

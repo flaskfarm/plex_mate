@@ -144,7 +144,7 @@ class PlexDBHandle(object):
     
     
     @classmethod
-    def execute_arg(cls, query, args, db_file=None):
+    def select_arg(cls, query, args, db_file=None):
         try:
             if db_file is None:
                 db_file = P.ModelSetting.get('base_path_db')
@@ -251,7 +251,7 @@ class PlexDBHandle(object):
     
     @classmethod
     def get_media_parts(cls, file):
-        return PlexDBHandle.execute_arg("SELECT id FROM media_parts WHERE file = ?", (file,))
+        return PlexDBHandle.select_arg("SELECT id FROM media_parts WHERE file = ?", (file,))
     
     @classmethod
     def get_media_parts_file_like(cls, file):
@@ -262,14 +262,14 @@ class PlexDBHandle(object):
     
     @classmethod
     def get_info_by_part_id(cls, part_id):
-        return PlexDBHandle.execute_arg("SELECT * FROM library_sections, metadata_items, media_items WHERE library_sections.id=metadata_items.library_section_id AND metadata_items.id = media_items.metadata_item_id AND media_items.id = ?", (part_id,))
+        return PlexDBHandle.select_arg("SELECT * FROM library_sections, metadata_items, media_items WHERE library_sections.id=metadata_items.library_section_id AND metadata_items.id = media_items.metadata_item_id AND media_items.id = ?", (part_id,))
 
 
     #SELECT * FROM library_sections, metadata_items, media_items WHERE library_sections.id=metadata_items.library_section_id AND metadata_items.id = media_items.metadata_item_id AND media_items.id = 2088
     
     @classmethod
     def update_show_recent(cls):
-        return PlexDBHandle.execute_arg("UPDATE metadata_items SET added_at = (SELECT max(added_at) FROM metadata_items mi WHERE mi.parent_id = metadata_items.id OR mi.parent_id IN(SELECT id FROM metadata_items mi2 WHERE mi2.parent_id = metadata_items.id)) WHERE metadata_type = 2;", ())
+        return PlexDBHandle.execute_query("UPDATE metadata_items SET added_at = (SELECT max(added_at) FROM metadata_items mi WHERE mi.parent_id = metadata_items.id OR mi.parent_id IN(SELECT id FROM metadata_items mi2 WHERE mi2.parent_id = metadata_items.id)) WHERE metadata_type = 2;")
 
 
     # 폴더에서 영화와 쇼 메타 키를 구한다. 이 키를 가지고 스캔
@@ -290,8 +290,6 @@ class PlexDBHandle(object):
             FROM metadata_items, media_items, media_parts 
             WHERE metadata_items.id = media_items.metadata_item_id AND media_items.id = media_parts.media_item_id AND metadata_items.library_section_id = """
         query += str(section_id) + " AND file LIKE '" + directory + "%'"
-
-        #data = cls.execute_arg(query, (section_id, directory))
         data = cls.select(query)
 
         #P.logger.error(data)

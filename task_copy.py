@@ -315,7 +315,7 @@ class Task(object):
 
     @staticmethod
     def insert_media_streams(media_stream, media_item_id, media_part_id, library_section_id):
-        data = PlexDBHandle.execute_arg(f"SELECT id FROM media_streams WHERE media_item_id = ? AND media_part_id = ? AND stream_type_id = ? AND codec = ? AND language = ? AND `index` = ? AND extra_data = ?", (media_item_id, media_part_id, media_stream['stream_type_id'], media_stream['codec'], media_stream['language'], media_stream['index'], media_stream['extra_data']))
+        data = PlexDBHandle.select_arg(f"SELECT id FROM media_streams WHERE media_item_id = ? AND media_part_id = ? AND stream_type_id = ? AND codec = ? AND language = ? AND `index` = ? AND extra_data = ?", (media_item_id, media_part_id, media_stream['stream_type_id'], media_stream['codec'], media_stream['language'], media_stream['index'], media_stream['extra_data']))
         #logger.error(data)
         if len(data) == 1:
             return data[0]['id']
@@ -416,7 +416,7 @@ class Task(object):
     # 여기서는 그 섹션의 루트 폴더를 받아서 처리
     @staticmethod
     def make_directories(library_section_id, path):
-        data = PlexDBHandle.execute_arg(f"SELECT id FROM directories WHERE library_section_id = ? AND path = ?", (library_section_id, path))
+        data = PlexDBHandle.select_arg(f"SELECT id FROM directories WHERE library_section_id = ? AND path = ?", (library_section_id, path))
         if len(data) == 1:
             return data[0]['id']
         elif len(data) == 0:
@@ -454,7 +454,7 @@ class Task(object):
 
     @staticmethod
     def insert_media_parts(media_part, media_item_id, library_section_id, current_section_folderpath):
-        data = PlexDBHandle.execute_arg(f"SELECT id FROM media_parts WHERE hash = ? AND media_item_id = ?", (media_part['hash'], media_item_id))
+        data = PlexDBHandle.select_arg(f"SELECT id FROM media_parts WHERE hash = ? AND media_item_id = ?", (media_part['hash'], media_item_id))
         if len(data) >= 1:
             return data[0]['id'], None
         elif len(data) == 0:
@@ -490,7 +490,7 @@ class Task(object):
 
     @staticmethod
     def insert_media_items(media_item, library_section_id, section_location_id, metadata_item_id, insert=True):
-        data = PlexDBHandle.execute_arg(f"SELECT id FROM media_items WHERE library_section_id = ? AND metadata_item_id = ? AND size = ? AND bitrate = ? AND hints = ?", (library_section_id, metadata_item_id, media_item['size'], media_item['bitrate'], media_item['hints']))
+        data = PlexDBHandle.select_arg(f"SELECT id FROM media_items WHERE library_section_id = ? AND metadata_item_id = ? AND size = ? AND bitrate = ? AND hints = ?", (library_section_id, metadata_item_id, media_item['size'], media_item['bitrate'], media_item['hints']))
         if len(data) >= 1:
             return data[0]['id']
         elif len(data) == 0:
@@ -527,7 +527,7 @@ class Task(object):
 
     @staticmethod
     def insert_metadata_items(metadata_item, section_id, insert=True, parent_id=None):
-        data = PlexDBHandle.execute_arg(f"SELECT id FROM metadata_items WHERE library_section_id = ? AND guid = ? AND hash = ?", (section_id, metadata_item['guid'], metadata_item['hash']))        
+        data = PlexDBHandle.select_arg(f"SELECT id FROM metadata_items WHERE library_section_id = ? AND guid = ? AND hash = ?", (section_id, metadata_item['guid'], metadata_item['hash']))        
         if len(data) >= 1:
             return data[0]['id'], True
         elif len(data) == 0:
@@ -600,13 +600,13 @@ class Task(object):
         rows = row_ce.fetchall()
         for tag_item in rows:
             if tag_item['taggings_index'] is not None:
-                data = PlexDBHandle.execute_arg(f"SELECT * FROM taggings, tags WHERE taggings.tag_id = tags.id AND taggings.metadata_item_id = ? AND taggings.`index` = ? AND taggings.text = ? AND taggings.extra_data = ? AND tags.tag = ? AND tags.tag_type = ?", (plex_metadata_item_id, tag_item['taggings_index'], tag_item['taggings_text'], tag_item['taggings_extra_data'], tag_item['tags_tag'], tag_item['tags_tag_type']))
+                data = PlexDBHandle.select_arg(f"SELECT * FROM taggings, tags WHERE taggings.tag_id = tags.id AND taggings.metadata_item_id = ? AND taggings.`index` = ? AND taggings.text = ? AND taggings.extra_data = ? AND tags.tag = ? AND tags.tag_type = ?", (plex_metadata_item_id, tag_item['taggings_index'], tag_item['taggings_text'], tag_item['taggings_extra_data'], tag_item['tags_tag'], tag_item['tags_tag_type']))
             else:
-                data = PlexDBHandle.execute_arg(f"SELECT * FROM taggings, tags WHERE taggings.tag_id = tags.id AND taggings.metadata_item_id = ? AND taggings.text = ? AND taggings.extra_data = ? AND tags.tag = ? AND tags.tag_type = ?", (plex_metadata_item_id, tag_item['taggings_text'], tag_item['taggings_extra_data'], tag_item['tags_tag'], tag_item['tags_tag_type']))
+                data = PlexDBHandle.select_arg(f"SELECT * FROM taggings, tags WHERE taggings.tag_id = tags.id AND taggings.metadata_item_id = ? AND taggings.text = ? AND taggings.extra_data = ? AND tags.tag = ? AND tags.tag_type = ?", (plex_metadata_item_id, tag_item['taggings_text'], tag_item['taggings_extra_data'], tag_item['tags_tag'], tag_item['tags_tag_type']))
             if len(data) > 0:
                 continue
             tag_id = -1
-            data = PlexDBHandle.execute_arg(f"SELECT * FROM tags WHERE tag = ? AND tag_type = ? AND user_thumb_url = ?", (tag_item['tags_tag'], tag_item['tags_tag_type'], tag_item['tags_user_thumb_url']))
+            data = PlexDBHandle.select_arg(f"SELECT * FROM tags WHERE tag = ? AND tag_type = ? AND user_thumb_url = ?", (tag_item['tags_tag'], tag_item['tags_tag_type'], tag_item['tags_user_thumb_url']))
             if len(data) > 0:
                 tag_id = data[0]['id']
             elif len(data) == 0:
