@@ -252,6 +252,12 @@ class PlexDBHandle(object):
     @classmethod
     def get_media_parts(cls, file):
         return PlexDBHandle.execute_arg("SELECT id FROM media_parts WHERE file = ?", (file,))
+    
+    @classmethod
+    def get_media_parts_file_like(cls, file):
+        sql = "SELECT file FROM media_parts WHERE file LIKE '%" + file + "%'"
+        logger.error(sql)
+        return PlexDBHandle.select(sql)
         
     
     @classmethod
@@ -296,4 +302,5 @@ class PlexDBHandle(object):
             else:
                 P.logger.error(d(data))
                 P.logger.error('에러 확인할것')
-            
+    
+    
