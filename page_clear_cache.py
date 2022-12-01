@@ -1,5 +1,6 @@
 from .setup import *
 
+
 class PageClearCache(PluginPageBase):
     def __init__(self, P, parent):
         super(PageClearCache, self).__init__(P, parent, name='cache')
@@ -9,6 +10,13 @@ class PageClearCache(PluginPageBase):
             f'{self.parent.name}_{self.name}_max_size' : '20',
         }
         self.scheduler_desc = 'Plex PhotoTranscoder 삭제 스케쥴링'
+
+    def process_menu(self, req):
+        arg = P.ModelSetting.to_dict()
+        arg['is_include'] = F.scheduler.is_include(self.get_scheduler_name())
+        arg['is_running'] = F.scheduler.is_running(self.get_scheduler_name())
+        return render_template(f'{P.package_name}_{self.parent.name}_{self.name}.html', arg=arg)
+
 
     def process_command(self, command, arg1, arg2, arg3, req):
         try:

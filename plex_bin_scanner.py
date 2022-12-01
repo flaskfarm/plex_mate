@@ -23,7 +23,7 @@ class PlexBinaryScanner(object):
         else:
             command = [P.ModelSetting.get("base_bin_scanner"), '--scan', '--refresh', '--section', str(section_id), '--directory', folderpath]
             process = SupportSubprocess(command, timeout=timeout,  stdout_callback=callback_function, env=env, uid=P.ModelSetting.get_int('base_bin_scanner_uid'), gid=P.ModelSetting.get_int('base_bin_scanner_gid'), call_id=callback_id)
-            process.start(join=True)
+            process.start(join=join)
             """
             from .plex_db import PlexDBHandle
             metaid = PlexDBHandle.get_metaid_by_directory(section_id, folderpath)

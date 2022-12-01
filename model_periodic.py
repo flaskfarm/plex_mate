@@ -37,9 +37,13 @@ class ModelPeriodicItem(ModelBase):
 
     @classmethod
     def set_terminated(cls):
-        with F.app.app_context():
-            db.session.query(cls).filter(cls.status == 'working').update(dict(status='terminated'))
-            db.session.commit()
+        try:
+            with F.app.app_context():
+                db.session.query(cls).filter(cls.status == 'working').update(dict(status='terminated'))
+                db.session.commit()
+        except Exception as e: 
+            logger.error(f"Exception:{str(e)}")
+            logger.error(traceback.format_exc())
 
     @classmethod
     def remove_no_append_data(cls):

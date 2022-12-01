@@ -53,11 +53,19 @@ class Task(object):
             db_item.start_time = datetime.now()
             db_item.status = "working"
             db_item.save()
-
-
-            
+ 
             #process = PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.folder, timeout=timeout, join=False, callback_function=Task.subprcoess_callback_function, callback_id=f"pm_periodic_{db_item.id}")
             process = PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.folder, timeout=timeout, join=False)
+            count = 0
+            while True:
+                count += 1
+                time.sleep(0.1)
+                if process.process != None:
+                    db_item.process_pid = process.process.pid 
+                    break
+                if count > 600:
+                    break
+
             db_item.process_pid = process.process.pid
             db_item.save()
             process.thread.join()
