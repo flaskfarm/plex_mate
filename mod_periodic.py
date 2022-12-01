@@ -79,11 +79,8 @@ class ModulePeriodic(PluginModuleBase):
 
 
     def plugin_load(self):
-        P.logger.error("111111111111111111111")
         ModelPeriodicItem.set_terminated()
-        P.logger.error("222222222222222222")
         self.start()
-        P.logger.error("3333333333333333333")
 
 
     #########################################################
@@ -138,14 +135,11 @@ class ModulePeriodic(PluginModuleBase):
 
 
     def start(self):
-        logger.error("START")
-        P.logger.error("55555555555555555555")
+        #logger.error("START")
         data = self.get_jobs()
-        P.logger.error(data)
 
         for idx, item in enumerate(data):
             if item.get('스케쥴링', '등록') == '등록':
-                P.logger.error("66666666666666666666666")
                 self.sched_add(idx, item=item)
                  
 
