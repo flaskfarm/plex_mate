@@ -54,8 +54,12 @@ class ModuleScan(PluginModuleBase):
 
 
     def plugin_load(self):
+        def func():
+            self.start_celery(Task.start)
+        thread = threading.Thread(target=func, args=())
+        thread.daemon = True
+        thread.start()
         
-        self.start_celery(Task.start)
         #Task.start()
 
         
