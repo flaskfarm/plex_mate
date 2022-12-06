@@ -51,13 +51,13 @@ class PlexBinaryScanner(object):
 
 
     @classmethod
-    def meta_refresh_by_id(cls, item_id, timeout=None):
+    def meta_refresh_by_id(cls, item_id, timeout=None, join=False):
         env = os.environ.copy()
         env['PLEX_MEDIA_SERVER_APPLICATION_SUPPORT_DIR'] = os.path.dirname(os.path.dirname(P.ModelSetting.get('base_path_metadata')))
         
         command = [P.ModelSetting.get("base_bin_scanner"), '--force', '--refresh', '--item', str(item_id)]
         process = SupportSubprocess(command, timeout=timeout, env=env, uid=P.ModelSetting.get_int('base_bin_scanner_uid'), gid=P.ModelSetting.get_int('base_bin_scanner_gid'))
-        process.start(join=False)
+        process.start(join=join)
         return process
 
     
