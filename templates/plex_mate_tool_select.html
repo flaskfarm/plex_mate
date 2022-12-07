@@ -76,7 +76,7 @@ var machine = "{{arg['base_machine']}}";
 
 
 $(function(){ 
-  $('#wide_checkbox').bootstrapToggle('on')
+  $('#wide_checkbox').bootstrapToggle('off')
 
   globalSendCommandPage('get_preset', null, null, null, function(data){
     preset = data['preset'];
