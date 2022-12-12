@@ -258,7 +258,7 @@ class PlexDBHandle(object):
     
     @classmethod
     def get_info_by_part_id(cls, part_id):
-        return PlexDBHandle.select_arg("SELECT * FROM library_sections, metadata_items, media_items WHERE library_sections.id=metadata_items.library_section_id AND metadata_items.id = media_items.metadata_item_id AND media_items.id = ?", (part_id,))
+        return PlexDBHandle.select_arg("SELECT * FROM library_sections, metadata_items, media_items, media_parts WHERE library_sections.id=metadata_items.library_section_id AND metadata_items.id = media_items.metadata_item_id AND media_items.id = media_parts.media_item_id AND media_parts.id = ?", (part_id,))
 
 
     #SELECT * FROM library_sections, metadata_items, media_items WHERE library_sections.id=metadata_items.library_section_id AND metadata_items.id = media_items.metadata_item_id AND media_items.id = 2088
