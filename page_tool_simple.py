@@ -31,6 +31,8 @@ class PageToolSimple(PluginPageBase):
             elif command == 'remove_collection':
                 query = f"DELETE FROM metadata_items WHERE metadata_type = 18 AND library_section_id = {arg1}; commit;"
                 result = PlexDBHandle.execute_query(query)
+                query = f"UPDATE metadata_items SET tags_collection = '' WHERE metadata_type = 18 AND library_section_id = {arg1}; commit;"
+                result = PlexDBHandle.execute_query(query)
                 if result != False:
                     ret = {'ret':'success', 'msg':'정상적으로 처리되었습니다.'}
                 else:
