@@ -83,7 +83,7 @@ class PlexDBHandle(object):
             cmd = [P.ModelSetting.get("base_bin_sqlite"), P.ModelSetting.get("base_path_db"), f".read {sql_filepath}"]
             for i in range(10):
                 ret = SupportSubprocess.execute_command_return(cmd)
-                #P.logger.error(ret)
+                P.logger.info(ret)
                 if ret['log'].find('database is locked') != -1:
                     time.sleep(5)
                 else:
@@ -157,8 +157,8 @@ class PlexDBHandle(object):
             return data
 
         except Exception as e: 
-            #logger.error(f'Exception:{str(e)}')
-            #logger.error(traceback.format_exc())
+            logger.error(f'Exception:{str(e)}')
+            logger.error(traceback.format_exc())
             pass
         return
 

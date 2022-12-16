@@ -1,3 +1,5 @@
+import urllib.parse
+
 import requests
 
 from .setup import *
@@ -81,6 +83,52 @@ class PlexWebHandle(object):
         try:
             url = f"{P.ModelSetting.get('base_url')}/library/sections/{library_section_id}/refresh?X-Plex-Token={P.ModelSetting.get('base_token')}"
             ret = requests.get(url)
+        except Exception as e: 
+            logger.error(f"Exception:{str(e)}")
+            logger.error(traceback.format_exc())
+    
+
+    @classmethod
+    def make_playlist(cls, playlist_title, metadata_id):
+        try:
+            from .plex_db import PlexDBHandle
+            url = f"{P.ModelSetting.get('base_url')}/playlists?"
+            data = {
+                'type': 'video',
+                'title': playlist_title,
+                'smart': 0,
+                'uri':f"server://{P.ModelSetting.get('base_machine')}/com.plexapp.plugins.library/library/metadata/{metadata_id}",
+            }
+            url += urllib.parse.urlencode(data)
+            ret = requests.post(url, headers={'X-Plex-Token': P.ModelSetting.get('base_token')}, data=data)
+            query = f"SELECT id FROM metadata_items WHERE title = '{playlist_title}' AND metadata_type = 15"
+            data = PlexDBHandle.select(query)
+            return data[-1]['id']
+        except Exception as e: 
+            logger.error(f"Exception:{str(e)}")
+            logger.error(traceback.format_exc())
+    
+    @classmethod
+    def add_playlist(cls, metadata_id, playlist_title=None, playlist_id=None):
+        try:
+            from .plex_db import PlexDBHandle
+            if playlist_id == None:
+                query = f"SELECT id FROM metadata_items WHERE title = '{playlist_title}' AND metadata_type = 15"
+                data = PlexDBHandle.select(query)
+                if len(data) == 0:
+                    playlist_id = cls.make_playlist(playlist_title, metadata_id)
+                    return playlist_id
+                else:
+                    playlist_id = data[-1]['id']
+
+            url = f"{P.ModelSetting.get('base_url')}/playlists/{playlist_id}/items?"
+            data = {
+                'uri':f"server://{P.ModelSetting.get('base_machine')}/com.plexapp.plugins.library/library/metadata/{metadata_id}",
+            }
+            url += urllib.parse.urlencode(data)
+            ret = requests.put(url, headers={'X-Plex-Token': P.ModelSetting.get('base_token')})
+            #logger.error(d(ret))
+            return playlist_id
         except Exception as e: 
             logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())

@@ -29,9 +29,9 @@ class PageToolSimple(PluginPageBase):
                 else:
                     ret = {'ret':'warning', 'msg':'실패'}
             elif command == 'remove_collection':
-                query = f"DELETE FROM metadata_items WHERE metadata_type = 18 AND library_section_id = {arg1}; commit;"
-                result = PlexDBHandle.execute_query(query)
-                query = f"UPDATE metadata_items SET tags_collection = '' WHERE metadata_type = 18 AND library_section_id = {arg1}; commit;"
+                query = f"DELETE FROM metadata_items WHERE metadata_type = 18 AND library_section_id = {arg1};"
+                query += f"UPDATE metadata_items SET tags_collection = '' WHERE library_section_id = {arg1};"
+                query += f"DELETE FROM tags WHERE id in (SELECT DISTINCT tags.id FROM metadata_items, taggings, tags WHERE  metadata_items.id = taggings.metadata_item_id AND taggings.tag_id=tags.id AND tag_type = 2 AND metadata_items.library_section_id = {arg1});"
                 result = PlexDBHandle.execute_query(query)
                 if result != False:
                     ret = {'ret':'success', 'msg':'정상적으로 처리되었습니다.'}
@@ -45,7 +45,7 @@ class PageToolSimple(PluginPageBase):
                 else:
                     ret = {'ret':'warning', 'msg':'실패'}
             elif command == 'remove_extra':
-                query = f"DELETE FROM metadata_items WHERE metadata_type = 12 AND guid LIKE 'sjva://sjva.me%'; commit;"
+                query = f"DELETE FROM metadata_items WHERE metadata_type = 12 AND guid LIKE 'sjva://sjva.me%';"
                 result = PlexDBHandle.execute_query(query)
                 if result != False:
                     ret = {'ret':'success', 'msg':'정상적으로 처리되었습니다.'}
