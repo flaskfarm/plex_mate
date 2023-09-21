@@ -1,4 +1,5 @@
 import platform
+from xml.parsers.expat import ExpatError
 
 import requests
 import xmltodict
@@ -138,8 +139,9 @@ class ModuleBase(PluginModuleBase):
             self.task_interface('clear', (path,))
             ret = {'ret':'success', 'msg':'명령을 전달하였습니다. 잠시 후 결과 알림을 확인하세요.'}
         elif command == 'system_agents':
-            data = PlexWebHandle.system_agents(url=arg1, token=arg2)
-            data = json.loads(json.dumps(xmltodict.parse(data)))
+            data = PlexWebHandle.system_agents(url=arg1, token=arg2)            
+            try: data = xmltodict.parse(data)
+            except ExpatError: data = json.loads(data)
             ret['title'] = 'System'
             ret['modal'] = json.dumps(data, indent=4, ensure_ascii=False)
         elif command == 'version':
