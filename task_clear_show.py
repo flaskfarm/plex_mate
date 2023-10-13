@@ -376,6 +376,7 @@ class Task(object):
                             data['remove_count'] += 1
                             if filepath not in data['remove_filepath']:
                                 data['remove_filepath'].append(filepath)
+                            file_size = os.path.getsize(filepath)
                             data['meta']['remove'] += file_size
                             if data['dryrun'] == False:
                                 P.logger.debug(f"안쓰는 파일 삭제 : {filepath}")
