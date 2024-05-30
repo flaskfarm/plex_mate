@@ -336,6 +336,7 @@ class Task(object):
                     continue
                 insert_col += f"'{key}',"
                 if type(value) == type(''):
+                    value = value.replace('"', '""')
                     insert_value += f'"{value}",'
                 else:
                     insert_value += f"{value},"
@@ -474,6 +475,7 @@ class Task(object):
                     continue
                 insert_col += f"'{key}',"
                 if type(value) == type(''):
+                    value = value.replace('"', '""')
                     insert_value += f'"{value}",'
                 else:
                     insert_value += f"{value},"
@@ -510,6 +512,7 @@ class Task(object):
                         continue
                     insert_col += f"'{key}',"
                     if type(value) == type(''):
+                        value = value.replace('"', '""')
                         insert_value += f'"{value}",'
                     else:
                         insert_value += f"{value},"
@@ -633,7 +636,8 @@ class Task(object):
                 insert_value += f' {tag_item["taggings_time_offset"]}, {tag_item["taggings_end_time_offset"]},'
             if tag_item["taggings_extra_data"] is not None:
                 insert_col += " 'extra_data',"
-                insert_value += f' "{tag_item["taggings_extra_data"]}",'
+                value = tag_item["taggings_extra_data"].replace('"', '""')
+                insert_value += f'"{value}",'
             insert_col += " 'thumb_url'"
             insert_value += f' ""'
             query = f"INSERT INTO taggings({insert_col}) VALUES ({insert_value});SELECT max(id) FROM taggings;" 
