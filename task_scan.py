@@ -137,7 +137,7 @@ class Task:
 
 
     def subprcoess_callback_function(call_id, mode, log):
-        logger.error(f"[{mode}] [{log}]")
+        logger.debug(f"[{mode}] [{log}]")
         try:
             db_item = ModelScanItem.get_by_id(call_id.split('_')[-1])
             if mode == 'START':

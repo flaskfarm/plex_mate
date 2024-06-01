@@ -155,7 +155,7 @@ class ModelScanItem(ModelBase):
                     logger.debug(f'scan callback : {ret}')
                 except Exception as e: 
                     logger.error(f'Exception:{str(e)}')
-                    logger.error(traceback.format_exc())
+                    #logger.error(traceback.format_exc())
             self.remove_in_queue(self)
         if save:
             self.save()
