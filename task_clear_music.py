@@ -1,7 +1,10 @@
 import sqlite3
-from support import SupportDiscord, SupportFile, d
+
+from support import SupportFile, d
+
 from .plex_db import PlexDBHandle, dict_factory
 from .setup import *
+
 
 class Task(object):
 
@@ -129,7 +132,8 @@ class Task(object):
                             localpath = localpath.replace('/', '\\')
                         if os.path.exists(localpath):
                             if data['dryrun'] == False:
-                                discord_url = SupportDiscord.discord_proxy_image_localfile(localpath)
+                                from gds_tool import SSGDrive
+                                discord_url = SSGDrive.upload_from_path(localpath)
                                 if discord_url is not None:
                                     album['process']['poster']['url'] = discord_url
                                     logger.warning(discord_url)

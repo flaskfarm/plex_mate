@@ -1,6 +1,6 @@
 import sqlite3
 
-from support import SupportDiscord, SupportFile, d
+from support import SupportFile, d
 
 from .plex_db import PlexDBHandle, dict_factory
 from .plex_web import PlexWebHandle
@@ -51,12 +51,14 @@ class Task(object):
                     data['status']['remove_size'] += data['media']['remove']
                 #P.logic.get_module('clear').receive_from_task(data, celery=False)
                 #continue
+                """
                 if 'use_filepath' in data:
                     del data['use_filepath']
                 if 'remove_filepath' in data:
                     del data['remove_filepath']
                 if 'seasons' in data:
                     del data['seasons']
+                """
                 if F.config['use_celery']:
                     self.update_state(state='PROGRESS', meta=data)
                 else:
@@ -105,70 +107,42 @@ class Task(object):
                     season_index = season['index']
                     episode_index = episode['index']
                     if episode['index'] == -1:
-                        #P.logger.error(d(episode))
-                        #P.logger.info(season_index)
-                        #P.logger.error(episode['available_at'])
-                        #P.logger.error(episode['originally_available_at'])
-                        """
-                        if episode['available_at'] is not None and type(episode['available_at']) != int:
-                            episode_index = episode['available_at'].split(' ')[0]
-                        elif episode['originally_available_at'] != None and type(episode['originally_available_at']) != int:
-                            episode_index = episode['originally_available_at'].split(' ')[0]
-                        else:
-                            #com.plexapp.agents.sjva_agent://KD58690/2011/2011-12-28?lang=ko
-
-                            P.logger.info(episode['guid'])
-                        """
                         tmp = episode['guid']
                         match = re.compile(r'\/(?P<season>\d{4})\/(?P<epi>\d{4}-\d{2}-\d{2})').search(episode['guid'])
                         if match:
                             episode_index = match.group('epi')
-                        #com.plexapp.agents.sjva_agent://KD58690/2011/2011-12-28?lang=ko
-                        #season_index = episode_index.split('-')[0]
                     if season_index not in data['seasons']:
                         data['seasons'][season_index] = {'db':season}
                         combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'seasons', f"{season_index}.xml")
                         ret = Task.xml_analysis(combined_xmlpath, data['seasons'][season_index], data)
-                        #if ret == False:
-                            #P.logger.warning(combined_xmlpath)
-                            #P.logger.warning(f"{data['db']['title']} 시즌 분석 실패 : season_index - {season_index}")
-                            #logger.warning(combined_xmlpath)
-                            #return
                         data['seasons'][season_index]['episodes'] = {}
                     data['seasons'][season_index]['episodes'][episode_index] = {'db':episode}
                     combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'seasons', f"{season_index}", "episodes", f"{episode_index}.xml")
                     ret = Task.xml_analysis(combined_xmlpath, data['seasons'][season_index]['episodes'][episode_index], data, is_episode=True)
-                    #if ret == False:
-                        #P.logger.warning(combined_xmlpath)
-                        #P.logger.warning(d(episode))
-                        #P.logger.warning(f"{data['db']['title']} 에피소드 분석 실패")
-                        #del data['seasons'][season_index]['episodes'][episode_index]
-                        #return
                 except Exception as e:
                     P.logger.error(f'Exception:{str(e)}')
                     P.logger.error(traceback.format_exc())
-        #logger.warning(d(data['use_filepath']))
-        #logger.warning(d(data))
-
         query = ""
-
         if data['command'] in ['start22', 'start3', 'start4']:
             # 쇼 http로 
             sql = 'UPDATE metadata_items SET '
             if data['process']['poster']['url'] != '':
-                sql += ' user_thumb_url = "{}", '.format(data['process']['poster']['url'])
+                gdrive_url = Task.process_step4(data, data['process']['poster']['url'])
+                sql += ' user_thumb_url = "{}", '.format(gdrive_url)
                 try: data['use_filepath'].remove(data['process']['poster']['localpath'])
                 except: pass
                 try: data['use_filepath'].remove(data['process']['poster']['realpath'])
                 except: pass
             if data['process']['art']['url'] != '':
-                sql += ' user_art_url = "{}", '.format(data['process']['art']['url'])
+                gdrive_url = Task.process_step4(data, data['process']['art']['url'])
+                sql += ' user_art_url = "{}", '.format(gdrive_url)
                 try: data['use_filepath'].remove(data['process']['art']['localpath'])
                 except: pass
                 try: data['use_filepath'].remove(data['process']['art']['realpath'])
                 except: pass
             if data['process']['banner']['url'] != '':
-                sql += ' user_banner_url = "{}", '.format(data['process']['banner']['url'])
+                gdrive_url = Task.process_step4(data, data['process']['banner']['url'])
+                sql += ' user_banner_url = "{}", '.format(gdrive_url)
                 try: data['use_filepath'].remove(data['process']['banner']['localpath'])
                 except: pass
                 try: data['use_filepath'].remove(data['process']['banner']['realpath'])
@@ -186,19 +160,22 @@ class Task(object):
                     continue
                 sql = 'UPDATE metadata_items SET '
                 if season['process']['poster']['url'] != '':
-                    sql += ' user_thumb_url = "{}", '.format(season['process']['poster']['url'])
+                    gdrive_url = Task.process_step4(data, season['process']['poster']['url'])
+                    sql += ' user_thumb_url = "{}", '.format(gdrive_url)
                     try: data['use_filepath'].remove(season['process']['poster']['localpath'])
                     except: pass
                     try: data['use_filepath'].remove(season['process']['poster']['realpath'])
                     except: pass
                 if season['process']['art']['url'] != '':
-                    sql += ' user_art_url = "{}", '.format(season['process']['art']['url'])
+                    gdrive_url = Task.process_step4(data, season['process']['art']['url'])
+                    sql += ' user_art_url = "{}", '.format(gdrive_url)
                     try: data['use_filepath'].remove(season['process']['art']['localpath'])
                     except: pass
                     try: data['use_filepath'].remove(season['process']['art']['realpath'])
                     except: pass
                 if season['process']['banner']['url'] != '':
-                    sql += ' user_banner_url = "{}", '.format(season['process']['banner']['url'])
+                    gdrive_url = Task.process_step4(data, season['process']['banner']['url'])
+                    sql += ' user_banner_url = "{}", '.format(gdrive_url)
                     try: data['use_filepath'].remove(season['process']['banner']['localpath'])
                     except: pass
                     try: data['use_filepath'].remove(season['process']['banner']['realpath'])
@@ -245,10 +222,15 @@ class Task(object):
                             localpath = localpath.replace('/', '\\')
                         if os.path.exists(localpath):
                             if data['dryrun'] == False:
-                                discord_url = SupportDiscord.discord_proxy_image_localfile(localpath)
-                                if discord_url is not None:
-                                    episode['process']['thumb']['url'] = discord_url
-                                    P.logger.warning(discord_url)
+                                try:
+                                    from gds_tool import SSGDrive
+                                    discord_url = SSGDrive.upload_from_path(localpath)
+                                    if discord_url is not None:
+                                        episode['process']['thumb']['url'] = discord_url
+                                        P.logger.warning(discord_url)
+                                except Exception as e:
+                                    P.logger.error(f'Exception:{str(e)}')
+                                    #P.logger.error(traceback.format_exc())
                         else:
                             #P.logger.warning(episode)
                             P.logger.warning(f"썸네일 없음 1 분석 실행: {episode['db']['id']}")
@@ -304,8 +286,28 @@ class Task(object):
                 episode_cs.row_factory = dict_factory
 
                 for episode in episode_cs.fetchall():
-                    if episode['user_thumb_url'].startswith('http'):
+                    if episode['user_thumb_url'].startswith('https://thumb.kakaocdn.net/dna/kamp/source'):
+                    #if episode['user_thumb_url'].startswith('http'):
+                        if data['dryrun'] == False:
+                            try:
+                                from gds_tool import SSGDrive
+                                imgur_url = SSGDrive.upload_from_url(episode['user_thumb_url'])
+                                if imgur_url is not None:
+                                    P.logger.warning(imgur_url)
+                                    sql = 'UPDATE metadata_items SET '
+                                    sql += ' user_thumb_url = "{}" '.format(imgur_url)
+                                    sql += '  WHERE id = {} ;\n'.format(episode['id'])
+                                    ret = PlexDBHandle.execute_query(sql)
+                                    if ret.find('database is locked') == -1:
+                                        pass
+                            except Exception as e:
+                                    P.logger.error(f'Exception:{str(e)}')
+                                    P.logger.error(traceback.format_exc())
+
+                    elif episode['user_thumb_url'].startswith('http'):
+                    #if episode['user_thumb_url'].find('drive.google.com') != -1:
                         continue
+
                     not_http_count += 1
 
                     if episode['user_thumb_url'] == None or episode['user_thumb_url'] == '':
@@ -326,22 +328,22 @@ class Task(object):
                     
                     if os.path.exists(localpath):
                         if data['dryrun'] == False:
-                            discord_url = SupportDiscord.discord_proxy_image_localfile(localpath)
-                            if discord_url is not None:
-                                P.logger.warning(discord_url)
-                                sql = 'UPDATE metadata_items SET '
-                                sql += ' user_thumb_url = "{}" '.format(discord_url)
-                                sql += '  WHERE id = {} ;\n'.format(episode['id'])
-                                ret = PlexDBHandle.execute_query(sql)
-                                if ret.find('database is locked') == -1:
-                                    data['meta']['remove'] += os.path.getsize(localpath)
-                                    os.remove(localpath)
+                            try:
+                                from gds_tool import SSGDrive
+                                discord_url = SSGDrive.upload_from_path(localpath)
+                                if discord_url is not None:
+                                    P.logger.warning(discord_url)
+                                    sql = 'UPDATE metadata_items SET '
+                                    sql += ' user_thumb_url = "{}" '.format(discord_url)
+                                    sql += '  WHERE id = {} ;\n'.format(episode['id'])
+                                    ret = PlexDBHandle.execute_query(sql)
+                                    if ret.find('database is locked') == -1:
+                                        data['meta']['remove'] += os.path.getsize(localpath)
+                                        os.remove(localpath)
+                            except Exception as e:
+                                    P.logger.error(f'Exception:{str(e)}')
                     else:
                         P.logger.warning(f"파일 없음. 메타 새로고침 필요. {data['db']['title']}")
-
-
-
-
 
         #P.logger.error(data['meta']['remove'] )
         #P.logger.error(data['use_filepath'] )
@@ -361,6 +363,7 @@ class Task(object):
                         #data['meta']['remove'] += file_size
                         continue
                 
+                #if data['command'] in ['start4'] and not_http_count == 0:
                 if not_http_count == 0:
                     if data['dryrun'] == False:
                         P.logger.info(f"삭제.메타에 http 0 : {filepath}")
@@ -369,7 +372,7 @@ class Task(object):
                         os.remove(filepath)
                 else:
                     tmp = f.split('.')[-1]
-                    using = PlexDBHandle.select(f"SELECT id FROM metadata_items WHERE user_thumb_url LIKE '%{tmp}' OR user_art_url LIKE '%{tmp}';")
+                    using = PlexDBHandle.select(f"SELECT id, guid, user_thumb_url FROM metadata_items WHERE user_thumb_url LIKE '%{tmp}' OR user_art_url LIKE '%{tmp}';")
                     if len(using) == 0:
                     #if filepath not in data['use_filepath']:
                         if os.path.exists(filepath):
@@ -407,15 +410,7 @@ class Task(object):
         P.logger.error(f'Exception:{str(e)}')
         P.logger.error(traceback.format_exc())
                 
-          
-
-
-
-
-
-
-
-
+    
 
     @staticmethod
     def xml_analysis(combined_xmlpath, data, show_data, is_episode=False):
@@ -517,3 +512,17 @@ class Task(object):
                             break
                         
         return True
+
+
+
+    @staticmethod
+    def process_step4(data, url):
+        return url
+        if data['command'] == 'start4':
+            from gds_tool import SSGDrive
+            drive_url = SSGDrive.upload_from_url(url)
+            if drive_url:
+                return drive_url
+        return url
+        
+        

@@ -1,6 +1,7 @@
 from .model_scan import ModelScanItem
 from .plex_bin_scanner import PlexBinaryScanner
 from .plex_db import PlexDBHandle
+from .plex_web import PlexWebHandle
 from .setup import *
 
 name = 'scan'
@@ -69,7 +70,7 @@ class Task:
                                 item.scan_folder = item.target
                             
                             for queue_item in ModelScanItem.queue_list:
-                                if queue_item.scan_folder == item.scan_folder:
+                                if queue_item.scan_folder == item.scan_folder and queue_item.mode == item.mode:
                                     item.set_status("FINISH_ALREADY_IN_QUEUE")
                                     break
                             else:
@@ -80,7 +81,48 @@ class Task:
                         else:
                             if item.created_time + timedelta(minutes=P.ModelSetting.get_int("scan_max_wait_time")) < now:
                                 item.set_status("FINISH_TIMEOVER")
-                    
+                    elif item.mode == 'REFRESH':
+                        item.filecheck_count += 1
+                        now = datetime.now()
+                        if item.section_id == None:
+                            section_info = PlexDBHandle.get_section_info_by_filepath(item.target)
+                            if section_info != None:
+                                item.section_id = section_info['section_id']
+                                item.section_type = section_info['section_type']
+                            else:
+                                item.set_status('FINISH_NOT_FIND_LIBRARY', save=True)
+                                continue
+                            
+                            metaid = PlexDBHandle.get_metaid_by_directory(item.section_id, item.target)
+                            if metaid != None:
+                                PlexWebHandle.refresh_by_id(metaid)
+                                item.set_status('FINISH_REFRESH', save=True)
+                                continue
+                    elif item.mode in ['REMOVE_FILE', 'REMOVE_FOLDER']:
+                        item.filecheck_count += 1
+                        now = datetime.now()
+                        if item.section_id == None:
+                            section_info = PlexDBHandle.get_section_info_by_filepath(item.target)
+                            if section_info != None:
+                                item.section_id = section_info['section_id']
+                                item.section_type = section_info['section_type']
+                            else:
+                                item.set_status('FINISH_NOT_FIND_LIBRARY', save=True)
+                                continue
+                        if os.path.exists(item.target) == False:
+                            if item.mode == 'REMOVE_FOLDER':
+                                item.scan_folder = item.target
+                            else:
+                                if item.target.startswith('/'):
+                                    item.scan_folder = item.target.rsplit('/', 1)[0]
+                                else:
+                                    item.scan_folder = item.target.rsplit('\\', 1)[0]
+                            item.set_status("ENQUEUE_REMOVE")
+                            item.init_for_queue()
+                            Task.scan_queue.put(item)
+                        else:
+                            if item.created_time + timedelta(minutes=P.ModelSetting.get_int("scan_max_wait_time")) < now:
+                                item.set_status("FINISH_TIMEOVER")
                 except Exception as e: 
                     logger.error(f"Exception:{str(e)}")
                     logger.error(traceback.format_exc())
@@ -108,7 +150,6 @@ class Task:
                     continue
                 
                 Task.process_item_add_on_queue(db_item)
-                
                 Task.scan_queue.task_done() 
             except Exception as e: 
                 logger.error(f"Exception:{str(e)}")
@@ -127,8 +168,9 @@ class Task:
 
     def process_item_add_on_queue(db_item:ModelScanItem):
         try:
-            if Task.__check_media_part_data(db_item):
-                return
+            if db_item.mode == 'ADD':
+                if Task.__check_media_part_data(db_item):
+                    return
             Task.current_scan_count += 1
             PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.scan_folder, callback_function=Task.subprcoess_callback_function, callback_id=f"pm_scan_{db_item.id}")
         except Exception as e:    

@@ -84,15 +84,18 @@ function make_list(data) {
     str += j_row_start();
     tmp = '모드 : ';
     str += j_col(1, data[i].id, 'center');
-    tmp += (data[i].mode  == 'ADD') ? "추가" : "삭제";
+    //tmp += (data[i].mode  == 'ADD') ? "추가" : "삭제";
+    tmp += data[i].mode;
     tmp += '<br>상태 : ';
     if (data[i].status == 'READY') tmp += "준비";
     else if (data[i].status == 'FINISH_ADD') tmp += text_color("정상 추가", 'blue');
-    else if (data[i].status == 'FINISH_ADD_ALREADY_IN_DB') tmp += "DB에 이미 있음";
-    else if (data[i].status == 'FINISH_ALREADY_IN_QUEUE') tmp += "큐에 이미 있음";
-    else if (data[i].status == 'FINISH_NOT_FIND_LIBRARY') tmp += "라이브러리 폴더 ✖️";
+    else if (data[i].status == 'FINISH_ADD_FOLDER') tmp += text_color("정상 추가 폴더", 'blue');
+    else if (data[i].status == 'FINISH_ADD_ALREADY_IN_DB') tmp += text_color("DB에 이미 있음", 'blue');
+    else if (data[i].status == 'FINISH_ALREADY_IN_QUEUE') tmp += text_color("큐에 이미 있음", 'blue');
+    else if (data[i].status == 'FINISH_NOT_FIND_LIBRARY') tmp += text_color("라이브러리 폴더 ✖️", 'red');
     else if (data[i].status == 'FINISH_TIMEOVER') tmp += "대기시간 오버";
     else tmp += data[i].status;
+
 
     //str += j_col(1, data[i].mode);
     str += j_col(2, tmp);

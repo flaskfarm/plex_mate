@@ -1,7 +1,7 @@
 import platform
 import sqlite3
 
-from support import SupportDiscord, SupportFile, d
+from support import SupportFile, d
 
 from .plex_db import PlexDBHandle, dict_factory
 from .plex_web import PlexWebHandle
@@ -181,9 +181,8 @@ class Task(object):
                     
                     if data['dryrun'] == False:
                         if os.path.exists(img):
-                            print('222')
-                            discord_url = SupportDiscord.discord_proxy_image_localfile(img)
-                            print(discord_url)
+                            from gds_tool import SSGDrive
+                            discord_url = SSGDrive.upload_from_path(localpath)
                             if discord_url is not None:
                                 P.logger.warning(discord_url)
                                 sql = 'UPDATE metadata_items SET '
@@ -196,11 +195,8 @@ class Task(object):
                         else:
                             P.logger.debug(f"아트 파일 없음. 분석 {data['db']['title']}")
                             PlexWebHandle.analyze_by_id(data['db']['id'])
-
-
-
-
         Task.remove_empty_folder(mediapath)
+        
 
     @staticmethod
     def xml_analysis(combined_xmlpath, data):

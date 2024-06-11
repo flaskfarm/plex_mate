@@ -1,8 +1,9 @@
 import sqlite3
+
+from support import SupportFile, d
+
+from .plex_db import PlexDBHandle, dict_factory
 from .setup import *
-from .plex_db import dict_factory
-from support import d, SupportFile
-from .plex_db import PlexDBHandle
 
 
 class Task(object):
@@ -26,10 +27,10 @@ class Task(object):
 
         status = {'is_working':'run', 'remove_count' : 0, 'remove_size':0, 'count':0, 'current':0}
 
-        print(folders)
+        #print(folders)
         for folder in folders:
             folder_path = os.path.join(root_path, folder)
-            P.logger.error(folder_path)
+            #P.logger.error(folder_path)
             if os.path.exists(folder_path) == False:
                 continue
 

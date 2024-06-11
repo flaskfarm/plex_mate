@@ -21,8 +21,8 @@
 
       {{ macros.m_hr_head_bottom() }}
       {{ macros.info_text_big('', '<테스트>', '')}}
-      {{ macros.setting_input_text('scan_manual_target', '스캔 타겟 파일 또는 폴더',  value=arg['scan_manual_target']) }}
-      {{ macros.setting_buttons([['select_target_btn', '선택'], ['add_btn', '추가 모드'], ['remove_btn', '삭제 모드']]) }}
+      {{ macros.setting_input_textarea('scan_manual_target', '스캔 타겟 파일 또는 폴더',  value=arg['scan_manual_target']) }}
+      {{ macros.setting_buttons([['add_btn', '추가'], ['remove_file_btn', '파일 삭제'], ['remove_folder_btn', '폴더 삭제'], ['refresh_btn', '메타새로고침 모드']]) }}
     {{ macros.m_tab_content_end() }} 
     
     {{ macros.m_tab_content_start('db', false) }}
@@ -44,12 +44,22 @@ $("body").on('click', '#select_target_btn', function(e){
 
 $("body").on('click', '#add_btn', function(e){
   e.preventDefault();
-  globalSendCommand('manual', 'add', $('#scan_manual_target').val().trim());
+  globalSendCommand('manual', 'ADD', $('#scan_manual_target').val().trim());
 });
 
-$("body").on('click', '#remove_btn', function(e){
+$("body").on('click', '#remove_file_btn', function(e){
   e.preventDefault();
-  globalSendCommand('manual', 'remove', $('#scan_manual_target').val().trim());
+  globalSendCommand('manual', 'REMOVE_FILE', $('#scan_manual_target').val().trim());
+});
+
+$("body").on('click', '#remove_folder_btn', function(e){
+  e.preventDefault();
+  globalSendCommand('manual', 'REMOVE_FOLDER', $('#scan_manual_target').val().trim());
+});
+
+$("body").on('click', '#refresh_btn', function(e){
+  e.preventDefault();
+  globalSendCommand('manual', 'REFRESH', $('#scan_manual_target').val().trim());
 });
 
 </script>    

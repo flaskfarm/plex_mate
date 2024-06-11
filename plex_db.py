@@ -272,7 +272,7 @@ class PlexDBHandle(object):
     @classmethod
     def get_metaid_by_directory(cls, section_id, directory):
         section_info = cls.library_section(section_id)
-        P.logger.error(section_info)
+        #P.logger.error(section_info)
         query = """
             SELECT 
                 metadata_items.id AS metadata_items_id, 
@@ -296,5 +296,17 @@ class PlexDBHandle(object):
             else:
                 P.logger.error(d(data))
                 P.logger.error('에러 확인할것')
-    
+        elif section_info['section_type'] == 2:
+            if len(data) > 0:
+                parent_id = data[0]['parent_id']
+                query = """
+                    SELECT id, parent_id
+                    FROM metadata_items 
+                    WHERE id = """
+                query += str(parent_id)
+                data2 = cls.select(query)
+                return data2[0]['parent_id']
+            else:
+                P.logger.error(d(data))
+                P.logger.error('에러 확인할것')
     

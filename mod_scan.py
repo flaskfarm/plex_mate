@@ -30,10 +30,7 @@ class ModuleScan(PluginModuleBase):
         ret = {'ret':'success'}
         if command == 'manual':
             P.ModelSetting.set(f"{self.name}_manual_target", arg2)
-            if arg1 == 'add':
-                ModelScanItem(arg2).save()
-            elif arg1 == 'remove':
-                ModelScanItem(arg2, target_mode="REMOVE").save()
+            ModelScanItem(arg2, mode=arg1).save()
             ret['msg'] = "추가하였습니다."
         return jsonify(ret)
     
@@ -59,8 +56,4 @@ class ModuleScan(PluginModuleBase):
         thread = threading.Thread(target=func, args=())
         thread.daemon = True
         thread.start()
-        
-        #Task.start()
-
-        
-    
+      
