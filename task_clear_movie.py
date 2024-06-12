@@ -177,12 +177,11 @@ class Task(object):
             else:
                 if data['command'] == 'start4':
                     img = os.path.join(mediapath, 'Contents', 'Art', 'art1.jpg')
-                    print(img)
                     
                     if data['dryrun'] == False:
                         if os.path.exists(img):
                             from gds_tool import SSGDrive
-                            discord_url = SSGDrive.upload_from_path(localpath)
+                            discord_url = SSGDrive.upload_from_path(img)
                             if discord_url is not None:
                                 P.logger.warning(discord_url)
                                 sql = 'UPDATE metadata_items SET '
@@ -196,7 +195,7 @@ class Task(object):
                             P.logger.debug(f"아트 파일 없음. 분석 {data['db']['title']}")
                             PlexWebHandle.analyze_by_id(data['db']['id'])
         Task.remove_empty_folder(mediapath)
-        
+
 
     @staticmethod
     def xml_analysis(combined_xmlpath, data):
