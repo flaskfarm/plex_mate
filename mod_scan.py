@@ -22,6 +22,8 @@ class ModuleScan(PluginModuleBase):
             f"{self.name}_filecheck_thread_interval": "60",
             f"{self.name}_db_delete_day": "30",
             f"{self.name}_db_auto_delete": "True",
+            f"{self.name}_use_vfs_refresh": "False",
+            f"{self.name}_vfs_change_rule": "/mnt/gds2/GDRIVE|/GDRIVE|172.17.0.1:5275\n#/mnt/mydrive|/sample/172.17.0.1:5524",
         }
         self.web_list_model = ModelScanItem
         

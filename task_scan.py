@@ -1,3 +1,5 @@
+from support import SupportSubprocess
+
 from .model_scan import ModelScanItem
 from .plex_bin_scanner import PlexBinaryScanner
 from .plex_db import PlexDBHandle
@@ -43,6 +45,7 @@ class Task:
     def filecheck_thread_function():
         while True:
             items = ModelScanItem.get_list_by_status('READY')
+            vfs_rules = P.ModelSetting.get_list('scan_vfs_change_rule')
             #logger.info(f"filecheck_thread_function : {len(items)}")
             for item in items:
                 try:
@@ -57,17 +60,61 @@ class Task:
                             else:
                                 item.set_status('FINISH_NOT_FIND_LIBRARY', save=True)
                                 continue
+                        
+                        if P.ModelSetting.get_bool('scan_use_vfs_refresh'):
+                            try:
+                                rclone = F.PluginManager.get_plugin_instance('rclone')
+                                cmd = [rclone.ModelSetting.get('rclone_path'), 'rc', 'vfs/refresh']
+
+                                for rule in vfs_rules:
+                                    tmps = rule.split('|')
+                                    if len(tmps) != 3: continue
+                                    cmd += [f"--rc-addr={tmps[2]}", f"_async=false"]
+                                    if item.target.startswith(tmps[0]) == False:
+                                        continue
+                                    remote = item.target.replace(tmps[0], tmps[1]).replace('\\', '/').replace('//', '/')
+                                    parent_remote = remote.rsplit('/', 1)[0]
+
+                                    # 현시점 파일인지, 폴더인지 모름
+                                    # 특히나 1회차면?
+                                    # 부모를 넣어서 OK를 받자
+                                    cmd.append(f'dir={parent_remote}')
+                                    result = SupportSubprocess.execute_command_return(cmd)
+                                    logger.info(' '.join(cmd))
+                                    logger.debug(f"vfs/refresh : {result}")
+                                    vfs_ret = json.loads(result['log'].replace('\n', ''))
+                                    logger.info(vfs_ret['result'][parent_remote])
+                                    if vfs_ret['result'][parent_remote] == 'file does not exist':
+                                        # 1회차 일 경우. 더 상위를 한번 호출하면 다음턴에 해결
+                                        del cmd[-1]
+                                        cmd.append(f"dir={parent_remote.rsplit('/', 1)[0]}")
+                                        result = SupportSubprocess.execute_command_return(cmd)
+                                    break
+                            except Exception as e: 
+                                logger.error(f"Exception:{str(e)}")
+                                logger.error(traceback.format_exc())
+
                         if os.path.exists(item.target):
                             if os.path.isfile(item.target):
                                 item.target_type = 'FILE'
                                 item.scan_folder = os.path.dirname(item.target)
-
                                 if Task.__check_media_part_data(item):
                                     continue
 
                             elif os.path.isdir(item.target):
                                 item.target_type = 'FOLDER'
                                 item.scan_folder = item.target
+                                # recursive=true vfs/refresh 
+                                if P.ModelSetting.get_bool('scan_use_vfs_refresh'):
+                                    try:
+                                        cmd[-1] = f'dir={remote}'
+                                        cmd.append('recursive=true')
+                                        result = SupportSubprocess.execute_command_return(cmd)
+                                        logger.info(' '.join(cmd))
+                                        logger.debug(f"vfs/refresh2 : {result}")
+                                    except Exception as e: 
+                                        logger.error(f"Exception:{str(e)}")
+                                        logger.error(traceback.format_exc())
                             
                             for queue_item in ModelScanItem.queue_list:
                                 if queue_item.scan_folder == item.scan_folder and queue_item.mode == item.mode:
