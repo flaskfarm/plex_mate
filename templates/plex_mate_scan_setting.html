@@ -21,10 +21,13 @@
 
       {{ macros.setting_checkbox('scan_use_vfs_refresh', 'rclone vfs/refresh 사용', value=arg['scan_use_vfs_refresh'], desc=['rclone 플러그인 설치 필요']) }}
       <div id="scan_use_vfs_refresh_div" class="collapse">
-      {{ macros.setting_input_textarea('scan_vfs_change_rule', 'vfs/refresh 규칙', col='12', row='3', value=arg['scan_vfs_change_rule'], desc=['A|B|C 가 하나의 규칙. 규칙 구분자 엔터']) }}
-      {{ macros.info_text('', '', "A: 로컬 경로, B: 리모트 경로, C: rc addr") }}
+      {{ macros.setting_input_textarea('scan_vfs_change_rule', 'vfs/refresh 규칙', col='12', row='3', value=arg['scan_vfs_change_rule'], desc=['A|B|C|D(옵션)|E(옵션) 가 하나의 규칙. 규칙 구분자 엔터']) }}
+      {{ macros.info_text('', '', "A: 로컬 경로, B: 리모트 경로, C: rc addr, D(옵션): rc user, E(옵션): rc pass") }}
       {{ macros.info_text('', '', "스캔경로가 A로 시작하면 A값을 B값으로 바꾼 리모트 경로를 rcaddr에 해당하는 C에 전달") }}
+      {{ macros.info_text('', '', "rclone 인증 설정이 없을 경우 :") }}
       {{ macros.info_text('', '', "/mnt/gds2/GDRIVE|/GDRIVE|172.17.0.1:5275") }}
+      {{ macros.info_text('', '', "rclone 인증 설정이 있을 경우 :") }}
+      {{ macros.info_text('', '', "/mnt/gds2/GDRIVE|/GDRIVE|172.17.0.1:5275|userid|userpw") }}
       
       </div>
 
