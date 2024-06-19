@@ -11,7 +11,7 @@
   * 특이 메타 검색
   * 스캔
 
-## Changelog
+## Changelog 
 - 1.1.4 (2024.06.18) by ocelot  
   rclone vfs/refresh rc 인증정보 추가.   
 
