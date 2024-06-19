@@ -12,7 +12,10 @@
   * 스캔
 
 ## Changelog
-- 1.1.2 (2024.06.13)   
+- 1.1.4 (2024.06.18) by ocelot  
+  rclone vfs/refresh rc 인증정보 추가.   
+
+- 1.1.3 (2024.06.13)   
   스캔시 rclone vfs/refresh 호출 기능 추가   
 
 - 1.1.2 (2024.06.11)   
