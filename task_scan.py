@@ -74,23 +74,29 @@ class Task:
                                     if item.target.startswith(tmps[0]) == False:
                                         continue
                                     remote = item.target.replace(tmps[0], tmps[1]).replace('\\', '/').replace('//', '/')
-                                    parent_remote = remote.rsplit('/', 1)[0]
 
                                     # 현시점 파일인지, 폴더인지 모름
                                     # 특히나 1회차면?
                                     # 부모를 넣어서 OK를 받자
-                                    cmd.append(f'dir={parent_remote}')
-                                    result = SupportSubprocess.execute_command_return(cmd)
-                                    logger.info(' '.join(cmd))
-                                    logger.debug(f"vfs/refresh : {result}")
-                                    vfs_ret = json.loads(result['log'].replace('\n', ''))
-                                    logger.info(vfs_ret['result'][parent_remote])
-                                    if vfs_ret['result'][parent_remote] == 'file does not exist':
-                                        # 1회차 일 경우. 더 상위를 한번 호출하면 다음턴에 해결
-                                        del cmd[-1]
-                                        cmd.append(f"dir={parent_remote.rsplit('/', 1)[0]}")
+                                    call_remote = remote.rsplit('/', 1)[0]
+                                    is_ok = False
+                                    while True:
+                                        cmd.append(f'dir={call_remote}')
                                         result = SupportSubprocess.execute_command_return(cmd)
-                                    break
+                                        logger.info(' '.join(cmd))
+                                        logger.debug(f"vfs/refresh : {result}")
+                                        vfs_ret = json.loads(result['log'].replace('\n', ''))
+                                        logger.info(vfs_ret['result'][call_remote])
+
+                                        if vfs_ret['result'][call_remote] == 'file does not exist':
+                                            # 1회차 일 경우. 더 상위를 한번 호출하면 다음턴에 해결
+                                            call_remote = call_remote.rsplit('/', 1)[0]
+                                            del cmd[-1]
+                                        else:
+                                            is_ok = True
+                                            break
+                                    if is_ok:
+                                        break
                             except Exception as e: 
                                 logger.error(f"Exception:{str(e)}")
                                 logger.error(traceback.format_exc())
