@@ -91,6 +91,8 @@ class Task:
                                         if vfs_ret['result'][call_remote] == 'file does not exist':
                                             # 1회차 일 경우. 더 상위를 한번 호출하면 다음턴에 해결
                                             call_remote = call_remote.rsplit('/', 1)[0]
+                                            if call_remote == '':
+                                                break
                                             del cmd[-1]
                                         else:
                                             is_ok = True
@@ -146,12 +148,21 @@ class Task:
                             else:
                                 item.set_status('FINISH_NOT_FIND_LIBRARY', save=True)
                                 continue
-                            
-                            metaid = PlexDBHandle.get_metaid_by_directory(item.section_id, item.target)
-                            if metaid != None:
-                                PlexWebHandle.refresh_by_id(metaid)
-                                item.set_status('FINISH_REFRESH', save=True)
-                                continue
+                            if os.path.exists(item.target):
+                                if os.path.isdir(item.target):
+                                    refresh_target = item.target
+                                else:
+                                    refresh_target = os.path.dirname((item.target))
+                                metaid = PlexDBHandle.get_metaid_by_directory(item.section_id, refresh_target)
+                                if metaid != None:
+                                    PlexWebHandle.refresh_by_id(metaid)
+                                    item.set_status('FINISH_REFRESH', save=True)
+                                    continue
+                                else:
+                                    item.set_status('FINISH_NOT_FIND_IN_LIBRARY', save=True)
+                            else:
+                                item.set_status('NOT_EXIST', save=True)
+                                        
                     elif item.mode in ['REMOVE_FILE', 'REMOVE_FOLDER']:
                         item.filecheck_count += 1
                         now = datetime.now()

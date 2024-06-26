@@ -12,7 +12,7 @@
   * 스캔
 
 ## Changelog 
-- 1.1.5 (2024.06.26)   
+- 1.1.6 (2024.06.26)   
   rclone vfs/refresh OK 받을 때까지 상위폴더 refresh.   
 
 - 1.1.4 (2024.06.18) by ocelot  
