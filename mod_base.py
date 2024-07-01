@@ -75,9 +75,9 @@ class ModuleBase(PluginModuleBase):
             program_path = arg1
             data_path = arg2
             if os.path.exists(program_path) == False:
-                ret = {'ret':'warning', 'msg':'데이터 폴더가 없습니다.'}
-            elif os.path.exists(data_path) == False:
                 ret = {'ret':'warning', 'msg':'프로그램 폴더가 없습니다.'}
+            elif os.path.exists(data_path) == False:
+                ret = {'ret':'warning', 'msg':'데이터 폴더가 없습니다.'}
             else:
                 ret['data'] = {}
                 ret['data']['bin_scanner'] = os.path.join(program_path, 'Plex Media Scanner')
