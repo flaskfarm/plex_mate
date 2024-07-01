@@ -159,7 +159,7 @@ class PageToolSimple(PluginPageBase):
                 section_id = arg1
                 query = f"""UPDATE metadata_items SET deleted_at = null WHERE deleted_at is not null AND library_section_id = {section_id};
                 UPDATE media_items SET deleted_at = null WHERE deleted_at is not null AND library_section_id = {section_id};
-                UPDATE media_parts SET deleted_at = null WHERE deleted_at is not null AND media_item_id in (SELECT id FROM media_itmes WHERE library_section_id = {section_id});"""
+                UPDATE media_parts SET deleted_at = null WHERE deleted_at is not null AND media_item_id in (SELECT id FROM media_items WHERE library_section_id = {section_id});"""
                 result = PlexDBHandle.execute_query(query)
                 logger.error(result)
                 if result != False:
