@@ -95,13 +95,16 @@ class ModuleBase(PluginModuleBase):
                     xml_string = SupportFile.read_file(os.path.join(data_path, 'Preferences.xml'))
                     result = xmltodict.parse(xml_string)
                     prefs = json.loads(json.dumps(result))
-                    logger.warning(d(prefs))
+                    logger.info(d(prefs))
                     ret['data']['token'] = prefs['Preferences']['@PlexOnlineToken']
                     ret['data']['machine'] = prefs['Preferences']['@ProcessedMachineIdentifier']
 
                 for key, value in ret['data'].items():
                     if key not in ['token', 'machine']:
                         if os.path.exists(value) == False:
+                            # 최초실행시 Metadata, Media 없음
+                            if key in ['path_metadata', 'path_media'] and os.path.exists(os.path.dirname(value)):
+                                continue
                             ret = {'ret':'warning', 'msg':'올바른 경로가 아닙니다.<br>' + value}
                             return jsonify(ret)
                 ret['ret'] = 'success'
