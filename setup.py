@@ -64,6 +64,15 @@ setting = {
                 ]
             },
             {
+                'uri': 'copy2',
+                'name': '라이브러리 복사2',
+                'list': [
+                    {'uri': 'copy', 'name': '복사 설정'},
+                    {'uri': 'status', 'name': '복사 상태'},
+                    {'uri': 'manual/files/라이브러리 복사2.md', 'name': '매뉴얼'},
+                ]
+            },
+            {
                 'uri': 'subtitle',
                 'name': '자막 처리',
                 'list': [
@@ -100,12 +109,13 @@ try:
     from .mod_base import ModuleBase
     from .mod_clear import ModuleClear
     from .mod_copy import ModuleCopy
+    from .mod_copy2 import ModuleCopy2
     from .mod_periodic import ModulePeriodic
     from .mod_scan import ModelScanItem, ModuleScan
     from .mod_subtitle import ModuleSubtitle
     from .mod_tool import ModuleTool
 
-    P.set_module_list([ModuleBase, ModuleScan, ModulePeriodic, ModuleTool, ModuleClear, ModuleCopy, ModuleSubtitle])
+    P.set_module_list([ModuleBase, ModuleScan, ModulePeriodic, ModuleTool, ModuleClear, ModuleCopy, ModuleCopy2, ModuleSubtitle])
     
     # 외부 호출
     from .plex_bin_scanner import PlexBinaryScanner

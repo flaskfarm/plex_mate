@@ -1,3 +1,5 @@
+import shutil
+
 from tool import ToolUtil
 
 from .plex_db import PlexDBHandle
@@ -87,8 +89,8 @@ DELETE FROM metadata_items WHERE not (library_section_id = {section_id} AND meta
                 query += f'''
 DELETE FROM metadata_items WHERE not (library_section_id = {section_id} AND metadata_type BETWEEN 8 AND 10);'''
             query += f'''
-DELETE FROM media_streams WHERE media_item_id not in (SELECT id FROM media_items WHERE library_section_id = {section_id});
-DELETE FROM media_parts WHERE media_item_id not in (SELECT id FROM media_items WHERE library_section_id = {section_id});
+DELETE FROM media_streams WHERE media_item_id is null OR media_item_id not in (SELECT id FROM media_items WHERE library_section_id = {section_id});
+DELETE FROM media_parts WHERE media_item_id is null OR media_item_id not in (SELECT id FROM media_items WHERE library_section_id = {section_id});
 DELETE FROM media_items WHERE library_section_id is null OR library_section_id != {section_id};
 DELETE FROM directories WHERE library_section_id is null OR library_section_id != {section_id};
 DELETE FROM section_locations WHERE library_section_id is null OR library_section_id != {section_id};
@@ -231,10 +233,133 @@ VACUUM;
                     os.remove(newpath.replace('.db', '.db-wal'))
                 except:
                     pass
+            
+            DBChangeOrder(newpath).start()
             return newpath
         except Exception as e: 
             logger.error(f'Exception:{str(e)}')
             logger.error(traceback.format_exc())
         return
 
+import sqlite3
+
+from .plex_db import PlexDBHandle, dict_factory
+
+INSERT_ROWS = 1000
+
+class DBChangeOrder:
+    table_list = [
+        "library_sections",
+        "section_locations",
+        "directories",
+        "metadata_items",
+        "media_items",
+        "media_parts",
+        "media_streams",
+        "tags",
+        "taggings",
+    ]
+
+    def __init__(self, db_path):
+        self.src_path = db_path
+        self.tar_path = None
+        self.idmap = {}
+        self.current = {}
+        for table in self.table_list:
+            self.idmap[table] = {}
+            self.current[table] = 0
     
+    def start(self):
+        try:
+            empty_path = os.path.join(os.path.dirname(__file__), 'files', 'empty.db')
+            self.tar_path = os.path.join(F.config['path_data'], 'tmp', 'empty.db')
+            shutil.copy(empty_path, self.tar_path)
+
+            self.source_con = sqlite3.connect(self.src_path)
+            self.target_con = sqlite3.connect(self.tar_path)
+            
+            for table in self.table_list:
+                ce = self.source_con.execute(f'SELECT * FROM {table} ORDER BY id')
+                ce.row_factory = dict_factory
+                data = ce.fetchall()
+                logger.info(f"{table} rows = {len(data)}")
+                count = 0
+                query = ''
+                after = []
+                forlist = [data, after]
+                for idx, _list in enumerate(forlist):
+                    for row in _list:
+                        rowcontinue = False
+                        insert_col = ''
+                        insert_value = ''
+                        for key, value in row.items():
+                            if key == 'id':
+                                #logger.info(f"{key} {value}")
+                                self.current[table] += 1
+                                self.idmap[table][value] = self.current[table]
+                                value = self.current[table]
+                            elif key == 'library_section_id':
+                                value = self.idmap['library_sections'][value]
+                            elif key == 'parent_directory_id' and value != None:
+                                value = self.idmap['directories'][value] 
+                            elif table == 'metadata_items' and key == 'parent_id' and value != None:
+                                if idx == 0 and value not in self.idmap['metadata_items']:
+                                    after.append(row)
+                                    rowcontinue = True
+                                    break
+                                # 스캔이 잘못되어 있는 경우
+                                #if idx == 1 and value not in self.idmap['metadata_items']:
+                                #    rowcontinue = True
+                                #    break
+                                value = self.idmap['metadata_items'][value]
+                            elif table == 'tags' and key == 'parent_id' and value != None:
+                                value = self.idmap['tags'][value]
+                            elif key == 'metadata_item_id' and value != None:
+                                value = self.idmap['metadata_items'][value] 
+                            elif key == 'section_location_id' and value != None:
+                                value = self.idmap['section_locations'][value] 
+                            elif key == 'media_item_id' and value != None:
+                                value = self.idmap['media_items'][value] 
+                            elif key == 'directory_id' and value != None:
+                                value = self.idmap['directories'][value] 
+                            elif key == 'media_part_id' and value != None:
+                                value = self.idmap['media_parts'][value] 
+                            elif key == 'tag_id' and value != None:
+                                value = self.idmap['tags'][value] 
+                            if value is None:
+                                continue
+                            insert_col += f"'{key}',"
+                            if type(value) == type(''):
+                                value = value.replace('"', '""')
+                                insert_value += f'"{value}",'
+                            else:
+                                insert_value += f"{value},"
+                        if rowcontinue:
+                            continue
+                        insert_col = insert_col.rstrip(',')
+                        insert_value = insert_value.rstrip(',')
+                        query = f"INSERT INTO {table} ({insert_col}) VALUES ({insert_value});"
+
+                        self.target_con.execute(query)
+
+                        count += 1
+
+                        if count % 1000 == 0:
+                            #PlexDBHandle.execute_query_with_db_filepath(query, self.tar_path)     
+                            logger.info(f"INSERT {table}: {count} / {len(data)}")    
+                            query = ""
+                    
+                self.target_con.commit()
+            self.source_con.close()
+            self.target_con.close()
+            if os.path.exists(self.src_path):
+                try:
+                    os.remove(self.src_path.replace('.db', '.db-shm'))
+                    os.remove(self.src_path.replace('.db', '.db-wal'))
+                    os.remove(self.src_path)
+                except:
+                    pass
+            shutil.move(self.tar_path, self.src_path)
+        except Exception as e: 
+            P.logger.error(f'Exception:{str(e)}')
+            P.logger.error(traceback.format_exc())
