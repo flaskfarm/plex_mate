@@ -32,7 +32,7 @@ class Task(object):
             Task.celery_instance = self
             Task.config = P.load_config()
             Task.change_rule = [P.ModelSetting.get('copy2_copy_path_source_root_path'), P.ModelSetting.get('copy2_copy_path_target_root_path')]
-            Task.file_change_rule = [P.ModelSetting.get('copy2_copy_path_source_root_path'), P.ModelSetting.get('copy2_copy_path_target_root_path').replace(' ', '%20')]
+            Task.file_change_rule = [P.ModelSetting.get('copy2_copy_path_source_root_path').replace(' ', '%20'), P.ModelSetting.get('copy2_copy_path_target_root_path').replace(' ', '%20')]
 
             Task.source_con = sqlite3.connect(P.ModelSetting.get('copy2_copy_path_source_db'))
             Task.source_cur = Task.source_con.cursor()
