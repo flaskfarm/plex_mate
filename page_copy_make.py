@@ -78,25 +78,8 @@ class PageCopyMake(PluginPageBase):
                 shutil.copy(db_path, newpath)
             logger.debug(f"파일 : {newpath}")
             
-            query = ''
-            if section['section_type'] == 1:
-                query += f'''
-DELETE FROM metadata_items WHERE not (library_section_id = {section_id} AND metadata_type = 1);'''
-            elif section['section_type'] == 2:
-                query += f'''
-DELETE FROM metadata_items WHERE not (library_section_id = {section_id} AND metadata_type BETWEEN 2 AND 4);'''
-            elif section['section_type'] == 8:
-                query += f'''
-DELETE FROM metadata_items WHERE not (library_section_id = {section_id} AND metadata_type BETWEEN 8 AND 10);'''
-            query += f'''
-DELETE FROM media_streams WHERE media_item_id is null OR media_item_id not in (SELECT id FROM media_items WHERE library_section_id = {section_id});
-DELETE FROM media_parts WHERE media_item_id is null OR media_item_id not in (SELECT id FROM media_items WHERE library_section_id = {section_id});
-DELETE FROM media_items WHERE library_section_id is null OR library_section_id != {section_id};
-DELETE FROM directories WHERE library_section_id is null OR library_section_id != {section_id};
-DELETE FROM section_locations WHERE library_section_id is null OR library_section_id != {section_id};
-DELETE FROM library_sections WHERE id is null OR id != {section_id};
-DELETE FROM taggings WHERE metadata_item_id not in (SELECT id FROM metadata_items);
-DELETE FROM tags WHERE id not in (SELECT tag_id FROM taggings GROUP BY tag_id);
+            logger.warning("쿼리 실행 시작")
+            query = '''
 DROP TABLE metadata_relations;
 DROP TABLE accounts;
 DROP TABLE activities;
@@ -223,9 +206,38 @@ DROP TRIGGER fts4_tag_titles_after_update_icu;
 DROP TRIGGER fts4_tag_titles_before_delete_icu;
 DROP TRIGGER fts4_tag_titles_before_update_icu;
 VACUUM;
-            '''
-            logger.warning("쿼리 실행 시작")
+'''
             PlexDBHandle.execute_query_with_db_filepath(query, newpath)
+            query = f'''
+DELETE FROM library_sections WHERE id is null OR id != {section_id};
+'''
+            if section['section_type'] == 1:
+                query += f'''
+DELETE FROM metadata_items WHERE not (library_section_id = {section_id} AND metadata_type = 1);'''
+            elif section['section_type'] == 2:
+                query += f'''
+DELETE FROM metadata_items WHERE not (library_section_id = {section_id} AND metadata_type BETWEEN 2 AND 4);'''
+            elif section['section_type'] == 8:
+                query += f'''
+DELETE FROM metadata_items WHERE not (library_section_id = {section_id} AND metadata_type BETWEEN 8 AND 10);'''
+            query += f'''
+DELETE FROM metadata_items WHERE parent_id is not null and parent_id not in (SELECT id FROM metadata_items WHERE library_section_id = {section_id});            
+DELETE FROM section_locations WHERE library_section_id is null OR library_section_id != {section_id};
+DELETE FROM directories WHERE library_section_id is null OR library_section_id != {section_id};
+DELETE FROM media_items WHERE library_section_id is null OR library_section_id != {section_id};
+DELETE FROM media_items WHERE metadata_item_id is not null and metadata_item_id not in (SELECT id FROM metadata_items WHERE library_section_id = {section_id});            
+DELETE FROM media_parts WHERE media_item_id is null OR media_item_id not in (SELECT id FROM media_items WHERE library_section_id = {section_id});
+DELETE FROM media_parts WHERE directory_id is null OR directory_id not in (SELECT id FROM directories WHERE library_section_id = {section_id});
+DELETE FROM media_streams WHERE media_item_id is null OR media_item_id not in (SELECT id FROM media_items WHERE library_section_id = {section_id});
+DELETE FROM media_streams WHERE media_part_id not in (SELECT id FROM directories WHERE library_section_id = {section_id});
+DELETE FROM taggings WHERE metadata_item_id not in (SELECT id FROM metadata_items);
+DELETE FROM tags WHERE id not in (SELECT tag_id FROM taggings GROUP BY tag_id);
+VACUUM;
+            '''
+            
+            PlexDBHandle.execute_query_with_db_filepath(query, newpath)
+
+
             logger.warning("쿼리 실행 끝")
             if os.path.exists(newpath):
                 try:
