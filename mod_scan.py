@@ -42,6 +42,9 @@ class ModuleScan(PluginModuleBase):
             overs = P.get_module('scan').web_list_model.get_list_by_status('FINISH_TIMEOVER')
             check_timeover(overs, arg1)
             ret['msg'] = '실행했습니다.'
+        elif command == 'retry_scan':
+            ModelScanItem.get_by_id(arg1).set_status('READY', save=True)
+            ret['msg'] = 'READY로 변경합니다.'
         return jsonify(ret)
 
 

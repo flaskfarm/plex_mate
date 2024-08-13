@@ -132,6 +132,9 @@ function make_list(data) {
       var meta_url = plex_url + '/web/index.html#!/server/' + machine + '/details?key=%2Flibrary%2Fmetadata%2F'+data[i].meta_info[0].metadata_item_id;
       tmp += j_button('globalOpenBtn', 'PLEX GO', {'url':meta_url}, 'info', true, true);
     }
+    if (data[i].status.startsWith('FINISH')) {
+      tmp += j_button('retryScanBtn', '재시도', {'id': data[i].id}, 'warning', true, true);
+    }
     tmp = j_button_group(tmp)
     right += j_col(12, tmp)
     right += j_row_end();
@@ -171,8 +174,10 @@ $("body").on('click', '#remove_no_append_data_btn', function(e){
   });
 });
 
-
-
+$("body").on('click', '#retryScanBtn', function(e){
+  e.preventDefault();
+  globalSendCommand('retry_scan', $(this).data('id'), null, null, null);
+});
 
 </script>
 
