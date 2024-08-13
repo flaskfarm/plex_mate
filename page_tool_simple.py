@@ -1,3 +1,7 @@
+import shutil
+import threading
+import time
+
 from .plex_db import PlexDBHandle
 from .setup import *
 
@@ -166,10 +170,189 @@ class PageToolSimple(PluginPageBase):
                     ret = {'ret':'success', 'msg':'정상적으로 처리되었습니다.'}
                 else:
                     ret = {'ret':'warning', 'msg':'실패'}
-
+            elif command == 'remove_meta_id':
+                ret = self.remove_meta(arg1)
+            elif command == 'fix_yamlmusic':
+                self.task_interface(self.fix_yamlmusic)
+                ret['msg'] = "작업을 시작합니다."
             return jsonify(ret)
         except Exception as e: 
             P.logger.error(f'Exception:{str(e)}')
             P.logger.error(traceback.format_exc())
             return jsonify({'ret':'danger', 'msg':str(e)})
 
+    def remove_meta(self, metaid):
+        #ret = PlexDBHandle.section_location()
+        DRYRUN = False
+        ret = {}
+        delete_query = ''
+        query = f"""
+            SELECT id, metadata_type, hash, title, library_section_id  FROM metadata_items WHERE id = {metaid}
+            UNION
+            SELECT id, metadata_type, hash, title, library_section_id FROM metadata_items WHERE parent_id = {metaid}
+            UNION
+            SELECT id, metadata_type, hash, title, library_section_id FROM metadata_items WHERE parent_id = (
+                SELECT id FROM metadata_items WHERE parent_id = {metaid}
+            )"""
+
+        metdata_items = PlexDBHandle.select(query)
+        
+        if len(metdata_items) == 0:
+            ret['msg'] = "메타가 존재하지 않습니다."
+            return ret
+        
+        metdata_items_ids = [ x['id']  for x in metdata_items ]
+        metdata_items_ids_query = [ str(x['id'])  for x in metdata_items ]
+        logger.info(f"metadata_items - id : {metdata_items_ids}")
+        ret['metdata_items'] = len(metdata_items)
+        
+        logger.info(f"{metdata_items[0]}")
+        library_section_id = metdata_items[0]['library_section_id']
+        logger.info(f"{metdata_items[0]['title']} - {metdata_items[0]['hash']}")
+        metapath = P.ModelSetting.get('base_path_metadata')
+        # 8 아티스트
+        # 9 앨범
+        if metdata_items[0]['metadata_type'] == 1:
+            foldername = "Movies"
+        elif metdata_items[0]['metadata_type'] == 2:
+            foldername = "TV Shows"
+        elif metdata_items[0]['metadata_type'] == 8:
+            foldername = "Artists"
+        elif metdata_items[0]['metadata_type'] == 9:
+            foldername = "Albums"
+        else:
+            ret['msg'] = f"지원하지 않는 메타 타입입니다. {metdata_items[0]['metadata_type']}"
+            return ret
+        metapath = os.path.join(metapath, foldername, metdata_items[0]['hash'][0], f"{metdata_items[0]['hash'][1:]}.bundle")
+        
+        if metapath:
+            if os.path.exists(metapath):
+                ret['metapath'] = metapath
+                logger.info(f"메타패스 EXIST : {metapath}")
+                if DRYRUN == False:
+                    shutil.rmtree(metapath)
+            else:
+                logger.info(f"메타패스 NOT EXIST : {metapath} ")
+        ret['metapath'] = metapath
+
+        query = f"SELECT id FROM media_items WHERE metadata_item_id in ({','.join(metdata_items_ids_query)})"
+        media_items = PlexDBHandle.select(query)
+        media_items_ids = [ x['id']  for x in media_items ]
+        media_items_ids_query = [ str(x['id'])  for x in media_items ]
+        logger.info(f"media_items - id : {media_items_ids}")
+        ret['media_items'] = len(media_items)
+
+        query = f"SELECT id, hash, file FROM media_parts WHERE media_item_id in ({','.join(media_items_ids_query)})"
+        media_parts = PlexDBHandle.select(query)
+        media_parts_ids = [ x['id']  for x in media_parts ]
+        media_parts_ids_query = [ str(x['id'])  for x in media_parts ]
+        logger.info(f"media_parts - id : {media_parts_ids}")
+        ret['media_parts'] = len(media_parts)
+        
+        ret['media_folder'] = []
+        MEDIAPATH = P.ModelSetting.get('base_path_media')
+        for media_part in media_parts:
+            mediapath = os.path.join(MEDIAPATH, 'localhost', media_part['hash'][0], f"{media_part['hash'][1:]}.bundle")
+            if os.path.exists(mediapath):
+                logger.info(f"미디어패스 EXIST : {mediapath}")
+                ret['media_folder'].append(mediapath)
+                if DRYRUN == False:
+                    shutil.rmtree(mediapath)
+            else:
+                logger.info(f"미디어패스 NOT EXIST : {mediapath} ")
+
+        media_file = media_parts[0]['file']
+        logger.info(media_file)
+        folodername = os.path.basename(os.path.dirname(media_file))
+        
+        delete_query += f"DELETE FROM directories WHERE path LIKE '%{folodername}' AND library_section_id = {library_section_id};"
+
+        # media_streams
+        delete_query += f"DELETE FROM media_streams WHERE media_part_id in ({','.join(media_parts_ids_query)});"
+        delete_query += f"DELETE FROM media_parts WHERE media_item_id in ({','.join(media_items_ids_query)});"
+        delete_query += f"DELETE FROM media_items WHERE metadata_item_id in ({','.join(metdata_items_ids_query)});"
+        delete_query += f"DELETE FROM tags WHERE id in (SELECT tag_id FROM taggings WHERE metadata_item_id in ({','.join(metdata_items_ids_query)}));"
+        delete_query += f"DELETE FROM taggings WHERE metadata_item_id in ({','.join(metdata_items_ids_query)});"
+        delete_query += f"DELETE FROM metadata_items WHERE id in ({','.join(metdata_items_ids_query)});"
+        
+        if DRYRUN == False:
+            query_ret = PlexDBHandle.execute_query(delete_query)
+            logger.info(query_ret)
+        ret['msg'] = "정상 삭제하였습니다."
+        return ret
+
+
+    def fix_yamlmusic(self):
+        DRYRUN = False
+        UPDATE_QUERY_COUNT = 1000
+
+        prefix = "http://127.0.0.1:32400/:/plugins/com.plexapp.agents.sjva_agent/function/yaml_lyric?"
+
+        query = f"""SELECT metadata_items.id as track_id, metadata_items.parent_id AS album_id, media_streams.id AS stream_id, media_streams.URL as URL
+    FROM library_sections, metadata_items, media_items, media_parts, media_streams
+    WHERE library_sections.id=metadata_items.library_section_id 
+        AND metadata_items.id = media_items.metadata_item_id 
+        AND media_items.id = media_parts.media_item_id 
+        AND media_streams.media_part_id = media_parts.id
+        AND (media_streams.codec = 'lrc' OR media_streams.codec = 'txt')
+        AND metadata_items.metadata_type = 10
+        AND media_streams.url LIKE "{prefix}%"
+        ORDER BY track_id
+    """
+        #AND metadata_items.id = 210398
+        # http://127.0.0.1:32400/:/plugins/com.plexapp.agents.sjva_agent/function/yaml_lyric?track_key=309952&lyric_index=0&album_key=309944&track_code=&disc_index=1&track_index=8
+        
+        prefix = "http://127.0.0.1:32400/:/plugins/com.plexapp.agents.sjva_agent/function/yaml_lyric?"
+        regex = r"^track_key=(?P<track_key>\d+)&lyric_index=(?P<lyric_index>\d+)&album_key=(?P<album_key>\d+)&track_code=&disc_index=(?P<disc_index>\d+)&track_index=(?P<track_index>\d+)$"
+        rows = PlexDBHandle.select(query)
+        ret = {'가사정보수': len(rows), "정규식불일치":0, "정상정보":0, "수정정보":0}
+        logger.info(f"가사정보 총: {ret['가사정보수']}건")
+        query = []
+        for idx, item in enumerate(rows):
+            #logger.debug(item)
+            
+            match = re.match(regex, item['URL'].replace(prefix,''))
+            if match:
+                if item['track_id'] == int(match.group('track_key')) and item['album_id'] == int(match.group('album_key')):
+                    ret['정상정보'] += 1
+                else:
+                    ret['수정정보'] += 1
+                    #logger.debug(item)
+                    newurl = f"{prefix}track_key={item['track_id']}&lyric_index={match.group('lyric_index')}&album_key={item['album_id']}&track_code=&disc_index={match.group('disc_index')}&track_index={match.group('track_index')}"
+                    stream_id = item['stream_id']
+                    query.append(f'UPDATE media_streams SET url = "{newurl}" WHERE id = {stream_id};')
+
+                    if DRYRUN == False and len(query)>0 and len(query) % UPDATE_QUERY_COUNT == 0:
+                        update_result = PlexDBHandle.execute_query(''.join(query))
+                        logger.info(f"{idx} 업데이트: {d(update_result)}")
+                        query = []
+                        #break
+
+            else:
+                ret['정규식불일치'] += 1
+                logger.debug(d(item))
+
+        if DRYRUN == False and len(query)>0:
+            update_result = PlexDBHandle.execute_query(''.join(query))
+            logger.info(f"last 업데이트: {d(update_result)}")
+            query = []
+
+        logger.info(d(ret))
+
+        ret['msg'] = f"총 {ret['가사정보수']}건 중 정상정보 {ret['정상정보']} 건, 수정정보 {ret['수정정보']}건."
+        return ret
+
+
+    def task_interface(self, mainfunc):
+        def func():
+            time.sleep(1)
+            self.task_interface2(mainfunc)
+        th = threading.Thread(target=func, args=())
+        th.setDaemon(True)
+        th.start()
+    
+    def task_interface2(self, mainfunc):
+        #ret = self.start_celery(mainfunc, None, *())
+        ret = mainfunc()
+        msg = ret['msg']
+        F.socketio.emit("modal", {'title':'DB Tool', 'data' : msg}, namespace='/framework', broadcast=True)  
