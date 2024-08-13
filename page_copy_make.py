@@ -232,6 +232,7 @@ DELETE FROM media_streams WHERE media_item_id is null OR media_item_id not in (S
 DELETE FROM media_streams WHERE media_part_id not in (SELECT id FROM directories WHERE library_section_id = {section_id});
 DELETE FROM taggings WHERE metadata_item_id not in (SELECT id FROM metadata_items);
 DELETE FROM tags WHERE id not in (SELECT tag_id FROM taggings GROUP BY tag_id);
+DELETE FROM taggings WHERE tag_id not in (SELECT id FROM tags);
 VACUUM;
             '''
             
