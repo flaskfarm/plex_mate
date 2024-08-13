@@ -1,6 +1,7 @@
 from .model_scan import ModelScanItem
 from .setup import *
 from .task_scan import Task
+from .extensions import check_timeover, BrowserPage
 
 name = 'scan'
 class ModuleScan(PluginModuleBase):
@@ -24,9 +25,12 @@ class ModuleScan(PluginModuleBase):
             f"{self.name}_db_auto_delete": "True",
             f"{self.name}_use_vfs_refresh": "False",
             f"{self.name}_vfs_change_rule": "/mnt/gds2/GDRIVE|/GDRIVE|172.17.0.1:5275\n#/mnt/mydrive|/sample/172.17.0.1:5524",
+            f"{self.name}_max_scan_time": "60",
+            f"{self.name}_timeover_reset_range": "0~0",
         }
         self.web_list_model = ModelScanItem
-        
+        self.set_page_list([BrowserPage])
+
 
     def process_command(self, command, arg1, arg2, arg3, req):
         ret = {'ret':'success'}
@@ -34,9 +38,13 @@ class ModuleScan(PluginModuleBase):
             P.ModelSetting.set(f"{self.name}_manual_target", arg2)
             ModelScanItem(arg2, mode=arg1).save()
             ret['msg'] = "추가하였습니다."
+        elif command == 'check_timeover':
+            overs = P.get_module('scan').web_list_model.get_list_by_status('FINISH_TIMEOVER')
+            check_timeover(overs, arg1)
+            ret['msg'] = '실행했습니다.'
         return jsonify(ret)
-    
-    
+
+
     def process_api(self, sub, req):
         ret = {'ret':'success'}
         if sub == 'do_scan':
@@ -58,4 +66,3 @@ class ModuleScan(PluginModuleBase):
         thread = threading.Thread(target=func, args=())
         thread.daemon = True
         thread.start()
-      

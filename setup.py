@@ -20,6 +20,7 @@ setting = {
                 'list': [
                     {'uri': 'setting', 'name': '설정'},
                     {'uri': 'list', 'name': '스캔 목록'},
+                    {'uri': 'browser', 'name': '탐색'},
                     {'uri': 'manual/files/스캔.md', 'name': '매뉴얼'},
                 ]
             },
@@ -116,7 +117,7 @@ try:
     from .mod_tool import ModuleTool
 
     P.set_module_list([ModuleBase, ModuleScan, ModulePeriodic, ModuleTool, ModuleClear, ModuleCopy, ModuleCopy2, ModuleSubtitle])
-    
+
     # 외부 호출
     from .plex_bin_scanner import PlexBinaryScanner
     from .plex_db import PlexDBHandle
@@ -133,7 +134,7 @@ def load_config():
     from support import SupportYaml
     from tool import ToolUtil
     return SupportYaml.read_yaml(ToolUtil.make_path(P.ModelSetting.get('base_path_config')))
-    
+
 P.load_config = load_config
 
 logger = P.logger

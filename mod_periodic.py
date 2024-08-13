@@ -10,7 +10,7 @@ from .task_periodic import Task
 #########################################################
 
 class ModulePeriodic(PluginModuleBase):
-    
+
 
     def __init__(self, P):
         super(ModulePeriodic, self).__init__(P, name='periodic', first_menu='list')
@@ -26,7 +26,7 @@ class ModulePeriodic(PluginModuleBase):
             arg['base_path_config'] = ToolUtil.make_path(P.ModelSetting.get('base_path_config'))
             arg['library_list'] = PlexDBHandle.library_sections()
             return render_template(f'{P.package_name}_{self.name}_{sub}.html', arg=arg)
-        except Exception as e: 
+        except Exception as e:
             P.logger.error(f'Exception:{str(e)}')
             P.logger.error(traceback.format_exc())
             return render_template('sample.html', title=f"{P.package_name}/{self.name}/{sub}")
@@ -52,7 +52,7 @@ class ModulePeriodic(PluginModuleBase):
             tasks = self.get_jobs()
             for idx, task in enumerate(tasks):
                 for section in section_list:
-                    if str(task['섹션ID']) ==  str(section['id']):
+                    if str(task.get('섹션ID')) ==  str(section['id']):
                         task['section_title'] = section['name']
                         break
             ret = {'data' : tasks}
@@ -95,9 +95,9 @@ class ModulePeriodic(PluginModuleBase):
             job = Job(self.P.package_name, item['job_id'], item['주기'], self.job_function, item['설명'], args=(idx,))
             F.scheduler.add_job_instance(job)
             return True
-        except Exception as e: 
+        except Exception as e:
             P.logger.error(f'Exception:{str(e)}')
-            P.logger.error(traceback.format_exc())   
+            P.logger.error(traceback.format_exc())
         return False
 
 
@@ -107,7 +107,7 @@ class ModulePeriodic(PluginModuleBase):
             db_item = ModelPeriodicItem.get_by_id(db_item_id)
             logger.debug(d(db_item.as_dict()))
             if db_item is not None:
-                
+
                 process = psutil.Process(int(db_item.process_pid))
                 logger.debug(process)
                 logger.debug(process.name())
@@ -125,10 +125,10 @@ class ModulePeriodic(PluginModuleBase):
             if db_item is not None:
                 db_item.status = 'terminated'
                 db_item.save()
-        except Exception as e: 
+        except Exception as e:
             P.logger.error(f'Exception:{str(e)}')
             P.logger.error(traceback.format_exc())
-            ret = {'ret':'danger', 'msg':str(e)} 
+            ret = {'ret':'danger', 'msg':str(e)}
         return ret
 
 
@@ -141,7 +141,7 @@ class ModulePeriodic(PluginModuleBase):
         for idx, item in enumerate(data):
             if item.get('스케쥴링', '등록') == '등록':
                 self.sched_add(idx, item=item)
-                 
+
 
     @classmethod
     def get_jobs(cls):
@@ -150,13 +150,6 @@ class ModulePeriodic(PluginModuleBase):
 
     def job_function(self, idx):
         logger.warning(f"job_function IDX : {idx}")
-        data = self.get_jobs()[idx]
-        if data.get('스캔모드', None) == '웹':
-            PlexWebHandle.section_scan(data['섹션ID'])
-            logger.debug(f"스캔모드 : 웹 실행")
-            logger.debug(data)
-            return
-        
         self.start_celery(Task.start, None, *(idx,'scheduler'))
         #Task.start(idx)
         #if app.config['config']['use_celery']:
@@ -183,7 +176,7 @@ class ModulePeriodic(PluginModuleBase):
                 t.daemon = True
                 t.start()
                 ret = 'thread'
-        except Exception as e: 
+        except Exception as e:
             logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())
             ret = 'fail'
