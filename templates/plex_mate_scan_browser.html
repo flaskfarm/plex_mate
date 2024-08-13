@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+[role=button] {
+    cursor: pointer;
+}
+
+.dir-folder:hover{
+    text-decoration: underline;
+}
+
+#brw-list-table.table tbody {
+    display: block;
+    overflow-y: auto;
+    overflow-x: auto;
+    min-height: 200px;
+}
+
+#brw-list-table.table thead,
+#brw-list-table.table tbody tr {
+    display: table;
+    width:100%;
+    table-layout: fixed;
+}
+
+#brw-list-table.table {
+    width: 100%;
+}
+
+#confirm_body {
+    word-break: break-word;
+}
+</style>
+<div class="input-group mb-3">
+    <input id="working-directory" placeholder="/home" type="text" value="{{ args['scan_browser_working_directory'] }}" class="form-control" />
+    <div class="input-group-append">
+        <button id="working-directory-submit" type="button" class="btn btn-outline-primary">이동</button>
+    </div>
+</div>
+<br />
+<table id="brw-list-table" class="table table-hover table-striped align-bottom">
+    <thead>
+        <tr class="text-primary">
+            <th scope="col" style="width: 60%" class="pl-3">이름</th>
+            <th scope="col" style="" class="text-right">크기</th>
+            <th scope="col" style="" class="text-center">수정한 날짜</th>
+            <th scope="col" style="" class="text-center">메뉴</th>
+        </tr>
+    </thead>
+    <thead class="dir-parent"></thead>
+    <tbody class="table-group-divider align-middle"></tbody>
+    <tfoot></tfoot>
+</table>
+
+<script type="text/javascript">
+
+const E_BROWSER_WD = $('#working-directory');
+const E_BROWSER_WD_SUBMIT = $('#working-directory-submit');
+const E_BROWSER_PARENT = $('#brw-list-table thead.dir-parent');
+const E_BROWSER_TBODY = $('#brw-list-table tbody');
+const TASKS = {
+    refresh_scan: '새로고침 후 스캔',
+    refresh: '새로고침',
+    scan: '스캔',
+    forget: '경로 캐시 삭제',
+}
+
+let DEFAULT_CONTEXT_MENU_OPTIONS = {
+    className: 'context-menu',
+    autohide: true,
+    callback: function(command, opt) {
+        let path = opt.$trigger.data('path');
+        confirmModal(TASKS[command] + ' 작업을 실행할까요?', path, function() {
+            let cmd = {
+                command: command,
+                path: path,
+                recursive: opt.inputs['recursive'].$input.prop('checked'),
+                async: opt.inputs['async'].$input.prop('checked'),
+                scanByBin: opt.inputs['scanByBin'].$input.prop('checked'),
+            }
+            browserCommand(cmd);
+        });
+    },
+    events: {
+        show: function(opt) {
+            console.log(opt.$trigger.data('path'));
+        }
+    },
+    items: {
+        refresh_scan: {
+            name: TASKS['refresh_scan'],
+            icon: 'fa-refresh',
+            disabled: function(){return $(this).hasClass('restrict-context');},
+        },
+        refresh: {
+            name: TASKS['refresh'],
+            icon: 'fa-refresh',
+            disabled: function(){return $(this).hasClass('restrict-context');},
+        },
+        scan: {
+            name: TASKS['scan'],
+            icon: 'fa-search',
+            disabled: function(){return $(this).hasClass('restrict-context');},
+        },
+        forget: {
+            name: TASKS['forget'],
+            icon: 'fa-undo',
+            disabled: function(){return $(this).hasClass('restrict-context');},
+        },
+        sep1: "---------",
+        clipboard: {
+            name: '경로 복사',
+            icon: 'fa-clipboard',
+            callback: function(key, opt, e) {
+                path = $(this).data('path');
+                copyToClipboard(path);
+            },
+            disabled: function(){return $(this).hasClass('no-context');},
+        },
+        edit: {
+            name: '편집',
+            icon: 'fa-edit',
+            callback: function(key, opt, e) {
+                path = $(this).data('path');
+                editFile(path);
+            },
+            disabled: function(){return !$(this).hasClass('dir-file');},
+        },
+        sep2: "---------",
+        recursive: {
+            name: '하위폴더',
+            type: 'checkbox',
+            selected: false,
+            disabled: function(){return $(this).hasClass('restrict-context');},
+        },
+        async: {
+            name: '비동기',
+            type: 'checkbox',
+            selected: false,
+            disabled: function(){return $(this).hasClass('restrict-context');},
+        },
+        scanByBin: {
+            name: '바이너리 스캔',
+            type: 'checkbox',
+            selected: true,
+            disabled: function(){return $(this).hasClass('restrict-context');},
+        },
+    },
+}
+
+function editFile(file) {
+    $.ajax({
+        url: '/global/ajax/is_available_edit',
+        type: "POST",
+        cache: false,
+        data: {},
+        dataType: "json",
+        success: function (ret) {
+        if (ret.ret) {
+            window.open('/flaskcode?open=' + file, ret.target);
+        } else {
+            notify('편집기 플러그인을 설치해야 합니다.', 'warning');
+        }
+        }
+    });
+}
+
+function confirmModal(title, content, func) {
+    $('#confirm_title').html(title);
+    $('#confirm_body').html(content);
+    $('#confirm_button').off('click');
+    $('#confirm_button').on('click', func);
+    $("#confirm_modal").modal({backdrop: 'static', keyboard: true}, 'show');
+}
+
+function copyToClipboard(text) {
+    if ( ! window.navigator.clipboard ) {
+        notify('클립보드 접근 권한이 없습니다.', 'warning');
+    } else {
+        window.navigator.clipboard.writeText(text).then(() => {
+            notify('클립보드에 복사하였습니다.', 'success');
+        },() => {
+            notify('클립보드 복사에 실패했습니다.', 'warning');
+        });
+    }
+}
+
+function setBrowserMaxheight(){
+    let browserBody = $('#brw-list-table.table tbody');
+    let windowHeight = $(window).height();
+    browserBody.css({
+        'max-height' : (windowHeight - 425) + 'px'
+    });
+}
+
+function browserCommand(cmd) {
+    let query = 'path=' + cmd.path;
+    query += '&scanByBin=' + (cmd.scanByBin ? cmd.scanByBin : '');
+    query += '&recursive=' + (cmd.recursive ? cmd.recursive : '');
+    query += '&async=' + (cmd.async ? cmd.async : '');
+    globalSendCommandPage(cmd.command, query, null, null, function(result) {
+        if (result.ret == 'success' && cmd.command == 'list') {
+            E_BROWSER_WD.prop('value', cmd.path);
+            listDirectory(JSON.parse(result.data));
+        }
+    });
+}
+
+function listDirectory(result) {
+    E_BROWSER_PARENT.empty();
+    E_BROWSER_TBODY.empty();
+    let linkClasses
+    let nameIClasses = 'fa-folder pr-2';
+    for (let index in result) {
+        if (index == 0) {
+            linkClasses = 'dir-folder no-context restrict-context';
+            result[index].size = '';
+            result[index].mtime = '';
+        } else if (result[index].is_file) {
+            linkClasses = 'dir-file restrict-context text-decoration-none font-weight-light';
+            nameIClasses = 'fa-file pr-2';
+        } else {
+            linkClasses = 'dir-folder';
+        }
+        let tdName = '<td style="width: 60%" class="dir-btn browser-context-menu ' + linkClasses + '" data-path="' + result[index].path + '" role="button"><span href="#" class="dir-name pr-5' + linkClasses +'"><i class="fa fa-2 ' + nameIClasses + '" aria-hidden="true"></i>' + result[index].name + '</span></td>';
+        let tdSize = '<td style="" class="text-right">' + result[index].size + '</td>';
+        let tdMtime = '<td style="" class="text-center">' + result[index].mtime + '</td>';
+        let tdButton = '<td style="" class="text-center"></td>';
+        if (index != 0) {
+            tdButton = '<td style="" class="text-center"><button class="btn browser-context-menu-btn dir-index-' + index + ' ' + linkClasses + '" data-path="' + result[index].path + '"><i class="fa fa-ellipsis-h fa-2x" aria-hidden="true"></i></button></td>';
+        }
+        let trGroup = '<tr class="dir-index-' + index + '">' + tdName + tdSize + tdMtime + tdButton + '</tr>';
+        if (index == 0) {
+            E_BROWSER_PARENT.append(trGroup);
+        } else {
+            E_BROWSER_TBODY.append(trGroup);
+        }
+    }
+    $('.dir-btn').on('click', function (e) {
+        // except file entries
+        if ($(this).hasClass('dir-folder')) {
+            let path = $(this).data('path');
+            let cmd = {
+                command: 'list',
+                path: path
+            }
+            browserCommand(cmd);
+        }
+    });
+    // attach context menu
+    let contextMenuTr = { ...DEFAULT_CONTEXT_MENU_OPTIONS };
+    contextMenuTr.selector = '.browser-context-menu';
+    $.contextMenu(contextMenuTr);
+    let contextMenuBtn = { ...DEFAULT_CONTEXT_MENU_OPTIONS };
+    contextMenuBtn.selector = '.browser-context-menu-btn'
+    contextMenuBtn.trigger = 'left';
+    $.contextMenu(contextMenuBtn);
+}
+
+$(function() {
+    // 현재 디렉토리
+    E_BROWSER_WD.keypress(function(e) {
+        if (e.keyCode && e.keyCode == 13) {
+            E_BROWSER_WD_SUBMIT.trigger("click");
+            return false;
+        }
+    });
+
+    // 브라우저 이동 버튼
+    E_BROWSER_WD_SUBMIT.on('click', function(e) {
+        let dir = E_BROWSER_WD.prop('value');
+        browserCommand({command: 'list', path: dir});
+    });
+
+    // 초기 디렉토리 불러오기
+    browserCommand({
+        command: 'list',
+        path: E_BROWSER_WD.prop('value'),
+    });
+
+    setBrowserMaxheight();
+    $(window).resize(function(){
+        setBrowserMaxheight();
+    });
+
+    io.connect(window.location.href).on('result', function(result) {
+    if (result) {
+        notify(result.result, result.status);
+    }
+
+});
+});
+
+</script>
+{% endblock %}

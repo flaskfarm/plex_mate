@@ -132,3 +132,19 @@ class PlexWebHandle(object):
         except Exception as e: 
             logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())
+
+    @classmethod
+    def path_scan(cls, library_section_id, path: str) -> None:
+        try:
+            url = f"{P.ModelSetting.get('base_url')}/library/sections/{library_section_id}/refresh"
+            params = {
+                'X-Plex-Token': P.ModelSetting.get('base_token'),
+                'path': path,
+            }
+            response = requests.request('GET', url, params=params)
+            if not str(response.status_code)[0] == '2':
+                logger.error(f'스캔 전송 실패: {response.text}')
+        except Exception as e: 
+            logger.error(f"Exception:{str(e)}")
+            logger.error(traceback.format_exc())
+            

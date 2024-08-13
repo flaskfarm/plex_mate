@@ -5,12 +5,12 @@
 {{ macros.m_row_start('5') }}
 {{ macros.m_row_end() }}
 
-<nav>  
+<nav>
   {{ macros.m_tab_head_start() }}
     {{ macros.m_tab_head('basic', '기본', true) }}
     {{ macros.m_tab_head('db', 'DB', false) }}
   {{ macros.m_tab_head_end() }}
-</nav> 
+</nav>
 <form id='setting'>
   <div class="tab-content" id="nav-tabContent">
     {{ macros.m_tab_content_start('basic', true) }}
@@ -21,15 +21,19 @@
 
       {{ macros.setting_checkbox('scan_use_vfs_refresh', 'rclone vfs/refresh 사용', value=arg['scan_use_vfs_refresh'], desc=['rclone 플러그인 설치 필요']) }}
       <div id="scan_use_vfs_refresh_div" class="collapse">
-      {{ macros.setting_input_textarea('scan_vfs_change_rule', 'vfs/refresh 규칙', col='12', row='3', value=arg['scan_vfs_change_rule'], desc=['A|B|C|D(옵션)|E(옵션) 가 하나의 규칙. 규칙 구분자 엔터']) }}
+      {{ macros.setting_input_textarea('scan_vfs_change_rule', 'vfs/refresh 규칙', col='12', row='3', value=arg['scan_vfs_change_rule'], desc=['A|B|C|D(옵션)|E(옵션) 가 하나의 규칙. 규칙 구분자 엔터', '{local_path}|{remote_path}|{address}#{remote_name}|{user_name}|{password}', '/mnt/gds/GDRIVE|/GDRIVE|172.17.0.1:5275#gds2|admin|nimda', '/mnt/gds||http://admin:nimda@localhost:5572']) }}
       {{ macros.info_text('', '', "A: 로컬 경로, B: 리모트 경로, C: rc addr, D(옵션): rc user, E(옵션): rc pass") }}
       {{ macros.info_text('', '', "스캔경로가 A로 시작하면 A값을 B값으로 바꾼 리모트 경로를 rcaddr에 해당하는 C에 전달") }}
       {{ macros.info_text('', '', "rclone 인증 설정이 없을 경우 :") }}
       {{ macros.info_text('', '', "/mnt/gds2/GDRIVE|/GDRIVE|172.17.0.1:5275") }}
       {{ macros.info_text('', '', "rclone 인증 설정이 있을 경우 :") }}
       {{ macros.info_text('', '', "/mnt/gds2/GDRIVE|/GDRIVE|172.17.0.1:5275|userid|userpw") }}
-      
+      {{ macros.setting_input_int('scan_max_scan_time', '최대 스캔 시간', value=arg['scan_max_scan_time'], desc=['SCANNING 상태에서 이 시간을 초과할 경우 FINISH_TIMEOVER 처리', '0이면 비활성화', '단위: 분']) }}
+      {{ macros.setting_input_text_and_buttons('scan_timeover_reset_range', '타임오버 항목 재설정', [['scan_timeover_reset_range_btn', '지금 실행']], value=arg['scan_timeover_reset_range'], desc=['이 ID 범위의 항목 중 FINISH_TIMEOVER 처리된 항목을 다시 READY로 변경', '형식: 시작ID~끝ID', '예시 : 100~110 (100, 101, 102 ... 107, 108, 109, 110)']) }}
+
       </div>
+
+      {{ macros.m_hr() }}
 
       <!--{{ macros.setting_radio_with_value('scan_mode', '스캔 방식', [['bin', '바이너리'], ['web', '웹']], value=arg['scan_mode'], desc=['바이너리 모드로 사용 하다 Plex가 지원하지 않는 경우 변경']) }}-->
 
@@ -37,12 +41,12 @@
       {{ macros.info_text_big('', '<테스트>', '')}}
       {{ macros.setting_input_textarea('scan_manual_target', '스캔 타겟 파일 또는 폴더',  col=12, value=arg['scan_manual_target']) }}
       {{ macros.setting_buttons([['add_btn', '추가'], ['remove_file_btn', '파일 삭제'], ['remove_folder_btn', '폴더 삭제'], ['refresh_btn', '메타새로고침 모드']]) }}
-    {{ macros.m_tab_content_end() }} 
-    
+    {{ macros.m_tab_content_end() }}
+
     {{ macros.m_tab_content_start('db', false) }}
-      {{ macros.setting_input_text_and_buttons('scan_db_delete_day', 'DB 삭제 기간', [['globalDbDeleteDayBtn', '기간 적용 삭제', [['tag_id','scan_db_delete_day']]], ['globalDbDeleteBtn', '전체 삭제']], value=arg['scan_db_delete_day'], col='6') }} 
+      {{ macros.setting_input_text_and_buttons('scan_db_delete_day', 'DB 삭제 기간', [['globalDbDeleteDayBtn', '기간 적용 삭제', [['tag_id','scan_db_delete_day']]], ['globalDbDeleteBtn', '전체 삭제']], value=arg['scan_db_delete_day'], col='6') }}
       {{ macros.setting_checkbox('scan_db_auto_delete', 'DB 자동 삭제', value=arg['scan_db_auto_delete'], desc=['On : 기간 적용하여 DB를 자동 삭제합니다.']) }}
-    {{ macros.m_tab_content_end() }} 
+    {{ macros.m_tab_content_end() }}
 </form>
 
 <script type="text/javascript">
@@ -84,5 +88,11 @@ $("body").on('click', '#refresh_btn', function(e){
   globalSendCommand('manual', 'REFRESH', $('#scan_manual_target').val().trim());
 });
 
-</script>    
+$("body").on('click', '#scan_timeover_reset_range_btn', function(e){
+  range = $('#scan_timeover_reset_range').prop('value');
+  e.preventDefault();
+  globalSendCommand('check_timeover', range, null, null, null);
+});
+
+</script>
 {% endblock %}

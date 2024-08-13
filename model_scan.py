@@ -11,7 +11,7 @@ class ModelScanItem(ModelBase):
 
     id = db.Column(db.Integer, primary_key=True)
     created_time    = db.Column(db.DateTime)
-    filecheck_time  = db.Column(db.DateTime)    
+    filecheck_time  = db.Column(db.DateTime)
     completed_time  = db.Column(db.DateTime)
 
     callback = db.Column(db.String)
@@ -26,7 +26,7 @@ class ModelScanItem(ModelBase):
     flag_db_include = db.Column(db.Boolean)
     flag_cancel = db.Column(db.Boolean)
     flag_finish = db.Column(db.Boolean)
-    
+
     scan_folder = db.Column(db.String)
     process_pid = db.Column(db.String)
     process_start_time = db.Column(db.DateTime)
@@ -53,13 +53,13 @@ class ModelScanItem(ModelBase):
 
     # enqueue_remove_removed : 삭제모드 파일 없어짐
     # 완료
-    # 
+    #
     # 있지 않음.
     # finish_wrong_section_id : 잘못된 섹션 ID로 요청
-    
+
     # finish_remove_already_not_in_db : 삭제모드. 이미 DB에 파일이 없음. 완료
     # finish_already_scan_folder_exist : 추가나 삭제모드. 이미 스캔 대상 폴더가 DB에 있음
-    
+
     # finish_remove : 삭제모드 끝
 
     # READY : 준비
@@ -68,14 +68,15 @@ class ModelScanItem(ModelBase):
     # FINISH_ADD : 정상추가
     # FINISH_ADD_ALREADY_IN_DB : 추가모드. 이미 DB에 파일이 있음
     # FINISH_ALREADY_IN_QUEUE : 이미 QUEUE에 scan_folder가 있음
-    # FINISH_NOT_FIND_LIBRARY  : section_location에 없음. 
+    # FINISH_NOT_FIND_LIBRARY  : section_location에 없음.
     # FINISH_TIMEOVER : 추가모드. 대기시간 지남
+    # FINISH_SCANNING : 스캔 완료했으나 media_part에 없음 (등록할 수 없는 파일 형식 혹은 REMOVE 모드)
 
     def __init__(self, target, mode="ADD", target_section_id='0', callback_id=None, callback_url=None):
         self.mode = mode
         self.target = target
         self.target_section_id = target_section_id
-        
+
         self.callback_id = callback_id
         if self.callback_id != None:
             self.callback = callback_id.rsplit('_', 1)[0]
@@ -89,7 +90,7 @@ class ModelScanItem(ModelBase):
         self.flag_cancel = False
         self.flag_finish = False
         self.filecheck_count = 0
-   
+
 
 
     @classmethod
@@ -105,7 +106,7 @@ class ModelScanItem(ModelBase):
                 query = query.order_by(desc(cls.id))
             else:
                 query = query.order_by(cls.id)
-            return query 
+            return query
 
 
     @classmethod
@@ -114,7 +115,7 @@ class ModelScanItem(ModelBase):
             return db.session.query(cls).filter_by(
                 flag_finish=False
             ).all()
-       
+
 
     ### only for queue
     def init_for_queue(self):
@@ -125,7 +126,7 @@ class ModelScanItem(ModelBase):
         for _ in cls.queue_list:
             if _.id == int(id):
                 return _
-    
+
     @classmethod
     def remove_in_queue(cls, db_item):
         ret = []
@@ -153,7 +154,7 @@ class ModelScanItem(ModelBase):
                 try:
                     ret = requests.post(self.callback_url, data=self.as_dict()).text
                     logger.debug(f'scan callback : {ret}')
-                except Exception as e: 
+                except Exception as e:
                     logger.error(f'Exception:{str(e)}')
                     #logger.error(traceback.format_exc())
             self.remove_in_queue(self)
@@ -188,7 +189,7 @@ class ModelScanItem(ModelBase):
 
             if option1 != 'all':
                 query = query.filter(cls.callback == option1)
-            
+
             if option2 != 'all':
                 query = query.filter(cls.status == option2)
 
@@ -197,7 +198,7 @@ class ModelScanItem(ModelBase):
             else:
                 query = query.order_by(cls.id)
 
-            return query       
+            return query
 
 
     """
@@ -205,7 +206,7 @@ class ModelScanItem(ModelBase):
     def get_items(cls, mode):
         if mode == 'wait':
             query = db.session.query(cls).filter(or_(cls.status == 'ready', cls.status.like('wait_%')))
-            
+
         elif mode == 'run':
             query = db.session.query(cls).filter(cls.status.like('run_%'))
         elif mode == 'all':
@@ -216,7 +217,7 @@ class ModelScanItem(ModelBase):
         items = query.all()
         return items
 
-    
+
     @classmethod
     def is_already_scan_folder_exist(cls, scan_folder):
         query = db.session.query(cls).filter(
@@ -225,7 +226,7 @@ class ModelScanItem(ModelBase):
         )
         query = query.order_by(cls.id)
         items = query.all()
-        return items   
+        return items
 
     @classmethod
     def not_finished_to_ready(cls):
@@ -234,9 +235,8 @@ class ModelScanItem(ModelBase):
             item.status = 'ready'
         db.session.commit()
 
-       
-    # JSON 
-    
+
+    # JSON
+
 
     """
-    

@@ -24,6 +24,7 @@
           <option value="FINISH_ALREADY_IN_QUEUE">FINISH_ALREADY_IN_QUEUE</option>
           <option value="FINISH_NOT_FIND_LIBRARY">FINISH_NOT_FIND_LIBRARY</option>
           <option value="FINISH_TIMEOVER">FINISH_TIMEOVER</option>
+          <option value="FINISH_SCANNING">FINISH_SCANNING</option>
         </select>
       </span>
       <span class="col-md-6">
@@ -99,7 +100,7 @@ function make_list(data) {
 
     //str += j_col(1, data[i].mode);
     str += j_col(2, tmp);
-    
+
     right = j_row_start();
     tmp = '';
     tmp += j_info_text_left("경로", data[i].target, 2, 10);
@@ -107,11 +108,11 @@ function make_list(data) {
     if (data[i].meta_info != null && data[i].meta_info.length > 0) {
       tmp += j_info_text_left("섹션", data[i].meta_info[0].name, 2, 10);
 
-      
+
       tmp += '<pre>' + data[i].meta_info[0].summary + '</pre>';
     }
-    
-    
+
+
     right += j_col(9, tmp);
 
     tmp = data[i].created_time + ' (생성)'
@@ -158,7 +159,7 @@ $("body").on('click', '#kill_btn', function(e){
   e.preventDefault();
   id = $(this).data('id');
   global_send_command2('kill', id);
-  
+
   // 확장, 축소 방지
   return false;
 });
@@ -173,6 +174,6 @@ $("body").on('click', '#remove_no_append_data_btn', function(e){
 
 
 
-</script> 
+</script>
 
 {% endblock %}

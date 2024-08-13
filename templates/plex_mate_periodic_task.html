@@ -37,9 +37,10 @@ function make_list(data) {
     <th style="width:15%; text-align:center;">폴더</th> \
     <th style="width:10%; text-align:left;">최대실행시간</th> \
     <th style="width:15%; text-align:center;">설명</th> \
+    <th style="width:15%; text-align:center;">새로고침</th> \
     <th style="width:5%; text-align:left;">Action</th> \
     </tr></thead><tbody id="list">';
-  
+
   if (data.length == 0) str += '<tr><td colspan="11"><h4>작업이 없습니다.</h4></td></tr>';
 
   for(i in data) {
@@ -55,25 +56,32 @@ function make_list(data) {
     else tmp2 = '';
     str += '<td scope="col" style="width:5%; text-align:left;">'+ tmp1 + '</td>';
     str += '<td scope="col" style="width:10%; text-align:left;">'+ tmp2 + '</td>';
-    
-    str += '<td scope="col" style="width:10%; text-align:left;">'+ data[i].section_title + '</td>';
-    str += '<td scope="col" style="width:5%; text-align:center;">'+ data[i].섹션ID + '</td>';
-    
+
+    console.log(data[i].section_title)
+    str += '<td scope="col" style="width:10%; text-align:left;">'+ (data[i].section_title ? data[i].section_title : '--') + '</td>';
+    str += '<td scope="col" style="width:5%; text-align:center;">'+ (data[i].섹션ID ? data[i].섹션ID : '--') + '</td>';
+
     tmp =  (data[i].주기 != null) ? data[i].주기 : '--';
     str += '<td scope="col" style="width:10%; text-align:center;">'+ tmp + '</td>';
 
-    tmp = (data[i].스캔모드 != null) ? data[i].스캔모드 : "바이너리";
+    if (data[i].새로고침 && data[i].새로고침.스캔무시) {
+      tmp = '새로고침 전용';
+    } else {
+      tmp = (data[i].스캔모드 != null) ? data[i].스캔모드 : "바이너리";
+    }
     str += '<td scope="col" style="width:10%; text-align:center;">'+ tmp + '</td>';
 
     tmp = (data[i].폴더 != null) ? data[i].폴더 : "";
     str += '<td scope="col" style="width:10%; text-align:center;">'+ tmp + '</td>';
-    
+
     tmp = (data[i].최대실행시간 != null) ? data[i].최대실행시간 : "--";
     str += '<td scope="col" style="width:10%; text-align:center;">'+ tmp + '</td>';
 
     tmp = (data[i].설명 != null) ? data[i].설명 : "";
     str += '<td scope="col" style="width:10%; text-align:center;">'+ tmp + '</td>';
-    
+
+    str += '<td scope="col" style="width:10%; text-align:center;">'+ (data[i].새로고침 ? 'O' : 'X')  + '</td>';
+
     tmp = j_button('execute_btn', '실행', {'idx':i});
     str += '<td scope="col" style="width:10%; text-align:left;">'+ tmp + '</td>';
 
@@ -126,6 +134,6 @@ $("body").on('click', '#execute_btn', function(e){
   });
 });
 
-</script> 
+</script>
 
 {% endblock %}
