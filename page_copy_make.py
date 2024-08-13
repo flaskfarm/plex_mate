@@ -337,6 +337,9 @@ class DBChangeOrder:
                             elif key == 'media_part_id' and value != None:
                                 value = self.idmap['media_parts'][value] 
                             elif key == 'tag_id' and value != None:
+                                if value not in self.idmap['tags']:
+                                    rowcontinue = True
+                                    break
                                 value = self.idmap['tags'][value] 
                             if value is None:
                                 continue
@@ -375,3 +378,16 @@ class DBChangeOrder:
         except Exception as e: 
             P.logger.error(f'Exception:{str(e)}')
             P.logger.error(traceback.format_exc())
+        finally:
+            try:
+                self.source_con.close()
+                self.target_con.close()
+            except:
+                pass
+            if os.path.exists(self.src_path):
+                try:
+                    os.remove(self.src_path.replace('.db', '.db-shm'))
+                    os.remove(self.src_path.replace('.db', '.db-wal'))
+                    os.remove(self.src_path)
+                except:
+                    pass
