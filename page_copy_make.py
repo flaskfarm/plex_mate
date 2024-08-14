@@ -229,11 +229,11 @@ DELETE FROM media_items WHERE metadata_item_id is not null and metadata_item_id 
 DELETE FROM media_parts WHERE media_item_id is null OR media_item_id not in (SELECT id FROM media_items WHERE library_section_id = {section_id});
 DELETE FROM media_parts WHERE directory_id is null OR directory_id not in (SELECT id FROM directories WHERE library_section_id = {section_id});
 DELETE FROM media_streams WHERE media_item_id is null OR media_item_id not in (SELECT id FROM media_items WHERE library_section_id = {section_id});
-DELETE FROM media_streams WHERE media_part_id not in (SELECT id FROM directories WHERE library_section_id = {section_id});
+DELETE FROM media_streams WHERE media_part_id not in (SELCT id FROM media_parts);
 DELETE FROM taggings WHERE metadata_item_id not in (SELECT id FROM metadata_items);
 DELETE FROM tags WHERE id not in (SELECT tag_id FROM taggings GROUP BY tag_id);
 DELETE FROM taggings WHERE tag_id not in (SELECT id FROM tags);
-VACUUM;
+VACUUM; 
             '''
             
             PlexDBHandle.execute_query_with_db_filepath(query, newpath)
