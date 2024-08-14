@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block content %}
+<form>
+    <div class="input-group mb-3">
+        <select class="custom-select col-1" id="trash-section-type">
+            <option value="movie">영화</option>
+            <option value="show">TV</option>
+            <option value="artist">음악</option>
+        </select>
+        <select class="custom-select col" id="trash-sections">
+            <option>No sections</option>
+        </select>
+        <div class="input-group-append">
+            <button class="btn btn-primary px-4" type="button" id="trash-btn-list">조회</button>
+        </div>
+        <select class="custom-select col-2" id="trash-task">
+            <option value="refresh">새로고침</option>
+            <option value="scan">스캔</option>
+            <option value="empty">비우기</option>
+            <option value="refresh_scan">새로고침 후 스캔</option>
+            <option value="refresh_scan_empty">새로고침 후 스캔 후 비우기</option>
+        </select>
+        <div class="input-group-append">
+            <button class="btn btn-primary px-5" type="button" id="trash-btn-execute" data-scan_trash_task_status="{{ args.scan_trash_task_status }}">
+                실행
+            </button>
+            <button class="btn btn-warning px-5" type="button" id="trash-btn-stop">중지</button>
+        </div>
+    </div>
+</form>
+<div>
+    <h4>이용 불가 파일: <span class="badge badge-light" id="trash-total-deleted">0</span> / 스캔이 필요한 폴더: <span class="badge badge-light" id="trash-total-paths">0</span></h4>
+</div>
+<nav class="pagination" aria-label="Page navigation"></nav>
+
+<nav class="trash-pagination">
+    <ul class="pagination justify-content-center">
+        <li class="page-item disabled"><a class="page-link" aria-label="Previous"><span aria-hidden="true">&laquo;</span></a></li>
+        <li class="page-item disabled"><a class="page-link disabled" href="#">1</a></li>
+        <li class="page-item disabled"><a class="page-link" href="#"  aria-label="Next"><span aria-hidden="true">&raquo;</span></a></li>
+    </ul>
+</nav>
+<table id="trash-list" class="table table-hover table-sm table-striped align-bottom table-responsive-sm">
+    <thead>
+        <tr class="text-primary">
+            <th scope="col" class="w-auto text-center">ID</th>
+            <th scope="col" class="text-center" width="100px">이용불가</th>
+            <th scope="col" class="w-auto">파일</th>
+            <th scope="col" class="text-center" width="100px">관리</th>
+        </tr>
+    </thead>
+    <tbody class="table-group-divider align-middle accordion" id="trash-accordion">
+    </tbody>
+    <tfoot>
+    </tfoot>
+</table>
+<nav class="trash-pagination">
+    <ul class="pagination justify-content-center">
+        <li class="page-item disabled"><a class="page-link" aria-label="Previous"><span aria-hidden="true">&laquo;</span></a></li>
+        <li class="page-item disabled"><a class="page-link disabled" href="#">1</a></li>
+        <li class="page-item disabled"><a class="page-link" href="#"  aria-label="Next"><span aria-hidden="true">&raquo;</span></a></li>
+    </ul>
+</nav>
+
+<script src="{{ url_for('.static', filename='extensions.js') }}"></script>
+<script type="text/javascript">
+    const E_TRASH_TOTAL_DELETED = $('#trash-total-deleted');
+    const E_TRASH_TOTAL_PATHS = $('#trash-total-paths');
+    const E_TRASH_SECTIONS = $('#trash-sections');
+    const E_TRASH_SECTION_TYPE = $('#trash-section-type');
+    const E_TRASH_BTN_LIST = $('#trash-btn-list');
+    const E_TRASH_BTN_STOP = $('#trash-btn-stop');
+    const E_TRASH_TASK = $('#trash-task');
+    const E_TRASH_RCLONE_REMOTES = $('#trash-rclone-remotes');
+    const E_TRASH_BTN_EXCEUTE = $('#trash-btn-execute');
+    const PLEX_SECTIONS = {{ args.plex_sections|tojson }};
+    const LAST_LIST_OPTIONS = {{ args.scan_trash_last_list_option.split('|')|tojson }};
+    const TASKS = {
+        refresh_scan: '새로고침 후 스캔',
+        refresh: '새로고침',
+        scan: '스캔',
+        empty: '비우기',
+        refresh_scan_empty: '새로고침 후 스캔 후 비우기',
+        delete: '삭제'
+    }
+
+    function setPlexSections(type, target, sections) {
+        target.empty();
+        if (sections[type]) {
+            sections[type].forEach(function(item) {
+                target.append(
+                    $('<option></option>').prop('value', item.id).append(item.name)
+                );
+            });
+        } else {
+            notify('라이브러리 섹션 정보가 없습니다.', 'warning');
+            target.append('<option>정보 없음</option>');
+        }
+        target.prop('value', '');
+    }
+
+    function makeList(data) {
+        let tbody = $('#trash-list tbody')
+        tbody.empty();
+        E_TRASH_TOTAL_DELETED.text(data.total);
+        E_TRASH_TOTAL_PATHS.text(data.total_paths);
+        if (data.data) {
+            data.data.forEach(function(item) {
+                let col_id = '<td class="text-center">' + item.id + '</td>';
+                let col_deleted = '<td class="text-center">' + item.deleted_at + '</td>';
+                let col_file = '<td class="">' + item.file + '</td>';
+                let col_manage = '<td class="text-center">';
+                col_manage += '<a href="#refresh-scan" class="trash-list-command mr-2 text-info" data-command="refresh_scan" title="새로고침 후 스캔"><i class="fa fa-lg fa-spinner" aria-hidden="true"></i></a>';
+                col_manage += '<a href="#refresh" class="trash-list-command mr-2" data-command="refresh" title="새로고침"><i class="fa fa-lg fa-refresh" aria-hidden="true"></i></a>';
+                col_manage += '<a href="#scan" class="trash-list-command mr-2" data-command="scan" title="스캔"><i class="fa fa-lg fa-search" aria-hidden="true"></i></a>';
+                col_manage += '<a href="#delete" class="trash-list-delete text-warning" title="삭제"><i class="fa fa-lg fa-trash" aria-hidden="true"></i></a>';
+                col_manage += '</td>';
+                let row = '<tr class="" data-id="' + item.id + '" data-metadata="' + item.metadata_item_id + '" data-path="' + item.file + '">' + col_id + col_deleted + col_file + col_manage + '</tr>';
+                tbody.append(row);
+            });
+        }
+
+        // 페이지
+        pagination($('nav.trash-pagination'), data.page, data.total, data.limit, getList);
+
+        // 관리 메뉴
+        $('.trash-list-command').on('click', function(e) {
+            let command = $(this).data('command');
+            let path = $(this).closest('tr').data('path');
+            // trash 목록은 파일 경로를 보여주고 있으나 새로고침/스캔 시에는 폴더 경로로 요청해야 함.
+            path = path.replace(path.replace(/^.*[\\\/]/, ''), '');
+            let query = 'path=' + path;
+            query += '&section_id=' + E_TRASH_SECTIONS.prop('value');
+            confirmModal(TASKS[command] + '을(를) 실행할까요?', path, function() {
+                globalSendCommandPage(command, query, null, null, null);
+            });
+        });
+        $('.trash-list-delete').on('click', function(e) {
+            let path = $(this).closest('tr').data('path');
+            let metadata = $(this).closest('tr').data('metadata');
+            let id = $(this).closest('tr').data('id');
+            confirmModal('이 파일을 플렉스에서 삭제할까요?', path, function() {
+                globalSendCommandPage('delete', 'metadata_id=' + metadata + '&mediaitem_id=' + id, null, null, function(result) {
+                    if (result.ret == 'success') {
+                        let page = $('ul.pagination li.active[aria-current=page]').first().text()
+                        getList(page ? page : 1);
+                    }
+                });
+            });
+        });
+    }
+
+    function getList(page_no) {
+        let lib_type = E_TRASH_SECTION_TYPE.prop('value');
+        let lib_id = E_TRASH_SECTIONS.prop('value');
+        let query = 'section_type=' + lib_type + '&section_id=' + lib_id + '&page=' + page_no + '&limit=50'
+        globalSendCommandPage('list', query, null, null, function(result) {
+            makeList(result.data);
+        });
+    }
+
+    $(function() {
+
+        E_TRASH_SECTIONS.change(function() {
+            getList(1);
+        });
+
+        E_TRASH_SECTION_TYPE.change(function() {
+            setPlexSections($(this).prop('value'), E_TRASH_SECTIONS, PLEX_SECTIONS);
+        });
+
+        E_TRASH_BTN_LIST.on('click', function(e) {
+            getList(1);
+        });
+
+        E_TRASH_BTN_STOP.on('click', function(e) {
+            globalSendCommandPage('stop', '', '', '', null);
+        });
+
+        E_TRASH_BTN_EXCEUTE.on('click', function(e) {
+            query = 'section_id=' + E_TRASH_SECTIONS.prop('value');
+            globalSendCommandPage(E_TRASH_TASK.prop('value'), query, null, null, null);
+        });
+
+        // 초기 리스트
+        if (!LAST_LIST_OPTIONS[0]) {
+            LAST_LIST_OPTIONS[0] = 'movie'
+        }
+        E_TRASH_SECTION_TYPE.prop('value', LAST_LIST_OPTIONS[0]);
+        setPlexSections(LAST_LIST_OPTIONS[0], E_TRASH_SECTIONS, PLEX_SECTIONS);
+        if (LAST_LIST_OPTIONS[1]) {
+            E_TRASH_SECTIONS.prop('value', LAST_LIST_OPTIONS[1]);
+        }
+        if (LAST_LIST_OPTIONS[0] && LAST_LIST_OPTIONS[1]) {
+            getList(1);
+        }
+
+        io.connect(window.location.href).on('result', function(result) {
+            if (result) {
+                notify(result.result, result.status);
+            }
+        });
+    });
+
+</script>
+{% endblock %}
