@@ -104,13 +104,15 @@
 </div>
 {{ macros.setting_bottom(['섹션내 모든 휴지통 표시 제거']) }}
 
+{{ macros.m_hr() }}
+{{ macros.setting_buttons([['fix_yamlmusic_btn', 'yaml 가사정보 Fix']], left='yaml 가사정보 Fix', desc=None)}}
 
 {{ macros.m_hr() }}
 {{ macros.setting_input_text_and_buttons('remove_meta_id', '메타만 지우기', [['remove_meta_id_btn', '삭제']], value=arg['remove_meta_id'], desc=['영화, 시리즈, 아티스트, 앨범 메타ID.', '시즌, 에피소드, 트랙 ID는 지원하지 않음']) }}
 
-
 {{ macros.m_hr() }}
-{{ macros.setting_buttons([['fix_yamlmusic_btn', 'yaml 가사정보 Fix']], left='yaml 가사정보 Fix', desc=None)}}
+{{ macros.setting_input_text_and_buttons('remove_db_by_folder', '폴더로 DB 정리', [['remove_db_by_folder_btn', '삭제']], value=arg['remove_db_by_folder'], desc=['폴더']) }}
+
 
 
 <script type="text/javascript">
@@ -188,6 +190,14 @@ $("body").on('click', '#fix_yamlmusic_btn', function(e){
   e.preventDefault();
   globalSendCommandPage('fix_yamlmusic');
 });
+
+$("body").on('click', '#remove_db_by_folder_btn', function(e){
+  e.preventDefault();
+  globalSendCommandPage('remove_db_by_folder', $('#remove_db_by_folder').val());
+});
+
+
+
 
 
 </script>    
