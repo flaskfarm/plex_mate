@@ -265,6 +265,7 @@ class PageToolSimple(PluginPageBase):
         logger.info(media_file)
         folodername = os.path.basename(os.path.dirname(media_file))
         
+        delete_query += f"DELETE FROM directories WHERE library_section_id = {library_section_id} AND parent_directory_id in (SELECT id FROM directories WHERE path LIKE '%{folodername}' AND library_section_id = {library_section_id});"
         delete_query += f"DELETE FROM directories WHERE path LIKE '%{folodername}' AND library_section_id = {library_section_id};"
 
         # media_streams
