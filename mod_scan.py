@@ -1,7 +1,7 @@
 from .model_scan import ModelScanItem
 from .setup import *
 from .task_scan import Task
-from .extensions import check_timeover, BrowserPage
+from .extensions import check_timeover, BrowserPage, TrashPage
 
 name = 'scan'
 class ModuleScan(PluginModuleBase):
@@ -29,7 +29,7 @@ class ModuleScan(PluginModuleBase):
             f"{self.name}_timeover_reset_range": "0~0",
         }
         self.web_list_model = ModelScanItem
-        self.set_page_list([BrowserPage])
+        self.set_page_list([BrowserPage, TrashPage])
 
 
     def process_command(self, command, arg1, arg2, arg3, req):

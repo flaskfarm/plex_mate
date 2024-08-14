@@ -52,6 +52,7 @@
     <tfoot></tfoot>
 </table>
 
+<script src="{{ url_for('.static', filename='extensions.js') }}"></script>
 <script type="text/javascript">
 
 const E_BROWSER_WD = $('#working-directory');
@@ -165,26 +166,6 @@ function editFile(file) {
     });
 }
 
-function confirmModal(title, content, func) {
-    $('#confirm_title').html(title);
-    $('#confirm_body').html(content);
-    $('#confirm_button').off('click');
-    $('#confirm_button').on('click', func);
-    $("#confirm_modal").modal({backdrop: 'static', keyboard: true}, 'show');
-}
-
-function copyToClipboard(text) {
-    if ( ! window.navigator.clipboard ) {
-        notify('클립보드 접근 권한이 없습니다.', 'warning');
-    } else {
-        window.navigator.clipboard.writeText(text).then(() => {
-            notify('클립보드에 복사하였습니다.', 'success');
-        },() => {
-            notify('클립보드 복사에 실패했습니다.', 'warning');
-        });
-    }
-}
-
 function setBrowserMaxheight(){
     let browserBody = $('#brw-list-table.table tbody');
     let windowHeight = $(window).height();
@@ -284,11 +265,10 @@ $(function() {
     });
 
     io.connect(window.location.href).on('result', function(result) {
-    if (result) {
-        notify(result.result, result.status);
-    }
-
-});
+        if (result) {
+            notify(result.result, result.status);
+        }
+    });
 });
 
 </script>

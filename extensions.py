@@ -6,6 +6,8 @@ import time
 import datetime
 import os
 import urllib
+import sqlite3
+import shutil
 from typing import Any, Optional, Union
 from threading import Thread
 
@@ -19,6 +21,13 @@ from plugin.logic_module_base import PluginModuleBase, PluginPageBase
 
 from .setup import F, P
 from .plex_db import PlexDBHandle
+
+
+def dict_factory(cursor: sqlite3.Cursor, row: tuple) -> dict:
+    d = {}
+    for idx, col in enumerate(cursor.description):
+        d[col[0]] = row[idx]
+    return d
 
 
 def get_rc_servers() -> list[dict]:
@@ -114,7 +123,9 @@ def rc_command(function: callable) -> callable:
                 return rc_result
         except:
             P.logger.error(traceback.format_exc())
-            P.logger.error(result)
+            P.logger.error(f'result={result}')
+            P.logger.error(f'cmd={cmd}')
+            P.logger.error(f'rclone={shutil.which(rclone.ModelSetting.get("rclone_path"))}')
             return {}
     return wrapper
 
@@ -143,10 +154,10 @@ def vfs__refresh(server: dict, remote_path: str, recursive: bool = False, async_
 
 
 @rc_command
-def vfs__forget(server: dict, remote_path: str) -> dict:
+def vfs__forget(server: dict, remote_path: str, is_file: bool = False) -> dict:
     data = {
         'server': server,
-        'args': [f'dir={remote_path}'],
+        'args': [f'file={remote_path}'] if is_file else [f'dir={remote_path}'],
     }
     if server['vfs']:
         data['args'].append(f'fs={server["vfs"]}')
@@ -170,8 +181,9 @@ def with_servers(function: callable) -> callable:
 
 @with_servers
 def vfs_forget(target: str, server: dict = None) -> None:
+    is_file = pathlib.Path(target).is_file()
     remote_path = update_path(pathlib.Path(target).as_posix(), {server['local']: server['remote']})
-    P.logger.info(vfs__forget(server, remote_path))
+    P.logger.info(vfs__forget(server, remote_path, is_file))
 
 
 @with_servers
@@ -275,7 +287,55 @@ def plex_sections() -> dict[str, str]:
     }
 
 
-def get_section_by_path(path: str) -> int | None:
+@plex_api
+def plex_delete_media(meta_id: int, media_id: int) -> dict[str, str]:
+    return {
+        'key': f'/library/metadata/{meta_id}/media/{media_id}',
+        'method': 'DELETE',
+    }
+
+
+@plex_api
+def plex_empty_trash(section_id: int) -> dict[str, str]:
+    return {
+        'key': f'/library/sections/{section_id}/emptyTrash',
+        'method': 'PUT',
+    }
+
+
+@plex_api
+def plex_activities() -> dict[str, str]:
+    return {
+        'key': '/activities',
+        'method': 'GET',
+    }
+
+
+def plex_empty(section_id: int) -> None:
+    counter = 0
+    while plex_library_is_updating(section_id):
+        time.sleep(10)
+        if counter > 36:
+            P.logger.error(f'라이브러리({section_id})를 스캔 중이라 휴지통 비우기를 취소합니다.')
+            return
+        counter += 1
+    result = plex_empty_trash(section_id)
+    P.logger.info(f'휴지통 비우기 명령을 요청했습니다: status_code={result.get("status_code")}')
+
+
+def plex_library_is_updating(section_id: int) -> bool:
+    container = plex_activities().get('MediaContainer')
+    if container:
+        for act in container.get('Activity', []):
+            if act.get('type') == 'library.update.section':
+                updating_section_id = int(act.get('Context', {}).get('librarySectionID'))
+                if updating_section_id == section_id:
+                    P.logger.debug(f"status=scanning section_id={updating_section_id} title='{act.get('title')}' progress={act.get('progress')}")
+                    return True
+    return False
+
+
+def plex_section_by_path(path: str) -> int | None:
     plex_path = pathlib.Path(path)
     sections = plex_sections()
     for directory in sections['MediaContainer']['Directory']:
@@ -285,13 +345,49 @@ def get_section_by_path(path: str) -> int | None:
                 return int(directory['key'])
 
 
+def plex_major_sections() -> dict:
+    return {
+        'movie': [{'id': item['id'], 'name': item['name']} for item in P.PlexDBHandle.library_sections(section_type=1)],
+        'show': [{'id': item['id'], 'name': item['name']} for item in P.PlexDBHandle.library_sections(section_type=2)],
+        'artist': [{'id': item['id'], 'name': item['name']} for item in P.PlexDBHandle.library_sections(section_type=8)],
+    }
+
+
+def plex_trashes(section_id: int, page_no: int = 1, limit: int = 10) -> dict:
+        query = '''
+        SELECT media_items.id, media_items.metadata_item_id, media_items.deleted_at, media_parts.file, media_parts.deleted_at
+        FROM media_parts, media_items
+        WHERE media_parts.deleted_at != ''
+            AND media_items.library_section_id = ?
+            AND media_items.id = media_parts.media_item_id
+        ORDER BY media_parts.file
+        LIMIT ? OFFSET ?
+        '''
+        offset = (page_no - 1) * limit
+        return P.PlexDBHandle.select_arg(query, (section_id, limit, offset))
+
+
+def plex_trash_list(section_id: int, page_no: int = 1, limit: int = 10) -> dict:
+        result = {'total': 0, 'limit': limit, 'page': page_no, 'section_id': section_id, 'total_paths': 0, 'data': None}
+        total_rows = plex_trashes(section_id, 1, -1)
+        paths ={pathlib.Path(row['file']).parent.as_posix() for row in total_rows}
+        result['total'] = len(total_rows)
+        result['total_paths'] = len(paths)
+        rows = plex_trashes(section_id, page_no, limit)
+        if len(rows) > 0:
+            for row in rows:
+                row['deleted_at'] = get_readable_time(row['deleted_at'])
+            result['data'] = rows
+        return result
+
+
 def plex_scan(path: str = None, scan_by_bin: bool = True, section_id: int = -1) -> None:
     if scan_by_bin:
         scan_item = P.get_module('scan').web_list_model(path)
         scan_item.save()
         P.logger.info(f'스캔 ID: {scan_item.id}')
     else:
-        section_id = get_section_by_path(path) if section_id < 0 else section_id
+        section_id = plex_section_by_path(path) if section_id < 0 else section_id
         if not section_id or section_id < 0:
             P.logger.error(f'섹션 ID를 찾을 수 없습니다: {path}')
         else:
@@ -399,25 +495,11 @@ def default_route_socketio_page(page):
     page.socketio_callback = socketio_callback
 
 
-def socketio_emit(command: str, data: dict, namespace: str) -> None:
-    F.socketio.emit(command, {'status': data.get('status'), 'result': data.get('result')}, namespace=namespace)
-
-
-def celery_is_active() -> bool:
+def celery_is_available() -> bool:
     try:
         return True if F.celery.control.inspect().stats() else False
     except:
         return False
-
-
-def socketio_emit(result: tuple[bool, str]) -> None:
-    F.socketio.emit('result', {'status': 'success' if result[0] else 'warning', 'result': result[1]}, namespace='/plex_mate/scan/browser')
-
-
-def socketio_emit_by_celery(result: dict) -> None:
-    # celery status: SUCCESS, STARTED, REVOKED, RETRY, RECEIVED, PENDING, FAILURE
-    #{'status': 'SUCCESS', 'result': (True, '작업을 완료했습니다.'), 'traceback': None, 'children': [(('cf6280f8-917e-4a21-b89e-cf890a4c991c', None), None)], 'date_done': '2024-08-13T08:42:04.600936', 'task_id': '492119df-94e7-4aae-9e4a-ab6b3e080b1c'}
-    socketio_emit(result['result'])
 
 
 @F.celery.task
@@ -453,6 +535,48 @@ def start_task(task: dict) -> tuple[bool, str]:
         return False, f'작업 도중에 오류가 발생했습니다: {repr(e)}'
 
 
+@F.celery.task
+def start_trash_task(task: dict) -> tuple[bool, str]:
+    P.ModelSetting.set('scan_trash_task_status', 'running')
+    try:
+        refresh = True if 'refresh' in task.get('command') else False
+        scan = True if 'scan' in task.get('command') else False
+        empty = True if 'empty' in task.get('command') else False
+        if task.get('path'):
+            if refresh:
+                vfs_refresh(task.get('path'))
+            if scan:
+                plex_scan(task.get('path'), scan_by_bin=False, section_id=task.get('section_id'))
+        elif task.get('section_id'):
+            trashes = plex_trashes(task.get('section_id'), 1, -1)
+            if trashes:
+                for path in {pathlib.Path(row['file']).parent.as_posix() for row in trashes}:
+                    if P.ModelSetting.get('scan_trash_task_status') != 'running':
+                        P.logger.info(f'작업을 중지합니다: {task}')
+                        break
+                    if refresh:
+                        vfs_refresh(path)
+                    if scan:
+                        plex_scan(path, scan_by_bin=False, section_id=task.get('section_id'))
+            else:
+                P.ModelSetting.warning('이용 불가 파일이 없습니다.')
+                empty = False
+            if empty and P.ModelSetting.get('scan_trash_task_status') == 'running':
+                plex_empty(task.get('section_id'))
+        else:
+            msg = f'작업 대상이 없습니다: {task}'
+            P.loggger.error(msg)
+            return False, msg
+        msg = f'작업이 끝났습니다: task={task}'
+        P.logger.info(msg)
+        return True, msg
+    except Exception as e:
+        P.logger.error(traceback.format_exc())
+        return False, f'작업 도중에 오류가 발생했습니다: {repr(e)}'
+    finally:
+        P.ModelSetting.set('scan_trash_task_status', 'ready')
+
+
 class ThreadHasReturn(Thread):
 
     def __init__(self, group=None, target: callable = None, name: str = None, args: tuple | list = (),
@@ -475,7 +599,132 @@ class ThreadHasReturn(Thread):
         return self._return
 
 
-class BrowserPage(PluginPageBase):
+class Base:
+
+    _DB_VERSIONS = ['1']
+
+    def __init__(self, *args, **kwds) -> None:
+        super().__init__(*args, **kwds)
+
+    def set_recent_menu(self, req: flask.Request) -> None:
+        current_menu = '|'.join(req.path[1:].split('/')[1:])
+        if not current_menu == P.ModelSetting.get('recent_menu_plugin'):
+            P.ModelSetting.set('recent_menu_plugin', current_menu)
+
+    def get_template_args(self) -> dict:
+        args = {
+            'package_name': P.package_name,
+            'module_name': self.name if isinstance(self, PluginModuleBase) else self.parent.name,
+            'page_name': self.name if isinstance(self, PluginPageBase) else None,
+        }
+        for conf in self.db_default.keys():
+            args[conf] = P.ModelSetting.get(conf)
+        return args
+
+    def prerender(self, sub: str, req: flask.Request) -> None:
+        self.set_recent_menu(req)
+
+    def run_async(self, func: callable, args: tuple = (), kwargs: dict = {}, **opts) -> None:
+        if celery_is_available():
+            P.logger.debug(f'Run by celery: {func.__name__}()')
+            result = func.apply_async(args=args, kwargs=kwargs, **opts)
+            Thread(target=result.get, kwargs={'on_message': self.socketio_emit_by_celery, 'propagate': False}, daemon=True).start()
+        else:
+            P.logger.debug(f'Run by Thread: {func.__name__}()')
+            th = ThreadHasReturn(target=func, args=args, kwargs=kwargs, daemon=True, callback=self.socketio_emit)
+            th.start()
+
+    def callback_sio(self, data: dict) -> None:
+        self.socketio_callback('result', {'status': data.get('status'), 'data': data.get('result')})
+
+    def process_command(self, command: str, arg1: str, arg2: str, arg3: str, request: flask.Request) -> flask.Response:
+        '''override'''
+        try:
+            data = getattr(self, f'command_{command}', self.command_default)(self.parse_command(request))
+        except Exception as e:
+            P.logger.error(traceback.format_exc())
+            data = self.returns('warning', str(e))
+        finally:
+            return flask.jsonify(data)
+
+    def parse_command(self, request: flask.Request) -> dict[str, Any]:
+        query = urllib.parse.parse_qs(request.form.get('arg1'), keep_blank_values=True)
+        return {
+            'command': request.form.get('command'),
+            'query': query,
+        }
+
+    def command_default(self, request: flask.Request) -> tuple[bool, str]:
+        data = self.returns('danger', title='Flaskfarmaider')
+        data['msg'] = '아직 구현되지 않았습니다.'
+        return data
+
+    def returns(self, success: str, msg: str = None, title: str = None, modal: str = None, json: dict = None, reload: bool = False, data: dict = None) -> dict:
+        return {'ret': success, 'msg': msg, 'title': title, 'modal': modal, 'json': json, 'reload': reload, 'data': data}
+
+    def _migration(self, version_key: str, table: str, migrate_func: callable) -> None:
+        version = P.ModelSetting.get(version_key) or self._DB_VERSIONS[0]
+        P.logger.debug(f'{table} 현재 DB 버전: {version}')
+        with F.app.app_context():
+            db_file = F.app.config['SQLALCHEMY_BINDS'][P.package_name].replace('sqlite:///', '').split('?')[0]
+            try:
+                with sqlite3.connect(db_file) as conn:
+                    conn.row_factory = sqlite3.Row
+                    cs = conn.cursor()
+                    # DB 볼륨 정리
+                    cs.execute('VACUUM;')
+                    for ver in self._DB_VERSIONS[(self._DB_VERSIONS.index(version)):]:
+                        migrate_func(ver, table, cs)
+                        version = ver
+                    F.db.session.flush()
+                P.logger.debug(f'{table} 최종 DB 버전: {version}')
+                P.ModelSetting.set(version_key, version)
+            except:
+                P.logger.error(traceback.format_exc())
+                P.logger.error('마이그레이션 실패')
+
+    def socketio_emit(self, result: tuple[bool, str]) -> None:
+        raise Exception('이 메소드를 구현하세요.')
+
+    def socketio_emit_by_celery(self, result: dict) -> None:
+        raise Exception('이 메소드를 구현하세요.')
+
+
+class ExtPageBase(Base, PluginPageBase):
+
+    def __init__(self, plugin: PluginBase, parent: PluginModuleBase, name: str = None, scheduler_desc: str = None) -> None:
+        super().__init__(plugin, parent, name, scheduler_desc)
+        default_route_socketio_page(self)
+        self.db_default = {}
+
+    def process_menu(self, req: flask.Request) -> flask.Response:
+        '''override'''
+        self.prerender(self.name, req)
+        try:
+            return flask.render_template(f'{P.package_name}_{self.parent.name}_{self.name}.html', args=self.get_template_args())
+        except:
+            P.logger.error(traceback.format_exc())
+            return flask.render_template('sample.html', title=f"process_menu() - {P.package_name}/{self.parent.name}/{self.name}")
+
+    def socketio_connect(self) -> None:
+        pass
+
+    def socketio_disconnect(self) -> None:
+        pass
+
+    def socketio_emit(self, result: tuple[bool, str]) -> None:
+        '''override'''
+        # {P.package_name}/{module.name}/{page.name}
+        F.socketio.emit('result', {'status': 'success' if result[0] else 'warning', 'result': result[1]}, namespace=f'/{P.package_name}/{self.parent.name}/{self.name}')
+
+    def socketio_emit_by_celery(self, result: dict) -> None:
+        '''override'''
+        # celery status: SUCCESS, STARTED, REVOKED, RETRY, RECEIVED, PENDING, FAILURE
+        #{'status': 'SUCCESS', 'result': (True, '작업을 완료했습니다.'), 'traceback': None, 'children': [(('cf6280f8-917e-4a21-b89e-cf890a4c991c', None), None)], 'date_done': '2024-08-13T08:42:04.600936', 'task_id': '492119df-94e7-4aae-9e4a-ab6b3e080b1c'}
+        self.socketio_emit(result['result'])
+
+
+class BrowserPage(ExtPageBase):
 
     def __init__(self, plugin: PluginBase, parent: PluginModuleBase) -> None:
         super().__init__(plugin, parent, name='browser')
@@ -484,46 +733,8 @@ class BrowserPage(PluginPageBase):
             'scan_browser_working_directory': '/',
         }
 
-    def run_async(self, func: callable, args: tuple = (), kwargs: dict = {}, **opts) -> None:
-        if celery_is_active():
-            P.logger.debug(f'Run by celery: {func.__name__}()')
-            result = func.apply_async(args=args, kwargs=kwargs, **opts)
-            Thread(target=result.get, kwargs={'on_message': socketio_emit_by_celery, 'propagate': False}, daemon=True).start()
-        else:
-            P.logger.debug(f'Run by Thread: {func.__name__}()')
-            th = ThreadHasReturn(target=func, args=args, kwargs=kwargs, daemon=True, callback=socketio_emit)
-            th.start()
-
-    def set_recent_menu(self, req: flask.Request) -> None:
-        current_menu = '|'.join(req.path[1:].split('/')[1:])
-        if not current_menu == P.ModelSetting.get('recent_menu_plugin'):
-            P.ModelSetting.set('recent_menu_plugin', current_menu)
-
-    def prerender(self, sub: str, req: flask.Request) -> None:
-        self.set_recent_menu(req)
-
-    def process_menu(self, req: flask.Request) -> flask.Response:
-        '''override'''
-        self.prerender(self.name, req)
-        try:
-            args = self.get_template_args()
-            return flask.render_template(f'{P.package_name}_{self.parent.name}_{self.name}.html', args=args)
-        except:
-            self.P.logger.error(traceback.format_exc())
-            return flask.render_template('sample.html', title=f"process_menu() - {P.package_name}/{self.parent.name}/{self.name}")
-
-    def process_command(self, command: str, arg1: str, arg2: str, arg3: str, request: flask.Request) -> flask.Response:
-        '''override'''
-        try:
-            #P.logger.debug(f'{command}: {arg1}')
-            data = getattr(self, f'command_{command}', self.command_default)(self.parse_command(request))
-        except Exception as e:
-            P.logger.error(traceback.format_exc())
-            data = self.returns('warning', str(e))
-        finally:
-            return flask.jsonify(data)
-
     def command_default(self, commands: dict[str, Any]) -> tuple[bool, str]:
+        '''override'''
         if commands['command'] in ['refresh_scan', 'refresh', 'scan', 'forget']:
             task = {
                 'command': commands['command'],
@@ -554,33 +765,68 @@ class BrowserPage(PluginPageBase):
         else:
             return self.returns('warning', '폴더 목록을 생성할 수 없습니다.')
 
-    def returns(self, success: str, msg: str = None, title: str = None, modal: str = None, json: dict = None, reload: bool = False, data: dict = None) -> dict:
-        return {'ret': success, 'msg': msg, 'title': title, 'modal': modal, 'json': json, 'reload': reload, 'data': data}
 
-    def parse_command(self, request: flask.Request) -> dict[str, Any]:
-        query = urllib.parse.parse_qs(request.form.get('arg1'), keep_blank_values=True)
-        return {
-            'command': request.form.get('command'),
-            'query': query,
+class TrashPage(ExtPageBase):
+
+    def __init__(self, plugin: PluginBase, parent: PluginModuleBase) -> None:
+        super().__init__(plugin, parent, name='trash')
+        default_route_socketio_page(self)
+        self.db_default = {
+            'scan_trash_task_status': 'ready',
+            'scan_trash_last_list_option': '',
         }
 
     def get_template_args(self) -> dict:
-        args = {
-            'package_name': P.package_name,
-            'module_name': self.name if isinstance(self, PluginModuleBase) else self.parent.name,
-            'page_name': self.name if isinstance(self, PluginPageBase) else None,
-        }
-        for conf in self.db_default.keys():
-            args[conf] = P.ModelSetting.get(conf)
-        confs = [
-
-        ]
-        for conf in confs:
-            args[conf] = P.ModelSetting.get(conf)
+        '''override'''
+        args = super().get_template_args()
+        args['plex_sections'] = plex_major_sections()
         return args
 
-    def socketio_connect(self) -> None:
-        pass
+    def check_status(func: callable) -> callable:
+        @functools.wraps(func)
+        def wrap(*args, **kwds) -> dict:
+            status = P.ModelSetting.get('scan_trash_task_status')
+            if status == 'ready':
+                return func(*args, **kwds)
+            else:
+                return {'ret': 'warning', 'msg': '작업이 실행중입니다.'}
+        return wrap
 
-    def socketio_disconnect(self) -> None:
-        pass
+    @check_status
+    def command_default(self, commands: dict[str, Any]) -> tuple[bool, str]:
+        '''override'''
+        if commands['command'] in ['refresh_scan', 'refresh', 'scan', 'empty', 'refresh_scan_empty']:
+            task = {
+                'command': commands['command'],
+                'path': commands['query'].get('path', [None])[0],
+                'section_id': int(commands['query'].get('section_id', [-1])[0]),
+            }
+            self.run_async(start_trash_task, (task,))
+            return self.returns('success', '실행했습니다.')
+        else:
+            data = self.returns('danger', title='Trash')
+            data['msg'] = '아직 구현되지 않았습니다.'
+            return data
+
+    def command_list(self, commands: dict[str, Any]) -> dict:
+        section_type = commands['query'].get('section_type', ['movie'])[0]
+        section_id = int(commands['query'].get('section_id', ['-1'])[0])
+        page_no = int(commands['query'].get('page', ['1'])[0])
+        limit = int(commands['query'].get('limit', ['30'])[0])
+        P.ModelSetting.set('scan_trash_last_list_option', f'{section_type}|{section_id}|{page_no}')
+        return self.returns('success', data=plex_trash_list(section_id, page_no, limit))
+
+    @check_status
+    def command_delete(self, commands: dict[str, Any]) -> dict:
+        metadata_id = int(commands['query'].get('metadata_id', ['-1'])[0])
+        mediaitem_id = int(commands['query'].get('mediaitem_id', ['-1'])[0])
+        result = plex_delete_media(metadata_id, mediaitem_id)
+        return self.returns('success', f'삭제를 요청했습니다: status_code={result.get("status_code")}')
+
+    def command_stop(self, commands: dict[str, Any]) -> dict:
+        status = P.ModelSetting.get('scan_trash_task_status')
+        if status in ['running', 'stopping']:
+            P.ModelSetting.set('scan_trash_task_status', 'stopping')
+            return self.returns('success', '작업을 멈추는 중입니다.')
+        else:
+            return self.returns('warning', '실행중이 아닙니다.')
