@@ -102,7 +102,7 @@ function make_locations_list(data) {
 function make_one(data) {
   //if (data.ret.find_meta)
   //  return
-  row = j_row_start_hover();
+  row = '';//j_row_start_hover();
   row += j_info_text("폴더", data.dir);
   row += j_info_text("파일", data.filename);
   if (data.ret.find_meta) {
@@ -145,7 +145,7 @@ function make_one(data) {
   //btn = '';
   //btn += j_button('open_filemanager_btn', 'Open Filemanager', {'path':data.dir});
   //row += j_info_text('', btn);
-  row += j_row_end();
+  //row += j_row_end();
   return row;
 }
 
