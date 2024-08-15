@@ -18,7 +18,7 @@ class Task(object):
             return []
         for idx, item in enumerate(data):
             item['job_id'] = f'{P.package_name}_periodic_{idx}'
-            item['설명'] = item.get('설명') or f"섹션: {item.get('섹션ID')}" if item.get('섹션ID') else '--'
+            item['설명'] = item.get('설명', f"섹션: {item.get('섹션ID')}" if item.get('섹션ID') else '--')
             item['is_include_scheduler'] = str(F.scheduler.is_include(item['job_id']))
         return data
 
