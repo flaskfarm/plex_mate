@@ -779,7 +779,11 @@ class TrashPage(ExtPageBase):
     def get_template_args(self) -> dict:
         '''override'''
         args = super().get_template_args()
-        args['plex_sections'] = plex_major_sections()
+        try:
+            args['plex_sections'] = plex_major_sections()
+        except:
+            P.logger.error(traceback.format_exc())
+            args['plex_sections'] = {}
         return args
 
     def check_status(func: callable) -> callable:
