@@ -50,17 +50,35 @@ class Task(object):
             if yaml.get('스캔모드') == "웹":
                 '''
                 섹션ID 정보가 있을 경우:
-                    섹션에 추가된 폴더와 작업의 "폴더"를 비교 후 상세 경로를 새로고침/스캔
+                    섹션에 추가된 폴더와 작업의 "폴더"를 비교 후 하위 경로를 새로고침
                 섹션ID 정보가 없을 경우:
-                    모든 섹션에 추가된 폴더와 작업의 "폴더" 중 상세 경로를 새로고침/스캔
+                    모든 섹션에 추가된 폴더와 작업의 "폴더" 중 하위 경로를 새로고침
+                폴더 정보가 있을 경우:
+                    부분 스캔
+                폴더 정보가 없을 경우:
+                    전체 스캔
+
+                Plex Dash 앱에서 library_sections 테이블의 scanned_at 컬럼의 정보를 통해 최근 스캔 시간을 표시중
+                이 컬럼은 전체 섹션을 스캔(path 파라미터 없이)했을 때만 갱신되는 것으로 보임
                 '''
+                if not yaml.get('폴더') and not yaml.get('섹션ID'):
+                    logger.error(f'스캔 대상을 명시해 주세요: {yaml}')
+                    return
+                if not yaml.get('폴더') and not should_refresh:
+                    PlexWebHandle.section_scan(yaml.get('섹션ID'))
+                    logger.debug(f'스캔 전송: section_id={yaml.get("섹션ID")}')
+                    return
                 targets: dict = get_scan_targets(yaml.get('폴더', '/'), yaml.get('섹션ID'))
                 for location, section_id in targets.items():
                     if should_refresh: vfs_refresh(location, recursive, async_)
-                    if yaml.get('스캔모드') == "웹":
-                        logger.debug(f'스캔 전송: section_id={section_id} path={location}')
+                    if yaml.get('폴더'):
+                        # 폴더 키워드가 있을 경우 부분 스캔
                         PlexWebHandle.path_scan(section_id, location)
-                logger.info(f'작업 종료: {yaml.get("job_id")}')
+                        logger.debug(f'스캔 전송: section_id={section_id} path={location}')
+                if not yaml.get('폴더'):
+                    # 폴더 키워드가 없을 경우 전체 스캔
+                    PlexWebHandle.section_scan(yaml.get('섹션ID'))
+                    logger.debug(f'스캔 전송: section_id={yaml.get("섹션ID")}')
                 return
 
             '''
