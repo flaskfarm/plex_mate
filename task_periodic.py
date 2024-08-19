@@ -56,7 +56,7 @@ class Task(object):
                 '''
                 targets: dict = get_scan_targets(yaml.get('폴더', '/'), yaml.get('섹션ID'))
                 for location, section_id in targets.items():
-                    vfs_refresh(location, recursive, async_)
+                    if should_refresh: vfs_refresh(location, recursive, async_)
                     if yaml.get('스캔모드') == "웹":
                         logger.debug(f'스캔 전송: section_id={section_id} path={location}')
                         PlexWebHandle.path_scan(section_id, location)
