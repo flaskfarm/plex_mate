@@ -64,15 +64,18 @@ class Task(object):
         if data['command'] == 'start0':
             return
         combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'Info.xml')
+        process_artist = True
         if os.path.exists(combined_xmlpath) == False:
-            return 
+            #return 
+            process_artist = False
         data['use_filepath'] = []
         data['remove_filepath'] = []
         data['albums'] = {}
-        ret = Task.xml_analysis(combined_xmlpath, data)
-        if ret == False:
-            logger.warning(f"{data['db']['title']} 아티스트 분석 실패")
-            return
+        if process_artist:
+            ret = Task.xml_analysis(combined_xmlpath, data)
+            #if ret == False:
+            #    logger.warning(f"{data['db']['title']} 아티스트 분석 실패")
+            #    return
         
         # 2022-05-11 앨범은 인덱스 모두 1임.
         # 트랙은 순서대로 있음
@@ -87,7 +90,7 @@ class Task(object):
             data['meta']['total'] += SupportFile.size(start_path=album_data['meta']['metapath'])
             
             combined_xmlpath = os.path.join(album_data['meta']['metapath'], 'Contents', '_combined', 'Info.xml')
-
+            
             ret = Task.xml_analysis(combined_xmlpath, album_data)
             if ret == False:
                 logger.warning(combined_xmlpath)
@@ -99,24 +102,25 @@ class Task(object):
 
         if data['command'] == 'start2':
             # 쇼 http로 
-            sql = 'UPDATE metadata_items SET '
-            if data['process']['poster']['url'] != '':
-                sql += ' user_thumb_url = "{}", '.format(data['process']['poster']['url'])
-                try: data['use_filepath'].remove(data['process']['poster']['localpath'])
-                except: pass
-                try: data['use_filepath'].remove(data['process']['poster']['realpath'])
-                except: pass
-            if data['process']['art']['url'] != '':
-                sql += ' user_art_url = "{}", '.format(data['process']['art']['url'])
-                try: data['use_filepath'].remove(data['process']['art']['localpath'])
-                except: pass
-                try: data['use_filepath'].remove(data['process']['art']['realpath'])
-                except: pass
-                
-            if sql != 'UPDATE metadata_items SET ':
-                sql = sql.strip().rstrip(',')
-                sql += '  WHERE id = {} ;\n'.format(data['db']['id'])
-                query += sql
+            if process_artist:
+                sql = 'UPDATE metadata_items SET '
+                if data['process']['poster']['url'] != '':
+                    sql += ' user_thumb_url = "{}", '.format(data['process']['poster']['url'])
+                    try: data['use_filepath'].remove(data['process']['poster']['localpath'])
+                    except: pass
+                    try: data['use_filepath'].remove(data['process']['poster']['realpath'])
+                    except: pass
+                if data['process']['art']['url'] != '':
+                    sql += ' user_art_url = "{}", '.format(data['process']['art']['url'])
+                    try: data['use_filepath'].remove(data['process']['art']['localpath'])
+                    except: pass
+                    try: data['use_filepath'].remove(data['process']['art']['realpath'])
+                    except: pass
+                    
+                if sql != 'UPDATE metadata_items SET ':
+                    sql = sql.strip().rstrip(',')
+                    sql += '  WHERE id = {} ;\n'.format(data['db']['id'])
+                    query += sql
 
             for album in data['albums']:
                 if 'process' not in album:
