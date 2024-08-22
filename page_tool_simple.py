@@ -13,6 +13,9 @@ class PageToolSimple(PluginPageBase):
             f'{self.parent.name}_{self.name}_db_version' : '1',
             f'{self.parent.name}_{self.name}_library_location_source' : '',
             f'{self.parent.name}_{self.name}_library_location_target' : '',
+            f'{self.parent.name}_{self.name}_remove_meta_id' : '',
+            f'{self.parent.name}_{self.name}_remove_db_by_folder' : '',
+            
         }
     
     def process_command(self, command, arg1, arg2, arg3, req):
@@ -171,8 +174,10 @@ class PageToolSimple(PluginPageBase):
                 else:
                     ret = {'ret':'warning', 'msg':'실패'}
             elif command == 'remove_meta_id':
+                P.ModelSetting.set('tool_simple_remove_meta_id', arg1)
                 ret = self.remove_meta(arg1)
             elif command == 'remove_db_by_folder':
+                P.ModelSetting.set('tool_simple_remove_db_by_folder', arg1)
                 ret = self.remove_db_by_folder(arg1)
             elif command == 'fix_yamlmusic':
                 self.task_interface(self.fix_yamlmusic)
@@ -371,7 +376,11 @@ class PageToolSimple(PluginPageBase):
                 self.remove_db_by_file(filepath)
 
         tmp = os.path.basename(folderpath)
-        query = f"""DELETE FROM directories WHERE path LIKE "%{tmp}%";"""
+
+        section = PlexDBHandle.get_section_info_by_filepath(folderpath)
+        
+        #tmp = tmp.replace('&', '\\&')
+        query = f"""DELETE FROM directories WHERE library_section_id = {section['section_id']} and (path LIKE "{tmp}%" or path LIKE "%{tmp}");"""
         query_ret = PlexDBHandle.execute_query(query)
 
         logger.info(query)
@@ -380,6 +389,7 @@ class PageToolSimple(PluginPageBase):
 
 
     def remove_db_by_file(self, filepath):
+        #filepath = filepath.replace('&', '\\&')
         query = f"""
 DELETE FROM media_streams WHERE media_part_id in (SELECT id FROM media_parts WHERE file = "{filepath}");
 DELETE FROM metadata_items WHERE id in (SELECT parent_id FROM metadata_items WHERE id in (SELECT parent_id FROM metadata_items WHERE id in (SELECT metadata_item_id FROM media_items WHERE id in (SELECT media_item_id FROM media_parts WHERE file = "{filepath}"))));
