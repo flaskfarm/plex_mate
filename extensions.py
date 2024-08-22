@@ -80,7 +80,7 @@ def rc_command(function: callable) -> callable:
         command = '/'.join(function.__name__.split('__'))
         server = data.get('server')
         rclone = F.PluginManager.get_plugin_instance('rclone')
-        cmd = [rclone.ModelSetting.get('rclone_path'), 'rc', command, f'--rc-addr={server["address"]}', 'timeout=0']
+        cmd = [rclone.ModelSetting.get('rclone_path'), 'rc', command, f'--rc-addr={server["address"]}', '--timeout=0']
         if server['user']:
             cmd.extend([f"--rc-user={server['user']}", f"--rc-pass={server['pass']}"])
         if data.get('args'):
