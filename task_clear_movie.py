@@ -72,6 +72,7 @@ class Task(object):
         # 2단계 TAG별 URL 로 세팅하고 xml 파일만 남기고 제거
         if data['dryrun'] == False:
             if 'poster' not in data['process']:
+                Task.process_agent_none(data, con, cur)
                 return
             sql = 'UPDATE metadata_items SET '
             if data['process']['poster']['url'] != '':
@@ -355,3 +356,73 @@ class Task(object):
                     count += 1
             if count == 0:
                 break
+
+
+    # 기타 비디오 타입
+    def process_agent_none(data, con, cur):
+        if data['db']['guid'].startswith('tv.plex.agents.none') == False:
+            return
+        if data['command'] != 'start4':
+            return
+
+        media_ce = con.execute('SELECT user_thumb_url, user_art_url, media_parts.file, media_parts.hash FROM metadata_items, media_items, media_parts WHERE metadata_items.id = media_items.metadata_item_id AND media_items.id = media_parts.media_item_id AND metadata_items.id = ?;', (data['db']['id'],))
+        media_ce.row_factory = dict_factory
+        data['media'] = {'total':0, 'remove':0}
+
+        for item in media_ce.fetchall():
+            if item['hash'] == '':
+                continue
+            mediapath = os.path.join(P.ModelSetting.get('base_path_media'), 'localhost', item['hash'][0], f"{item['hash'][1:]}.bundle")
+            if os.path.exists(mediapath) == False:
+                continue
+            data['media']['total'] += SupportFile.size(start_path=mediapath)
+            count = 0
+            if item['user_thumb_url'].startswith('media'):
+                img = os.path.join(mediapath, 'Contents', 'Thumbnails', 'thumb3.jpg')
+                if os.path.exists(img):
+                    from gds_tool import SSGDrive
+                    gdrive_url = SSGDrive.upload_from_path(img)
+                    if gdrive_url is not None:
+                        P.logger.warning(gdrive_url)
+                        sql = 'UPDATE metadata_items SET '
+                        sql += ' user_thumb_url = "{}" '.format(gdrive_url)
+                        sql += '  WHERE id = {} ;\n'.format(data['db']['id'])
+                        ret = PlexDBHandle.execute_query(sql)
+                        if ret.find('database is locked') == -1:
+                            data['media']['remove'] += os.path.getsize(img)
+                            os.remove(img)
+                            count += 1
+            else:
+                count += 1
+                img = os.path.join(mediapath, 'Contents', 'Thumbnails', 'thumb3.jpg')
+                if os.path.exists(img):
+                    data['media']['remove'] += os.path.getsize(img)
+                    if data['dryrun'] == False:
+                        os.remove(img)
+
+            if item['user_art_url'].startswith('media'):
+                img = os.path.join(mediapath, 'Contents', 'Art', 'art3.jpg')
+                if os.path.exists(img):
+                    from gds_tool import SSGDrive
+                    gdrive_url = SSGDrive.upload_from_path(img)
+                    if gdrive_url is not None:
+                        P.logger.warning(gdrive_url)
+                        sql = 'UPDATE metadata_items SET '
+                        sql += ' user_art_url = "{}" '.format(gdrive_url)
+                        sql += '  WHERE id = {} ;\n'.format(data['db']['id'])
+                        ret = PlexDBHandle.execute_query(sql)
+                        if ret.find('database is locked') == -1:
+                            data['media']['remove'] += os.path.getsize(img)
+                            os.remove(img)
+                            count += 1
+            else:
+                count += 1
+                img = os.path.join(mediapath, 'Contents', 'Thumbnails', 'art3.jpg')
+                if os.path.exists(img):
+                    data['media']['remove'] += os.path.getsize(img)
+                    if data['dryrun'] == False:
+                        os.remove(img)
+
+            if count == 2:
+                shutil.rmtree(mediapath)
+                
