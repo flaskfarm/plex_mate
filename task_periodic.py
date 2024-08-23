@@ -108,16 +108,21 @@ class Task(object):
                 timeout = int(timeout)*60
 
             db_item.start_time = datetime.now()
-            db_item.status = "working"
             db_item.save()
 
             if should_refresh:
+                db_item.status = "refreshing"
+                db_item.save()
                 targets: dict = get_scan_targets(db_item.folder or '/', db_item.section_id)
                 for location, section_id in targets.items():
                     vfs_refresh(location, recursive, async_)
 
             #process = PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.folder, timeout=timeout, join=False, callback_function=Task.subprcoess_callback_function, callback_id=f"pm_periodic_{db_item.id}")
             process = PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.folder, timeout=timeout, join=False)
+
+            db_item.status = "working"
+            db_item.save()
+
             count = 0
             while True:
                 count += 1

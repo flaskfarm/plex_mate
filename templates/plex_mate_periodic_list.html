@@ -47,7 +47,7 @@
     </div>
   </form>
   <div id='page1'></div>
-  
+
   <div id="list_div"></div>
   <div id='page2'></div>
 </div>
@@ -95,7 +95,7 @@ function make_list(data) {
     <th style="width:10%; text-align:right;">추가 파일 수</th> \
     <th style="width:10%; text-align:right;">전체 파일 수</th> \
     </tr></thead><tbody id="list">';
-  
+
   if (data.length == 0) str += '<tr><td colspan="6"><h4>검색된 데이터가 없습니다.</h4></td></tr>';
 
   for(i in data) {
@@ -114,8 +114,9 @@ function make_list(data) {
     else if (data[i].status == 'timeout') tmp = text_color('시간초과', 'red');
     else if (data[i].status == 'terminated') tmp = text_color('중지', 'red');
     else if (data[i].status == 'user_stop') tmp = text_color('사용자 중지', 'red');
+    else if (data[i].status == 'refreshing') tmp = text_color('새로고침 중', 'blue');
     str += '<td scope="col" style="width:10%; text-align:left;">'+ tmp + '</td>';
-    tmp =  (data[i].duration != null) ? (parseInt(data[i].duration / 60) > 0 ? parseInt(data[i].duration / 60) + '분 ' : '')+ String(data[i].duration % 60).padStart(2, '0') + '초' : '--'; 
+    tmp =  (data[i].duration != null) ? (parseInt(data[i].duration / 60) > 0 ? parseInt(data[i].duration / 60) + '분 ' : '')+ String(data[i].duration % 60).padStart(2, '0') + '초' : '--';
     str += '<td scope="col" style="width:10%; text-align:right;">'+ tmp + '</td>';
     tmp =  (data[i].part_append_count != null) ? data[i].part_append_count  : '--';
     str += '<td scope="col" style="width:10%; text-align:right;">'+ tmp + '</td>';
@@ -172,6 +173,6 @@ $("body").on('click', '#remove_no_append_data_btn', function(e){
 
 
 
-</script> 
+</script>
 
 {% endblock %}
