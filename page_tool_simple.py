@@ -256,33 +256,34 @@ class PageToolSimple(PluginPageBase):
         logger.info(f"media_parts - id : {media_parts_ids}")
         ret['media_parts'] = len(media_parts)
         
-        ret['media_folder'] = []
-        MEDIAPATH = P.ModelSetting.get('base_path_media')
-        for media_part in media_parts:
-            mediapath = os.path.join(MEDIAPATH, 'localhost', media_part['hash'][0], f"{media_part['hash'][1:]}.bundle")
-            if os.path.exists(mediapath):
-                logger.info(f"미디어패스 EXIST : {mediapath}")
-                ret['media_folder'].append(mediapath)
-                if DRYRUN == False:
-                    shutil.rmtree(mediapath)
-            else:
-                logger.info(f"미디어패스 NOT EXIST : {mediapath} ")
+        if ret['media_parts'] > 0:
+            ret['media_folder'] = []
+            MEDIAPATH = P.ModelSetting.get('base_path_media')
+            for media_part in media_parts:
+                mediapath = os.path.join(MEDIAPATH, 'localhost', media_part['hash'][0], f"{media_part['hash'][1:]}.bundle")
+                if os.path.exists(mediapath):
+                    logger.info(f"미디어패스 EXIST : {mediapath}")
+                    ret['media_folder'].append(mediapath)
+                    if DRYRUN == False:
+                        shutil.rmtree(mediapath)
+                else:
+                    logger.info(f"미디어패스 NOT EXIST : {mediapath} ")
 
-        media_file = media_parts[0]['file']
-        logger.info(media_file)
-        folodername = os.path.basename(os.path.dirname(media_file))
-        
-        delete_query += f"DELETE FROM directories WHERE library_section_id = {library_section_id} AND parent_directory_id in (SELECT id FROM directories WHERE path LIKE '%{folodername}' AND library_section_id = {library_section_id});"
-        delete_query += f"DELETE FROM directories WHERE path LIKE '%{folodername}' AND library_section_id = {library_section_id};"
+            media_file = media_parts[0]['file']
+            logger.info(media_file)
+            folodername = os.path.basename(os.path.dirname(media_file))
+            
+            delete_query += f"DELETE FROM directories WHERE library_section_id = {library_section_id} AND parent_directory_id in (SELECT id FROM directories WHERE path LIKE '%{folodername}' AND library_section_id = {library_section_id});"
+            delete_query += f"DELETE FROM directories WHERE path LIKE '%{folodername}' AND library_section_id = {library_section_id};"
 
-        # media_streams
-        delete_query += f"DELETE FROM media_streams WHERE media_part_id in ({','.join(media_parts_ids_query)});"
-        delete_query += f"DELETE FROM media_parts WHERE media_item_id in ({','.join(media_items_ids_query)});"
+            # media_streams
+            delete_query += f"DELETE FROM media_streams WHERE media_part_id in ({','.join(media_parts_ids_query)});"
+            delete_query += f"DELETE FROM media_parts WHERE media_item_id in ({','.join(media_items_ids_query)});"
         delete_query += f"DELETE FROM media_items WHERE metadata_item_id in ({','.join(metdata_items_ids_query)});"
         delete_query += f"DELETE FROM tags WHERE id in (SELECT tag_id FROM taggings WHERE metadata_item_id in ({','.join(metdata_items_ids_query)}));"
         delete_query += f"DELETE FROM taggings WHERE metadata_item_id in ({','.join(metdata_items_ids_query)});"
         delete_query += f"DELETE FROM metadata_items WHERE id in ({','.join(metdata_items_ids_query)});"
-        
+            
         if DRYRUN == False:
             query_ret = PlexDBHandle.execute_query(delete_query)
             logger.info(query_ret)
@@ -367,17 +368,21 @@ class PageToolSimple(PluginPageBase):
 
     
 
-    def remove_db_by_folder(self, folderpath):
+    def remove_db_by_folder(self, folderpath, delete_grand_parent=True):
         
+        section = PlexDBHandle.get_section_info_by_filepath(folderpath)
+
+        if section['section_type'] == 8:
+            delete_grand_parent = False
         for base, dirs, files in os.walk(folderpath): 
             for filename in files:
                 filepath = os.path.join(base, filename)
 
-                self.remove_db_by_file(filepath)
+                self.remove_db_by_file(filepath, delete_grand_parent=delete_grand_parent)
 
         tmp = os.path.basename(folderpath)
 
-        section = PlexDBHandle.get_section_info_by_filepath(folderpath)
+        
         
         #tmp = tmp.replace('&', '\\&')
         query = f"""DELETE FROM directories WHERE library_section_id = {section['section_id']} and (path LIKE "{tmp}%" or path LIKE "%{tmp}");"""
@@ -388,11 +393,12 @@ class PageToolSimple(PluginPageBase):
         return {'msg':'삭제하였습니다.'}
 
 
-    def remove_db_by_file(self, filepath):
+    def remove_db_by_file(self, filepath, delete_grand_parent=True):
         #filepath = filepath.replace('&', '\\&')
-        query = f"""
-DELETE FROM media_streams WHERE media_part_id in (SELECT id FROM media_parts WHERE file = "{filepath}");
-DELETE FROM metadata_items WHERE id in (SELECT parent_id FROM metadata_items WHERE id in (SELECT parent_id FROM metadata_items WHERE id in (SELECT metadata_item_id FROM media_items WHERE id in (SELECT media_item_id FROM media_parts WHERE file = "{filepath}"))));
+        query = f"""DELETE FROM media_streams WHERE media_part_id in (SELECT id FROM media_parts WHERE file = "{filepath}");"""
+        if delete_grand_parent:
+            query += f"""DELETE FROM metadata_items WHERE id in (SELECT parent_id FROM metadata_items WHERE id in (SELECT parent_id FROM metadata_items WHERE id in (SELECT metadata_item_id FROM media_items WHERE id in (SELECT media_item_id FROM media_parts WHERE file = "{filepath}"))));"""
+        query += f"""
 DELETE FROM metadata_items WHERE id in (SELECT parent_id FROM metadata_items WHERE id in (SELECT metadata_item_id FROM media_items WHERE id in (SELECT media_item_id FROM media_parts WHERE file = "{filepath}")));
 DELETE FROM metadata_items WHERE id in (SELECT metadata_item_id FROM media_items WHERE id in (SELECT media_item_id FROM media_parts WHERE file = "{filepath}"));
 DELETE FROM media_items WHERE id in (SELECT media_item_id FROM media_parts WHERE file = "{filepath}");
@@ -400,4 +406,5 @@ DELETE FROM media_parts WHERE file = "{filepath}";
 DELETE FROM tags WHERE id in (SELECT tag_id FROM taggings WHERE metadata_item_id in (SELECT metadata_item_id FROM media_items WHERE id in (SELECT media_item_id FROM media_parts WHERE file = "{filepath}")));
 DELETE FROM taggings WHERE metadata_item_id in (SELECT metadata_item_id FROM media_items WHERE id in (SELECT media_item_id FROM media_parts WHERE file = "{filepath}"));
 """
+        
         query_ret = PlexDBHandle.execute_query(query)
