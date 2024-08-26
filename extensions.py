@@ -42,7 +42,7 @@ def get_rc_servers() -> list[dict]:
             continue
         addr, _, vfs = tmps[2].partition('#')
         if vfs and ':' not in vfs:
-            vfs = f'{vfs}:'
+            vfs = vfs if vfs.endswith(':') else f'{vfs}:'
         auth, _, addr = addr.rpartition('@')
         username, _, password = auth.partition(':')
         servers.append({
@@ -80,7 +80,14 @@ def rc_command(function: callable) -> callable:
         command = '/'.join(function.__name__.split('__'))
         server = data.get('server')
         rclone = F.PluginManager.get_plugin_instance('rclone')
-        cmd = [rclone.ModelSetting.get('rclone_path'), 'rc', command, f'--rc-addr={server["address"]}', '--timeout=0']
+        cmd = [
+            rclone.ModelSetting.get('rclone_path'),
+            '--timeout=0',
+            f'--log-file={F.config["path_data"]}/log/{__package__}.log',
+            'rc',
+            command,
+            f'--rc-addr={server["address"]}'
+        ]
         if server['user']:
             cmd.extend([f"--rc-user={server['user']}", f"--rc-pass={server['pass']}"])
         if data.get('args'):

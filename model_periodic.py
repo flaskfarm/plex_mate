@@ -39,7 +39,8 @@ class ModelPeriodicItem(ModelBase):
     def set_terminated(cls):
         try:
             with F.app.app_context():
-                db.session.query(cls).filter(cls.status == 'working').update(dict(status='terminated'))
+                #db.session.query(cls).filter(cls.status == 'working').update(dict(status='terminated'))
+                db.session.query(cls).filter(cls.status.in_(['working', 'refreshing'])).update(dict(status='terminated'))
                 db.session.commit()
         except Exception as e: 
             logger.error(f"Exception:{str(e)}")
