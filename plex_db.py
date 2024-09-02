@@ -76,7 +76,7 @@ class PlexDBHandle(object):
     def execute_query(cls, sql, sql_filepath=None):
         try:
             if sql_filepath is None:
-                sql_filepath = os.path.join(F.config['path_data'], 'tmp', f"{str(time.time()).split('.')[0]}.sql")
+                sql_filepath = os.path.join(F.config['path_data'], 'tmp', f"{str(time.time())}.sql")
             SupportFile.write_file(sql_filepath, sql)
             if platform.system() == 'Windows':
                 sql_filepath = sql_filepath.replace('\\', '\\\\')
@@ -99,7 +99,7 @@ class PlexDBHandle(object):
     @classmethod
     def execute_query_with_db_filepath(cls, sql, db_filepath):
         try:
-            sql_filepath = os.path.join(F.config['path_data'], 'tmp', f"{str(time.time()).split('.')[0]}.sql")
+            sql_filepath = os.path.join(F.config['path_data'], 'tmp', f"{str(time.time())}.sql")
             SupportFile.write_file(sql_filepath, sql)
             last_sql_filepath = sql_filepath
             if platform.system() == 'Windows':
