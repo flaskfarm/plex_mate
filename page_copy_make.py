@@ -315,6 +315,10 @@ class DBChangeOrder:
                             elif key == 'library_section_id':
                                 value = self.idmap['library_sections'][value]
                             elif key == 'parent_directory_id' and value != None:
+                                if idx == 0 and value not in self.idmap['directories']:
+                                    after.append(row)
+                                    rowcontinue = True
+                                    break
                                 value = self.idmap['directories'][value] 
                             elif table == 'metadata_items' and key == 'parent_id' and value != None:
                                 if idx == 0 and value not in self.idmap['metadata_items']:
