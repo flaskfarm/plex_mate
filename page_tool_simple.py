@@ -83,8 +83,30 @@ class PageToolSimple(PluginPageBase):
                 P.ModelSetting.set(f'{self.parent.name}_{self.name}_library_location_source', req.form['arg1'])
                 P.ModelSetting.set(f'{self.parent.name}_{self.name}_library_location_target', req.form['arg2'])
 
-                query = f'UPDATE section_locations SET root_path = REPLACE(root_path, "{arg1}", "{arg2}");'
+                # 2024-09-05
+                query = "SELECT id, root_path FROM section_locations"
+                rows = PlexDBHandle.select(query)
+                for idx, row in enumerate(rows):
+                    #logger.warning(f"{idx}/{len(rows)} {row}")
+                    if arg1.startswith(row['root_path']):
+                        logger.error(row['root_path'])
+                        tmp1 = arg1.replace(row['root_path'], '').lstrip('/')
+                        tmp2 = arg2.replace(row['root_path'], '').lstrip('/')
+                        if len(tmp1.split('/')) != len(tmp2.split('/')):
+                            break
+                        #logger.error(tmp1)
+                        #logger.error(tmp2)
+                        tmp1 = tmp1.replace("'", "''")
+                        tmp2 = tmp2.replace("'", "''")
+                        query1 = "SELECT * FROM directories WHERE path = ?"
+                        dir_ret = PlexDBHandle.select_arg(query1, (tmp1,))
+                        #logger.info(d(dir_ret))
+                        if len(dir_ret):
+                            query = f"UPDATE directories SET path = '{tmp2}' WHERE path = '{tmp1}';"
+                            PlexDBHandle.execute_query(query)
+                            break
 
+                query = f'UPDATE section_locations SET root_path = REPLACE(root_path, "{arg1}", "{arg2}");'
                 query += f'UPDATE media_parts SET file = REPLACE(file, "{arg1}", "{arg2}");'
 
                 ret = []
