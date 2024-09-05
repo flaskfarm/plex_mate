@@ -384,6 +384,9 @@ class DBChangeOrder:
         except Exception as e: 
             P.logger.error(f'Exception:{str(e)}')
             P.logger.error(traceback.format_exc())
+            try:
+                logger.error(d(row))
+            except: pass
         finally:
             try:
                 self.source_con.close()
