@@ -1,11 +1,11 @@
 from support import SupportSubprocess
 
+from .extensions import check_scanning, vfs_forget, vfs_refresh
 from .model_scan import ModelScanItem
 from .plex_bin_scanner import PlexBinaryScanner
 from .plex_db import PlexDBHandle
 from .plex_web import PlexWebHandle
 from .setup import *
-from .extensions import check_scanning, vfs_refresh, vfs_forget
 
 name = 'scan'
 
@@ -252,11 +252,12 @@ class Task:
 
     def process_item_add_on_queue(db_item:ModelScanItem):
         try:
-            if db_item.mode == 'ADD':
-                if Task.__check_media_part_data(db_item):
-                    return
-            Task.current_scan_count += 1
-            PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.scan_folder, callback_function=Task.subprcoess_callback_function, callback_id=f"pm_scan_{db_item.id}")
+            if db_item.mode == 'ADD' and Task.__check_media_part_data(db_item):
+                pass
+            else:
+                Task.current_scan_count += 1
+                PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.scan_folder, callback_function=Task.subprcoess_callback_function, callback_id=f"pm_scan_{db_item.id}")
+            
         except Exception as e:
             logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())
@@ -289,6 +290,13 @@ class Task:
                     else:
                         db_item.set_status('FINISH_SCANNING', save=True)
                     Task.current_scan_count += -1
+                # 2024-09-07
+                # 이제 bin scanner가 refresh까지 하지 못함. web refresh 하도록 추가
+                if db_item.mode == 'ADD':
+                    metaid = PlexDBHandle.get_metaid_by_directory(db_item.section_id, db_item.scan_folder)
+                    if metaid != None:
+                        logger.info(f"스캔: meta resresh {metaid}")
+                        PlexWebHandle.refresh_by_id(metaid)
         except Exception as e:
             logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())

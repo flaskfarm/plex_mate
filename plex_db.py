@@ -289,7 +289,6 @@ class PlexDBHandle(object):
         data = cls.select(query)
 
         #P.logger.error(data)
-
         if section_info['section_type'] == 1:
             if len(data) == 1:
                 return data[0]['metadata_items_id']
@@ -299,14 +298,17 @@ class PlexDBHandle(object):
         elif section_info['section_type'] == 2:
             if len(data) > 0:
                 parent_id = data[0]['parent_id']
-                query = """
-                    SELECT id, parent_id
-                    FROM metadata_items 
-                    WHERE id = """
+                query = "SELECT id, parent_id FROM metadata_items WHERE id = "
                 query += str(parent_id)
                 data2 = cls.select(query)
                 return data2[0]['parent_id']
             else:
                 P.logger.error(d(data))
                 P.logger.error('에러 확인할것')
-    
+        elif section_info['section_type'] == 8:
+            if len(data) > 0:
+                return data[0]['parent_id']
+            else:
+                P.logger.error(d(data))
+                P.logger.error('에러 확인할것')
+
