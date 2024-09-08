@@ -8,12 +8,20 @@
 {{ macros.setting_input_text_and_buttons('copy2_copy_path_source_db', '소스 DB 파일 경로', [['select_copy_copy_path_source_db_btn', '경로 선택'], ['source_section_btn', '소스 DB 섹션 확인']], value=arg['copy2_copy_path_source_db'], desc=['복사에 사용할 DB파일']) }}
 {{ macros.setting_input_text_and_buttons('copy2_copy_path_source_root_path', '소스 파일 경로', [['select_source_locations_btn', '경로 참고']], value=arg['copy2_copy_path_source_root_path'], desc=['경로 변환시 사용할 소스 Root']) }}
 {{ macros.setting_input_text_and_buttons('copy2_copy_path_target_root_path', '타겟 파일 경로', [['select_target_locations_btn', '경로 참고']], value=arg['copy2_copy_path_target_root_path'], desc=['경로 변환시 사용할 타겟 Root']) }}
+
+{{ macros.setting_checkbox('copy2_copy_section_id_user', '섹션 ID 임의지정', value=arg['copy2_copy_section_id_user'], desc=['On: 비어있는 섹션ID 지정시 적용', 'Off: 자동증가']) }}
+<div id="copy2_copy_section_id_user_div" class="collapse">
+  {{ macros.setting_input_text_and_buttons('copy2_copy_section_id', '섹션ID', [['section_test_btn', '가능여부 확인']], value=arg['copy2_copy_section_id']) }}
+</div>
 </form>
 
 
 <script type="text/javascript">
 $(document).ready(function(){
+  use_collapse("copy2_copy_section_id_user");
 });
+
+$('#copy2_copy_section_id_user').change(function() {use_collapse('copy2_copy_section_id_user');});
 
 $("body").on('click', '#select_copy_copy_path_source_db_btn', function(e){
   e.preventDefault();
@@ -48,6 +56,12 @@ $("body").on('click', '#select_target_locations_btn', function(e){
   e.preventDefault();
   globalSendCommandPage('select_target_locations');
 });
+
+$("body").on('click', '#section_test_btn', function(e){
+  e.preventDefault();
+  globalSendCommandPage('section_test', $('#copy2_copy_section_id').val());
+});
+
 
 </script> 
 

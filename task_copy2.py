@@ -61,7 +61,6 @@ class Task(object):
             Task.message(f"종료: {end_dt-start_dt}")
             logger.info(d(Task.copy_info))
             logger.info(d(Task.copy_result))
-            return "wait"
         except Exception as e: 
             P.logger.error(f'Exception:{str(e)}')
             P.logger.error(traceback.format_exc())
@@ -74,7 +73,7 @@ class Task(object):
                 Task.target_cur.close()
             if Task.target_con is not None:
                 Task.target_con.close()
-
+            return "wait"
 
     def 유틸_경로변환(source_path):
         if Task.change_rule[1] == '':
@@ -103,6 +102,14 @@ class Task(object):
         data = ce.fetchall()
         insert_col = ''
         insert_value = ''
+        if P.ModelSetting.get_bool('copy2_copy_section_id_user'):
+            val = P.ModelSetting.get_int('copy2_copy_section_id')
+            rows = PlexDBHandle.select(f"SELECT * FROM library_sections WHERE id = {val}")
+            if len(rows) != 0:
+                Task.message(f"에러: {val} 섹션 ID가 이미 있습니다.")
+                raise Exception(f'')
+            insert_col += "'id',"
+            insert_value += f"{val},"
         for key, value in data[0].items():
             if key in ['id']:
                 continue
@@ -120,8 +127,11 @@ class Task(object):
         insert_value = insert_value.rstrip(',')
         query = f"INSERT INTO library_sections ({insert_col}) VALUES ({insert_value});SELECT max(id) FROM library_sections;" 
         ret = PlexDBHandle.execute_query(query)
-        if ret != '':
-            Task.copy_info['library_sections_id'] = int(ret)
+        if P.ModelSetting.get_bool('copy2_copy_section_id_user'):
+            Task.copy_info['library_sections_id'] = int(P.ModelSetting.get_int('copy2_copy_section_id'))
+        else:
+            if ret != '':
+                Task.copy_info['library_sections_id'] = int(ret)
         Task.message(f"--- 섹션 ID: {Task.copy_info['library_sections_id']}")
         Task.target_con.commit()
 

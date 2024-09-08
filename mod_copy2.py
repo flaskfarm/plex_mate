@@ -20,6 +20,8 @@ class PageCopy2Copy(PluginPageBase):
             f'{self.parent.name}_{self.name}_path_source_root_path' : '',
             f'{self.parent.name}_{self.name}_path_target_root_path' : '',
             f'{self.parent.name}_{self.name}_task_stop_flag' : 'False',
+            f'{self.parent.name}_{self.name}_section_id_user' : 'False',
+            f'{self.parent.name}_{self.name}_section_id' : '',
         }
         self.data = {
             'list' : [],
@@ -52,6 +54,16 @@ class PageCopy2Copy(PluginPageBase):
                 data = PlexDBHandle.select('SELECT * FROM section_locations')
                 ret['json'] = data
                 ret['title'] = '타겟 Section Locations'
+            elif command == 'section_test':
+                try:
+                    arg1 = int(arg1)
+                    rows = PlexDBHandle.select(f"SELECT * FROM library_sections WHERE id = {arg1}")
+                    if len(rows) == 0:
+                        ret['msg'] = '가능합니다.'
+                    else:
+                        raise Exception('')
+                except:
+                    ret['msg'] = '불가능합니다.'
             return jsonify(ret)
         except Exception as e: 
             P.logger.error(f'Exception:{str(e)}')
