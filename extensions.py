@@ -86,10 +86,10 @@ def rc_command(function: callable) -> callable:
             f'--log-file={F.config["path_data"]}/log/{__package__}.log',
             'rc',
             command,
-            f'--rc-addr={server["address"]}'
+            f'--url={server["address"]}'
         ]
         if server['user']:
-            cmd.extend([f"--rc-user={server['user']}", f"--rc-pass={server['pass']}"])
+            cmd.extend([f"--user={server['user']}", f"--pass={server['pass']}"])
         if data.get('args'):
             cmd.extend(data.get('args'))
         if data.get('async'):
