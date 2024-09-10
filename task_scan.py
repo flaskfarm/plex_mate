@@ -18,6 +18,12 @@ class Task:
     @F.celery.task
     def start():
         ModelScanItem.set_status_incompleted_to_ready()
+        for db_item in ModelScanItem.get_list_by_status('FINISH_SCANNING'):
+            if db_item.mode not in ['ADD']:
+                continue
+            if Task.__check_media_part_data(db_item):
+                db_item.set_status('FINISH_ADD', save=True)
+                PlexDBHandle.update_show_recent()
         if Task.scan_queue is None:
             Task.scan_queue = queue.Queue()
         if Task.scan_thread is None:
@@ -207,15 +213,15 @@ class Task:
                     logger.error(traceback.format_exc())
                 finally:
                     item.save()
+            max_scan_time = P.ModelSetting.get_int('scan_max_scan_time')
+            if max_scan_time > 0:
+                scannings = ModelScanItem.get_list_by_status('SCANNING')
+                check_scanning(scannings, max_scan_time)
             #P.logger.warning("파일체크 대기")
             for i in range(P.ModelSetting.get_int(f"{name}_filecheck_thread_interval")):
                 time.sleep(1)
                 #print(i)
             #time.sleep(60)
-            max_scan_time = P.ModelSetting.get_int('scan_max_scan_time')
-            if max_scan_time > 0:
-                scannings = ModelScanItem.get_list_by_status('SCANNING')
-                check_scanning(scannings, max_scan_time)
 
 
     def scan_thread_function():
