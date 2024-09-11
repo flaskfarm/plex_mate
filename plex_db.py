@@ -293,6 +293,14 @@ class PlexDBHandle(object):
             if len(data) == 1:
                 return data[0]['metadata_items_id']
             else:
+                # 2024-09-11
+                if len(data) > 1:
+                    unique_id = data[0]['metadata_items_id']
+                    for row in data[1:]:
+                        if row['metadata_items_id'] != unique_id:
+                            break
+                    else:
+                        return unique_id
                 P.logger.error(d(data))
                 P.logger.error('에러 확인할것')
         elif section_info['section_type'] == 2:
