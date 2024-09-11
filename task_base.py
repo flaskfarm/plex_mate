@@ -39,8 +39,18 @@ class Task(object):
     @staticmethod
     @celery.task()
     def clear(args):
-        ret = SupportFile.rmtree(args[0])
-        os.makedirs(args[0], exist_ok=True)
+        if os.path.basename(os.path.normpath(args[0])) == 'PhotoTranscoder':
+            for root, dirs, files in os.walk(args[0], topdown=False):
+                try:
+                    for name in files:
+                        os.remove(os.path.join(root, name))
+                    for name in dirs:
+                        os.rmdir(os.path.join(root, name))
+                except:
+                    logger.error(traceback.format_exc())
+        else:
+            ret = SupportFile.rmtree(args[0])
+            os.makedirs(args[0], exist_ok=True)
         return Task.get_size(args)
 
 

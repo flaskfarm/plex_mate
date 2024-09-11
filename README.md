@@ -12,6 +12,9 @@
   * 스캔
 
 ## Changelog
+- 1.1.21 (2024.09.11)
+  PhotoTranscoder 폴더 정리를 비우기 방식으로 변경
+
 - 1.1.20 (2024.09.10)
   플러그인 로딩시 FINISH_SCANNING 재점검
 
