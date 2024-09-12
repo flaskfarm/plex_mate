@@ -19,21 +19,21 @@ from support import SupportSubprocess, d
 DRYRUN = True
 
 def start():
-    # 앨범이 없는 아티스트
-    query = f"""select * from (select parent_id as parent_id1, title from metadata_items where metadata_type = 9 group by parent_id) as A left OUTER join metadata_items as B
+    # 아티스트 없는 앨범
+    query = f"""select * from (select parent_id as parent_id1, id as album_id, title as ablum_title from metadata_items where metadata_type = 9 group by parent_id) as A left OUTER join metadata_items as B
 on A.parent_id1 = B.id
 where B.id is null;"""
     rows = PlexDBHandle.select(query)
-    log(f"- 앨범이 없는 아티스트: {len(rows)}")
+    log(f"- 아티스트 없는 앨범: {len(rows)}")
     query = ''
     for idx, row in enumerate(rows):
-        log(f"- 앨범이 없는 아티스트: {idx+1}/{len(rows)}")
+        log(f"- 아티스트 없는 앨범: {idx+1}/{len(rows)} {row['ablum_title']}")
         log(d(row))
-        query += f"""DELETE FROM metadata_items WHERE parent_id = {row['parent_id']};"""
-        break
+        query += f"""DELETE FROM metadata_items WHERE id = {row['album_id']};"""
+        #break
     if not DRYRUN:
         PlexDBHandle.execute_query(query)
-    
+
     # 트랙이 없는 앨범
     query = f"""select metadata_items.id as artist_id, metadata_items.title as artist, A.id as album_id, A.title as album from (select * from metadata_items where metadata_type = 9 and id not in (select parent_id from metadata_items where metadata_type = 10 group by parent_id)) as A left outer join metadata_items
 on A.parent_id = metadata_items.id;"""
@@ -63,18 +63,17 @@ on A.parent_id = metadata_items.id;"""
         PlexDBHandle.execute_query(query)
     
     
-    # 시즌 없는 쇼
-    query = f"""select * from (select parent_id as parent_id1, title from metadata_items where metadata_type = 3 group by parent_id) as A left OUTER join metadata_items as B
+    # 쇼 없는 시즌
+    query = f"""select * from (select parent_id as parent_id1, id as season_id, title from metadata_items where metadata_type = 3 group by parent_id) as A left OUTER join metadata_items as B
 on A.parent_id1 = B.id
 where B.id is null;"""
     rows = PlexDBHandle.select(query)
-    log(f"- 시즌 없는 쇼: {len(rows)}")
+    log(f"- 쇼 없는 시즌: {len(rows)}")
     query = ''
     for idx, row in enumerate(rows):
-        log(f"- 시즌 없는 쇼: {idx+1}/{len(rows)}")
+        log(f"- 쇼 없는 시즌: {idx+1}/{len(rows)}")
         log(d(row))
-        query += f"""DELETE FROM metadata_items WHERE parent_id = {row['parent_id1']};"""
-        
+        query += f"""DELETE FROM metadata_items WHERE id = {row['season_id']};"""
     if not DRYRUN:
         PlexDBHandle.execute_query(query)
     
