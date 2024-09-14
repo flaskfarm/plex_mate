@@ -21,9 +21,7 @@ class Task:
         for db_item in ModelScanItem.get_list_by_status('FINISH_SCANNING'):
             if db_item.mode not in ['ADD']:
                 continue
-            if Task.__check_media_part_data(db_item):
-                db_item.set_status('FINISH_ADD', save=True)
-                PlexDBHandle.update_show_recent()
+            db_item.set_status('READY', save=True)
         if Task.scan_queue is None:
             Task.scan_queue = queue.Queue()
         if Task.scan_thread is None:
