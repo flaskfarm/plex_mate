@@ -198,7 +198,7 @@ class ModuleBase(PluginModuleBase):
                 'data' : f"경로 : {ret['target']}\n크기 : {ret['sizeh']}",
             }
             logger.debug(d(modal_data))
-            F.socketio.emit("modal", modal_data, namespace='/framework', broadcast=True)    
+            F.socketio.emit("modal", modal_data, namespace='/framework', to='all')
         elif command == 'size_ret':
             return ret
         elif command == 'backup':
@@ -206,10 +206,10 @@ class ModuleBase(PluginModuleBase):
                 noti_data = {'type':'info', 'msg' : f"경로 : {ret['target']}<br>복사하였습니다."}
             else:
                 noti_data = {'type':'danger', 'msg' : f"백업에 실패하였습니다.<br>{ret['log']}"}
-            F.socketio.emit("notify", noti_data, namespace='/framework', broadcast=True)    
+            F.socketio.emit("notify", noti_data, namespace='/framework', to='all')
         elif command == 'clear':
             noti_data = {'type':'info', 'msg' : f"경로 : {ret['target']}<br>크기 : {ret['sizeh']}"}
-            F.socketio.emit("notify", noti_data, namespace='/framework', broadcast=True) 
+            F.socketio.emit("notify", noti_data, namespace='/framework', to='all')
         elif command == 'clear_ret':
             return ret
         elif command == 'agent_update':
@@ -219,7 +219,7 @@ class ModuleBase(PluginModuleBase):
                     'data' : d(ret),
                 }
                 #P.logger.error(ret)
-                F.socketio.emit("modal", modal_data, namespace='/framework', broadcast=True)    
+                F.socketio.emit("modal", modal_data, namespace='/framework', to='all')  
 
 
 

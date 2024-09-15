@@ -12,6 +12,9 @@
   * 스캔
 
 ## Changelog
+- 1.1.22 (2024.09.15)   
+  python-socketio 최신 버전 사용하도록 수정.   
+
 - 1.1.21 (2024.09.11)
   PhotoTranscoder 폴더 정리를 비우기 방식으로 변경
 
