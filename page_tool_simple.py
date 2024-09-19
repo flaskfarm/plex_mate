@@ -387,7 +387,7 @@ class PageToolSimple(PluginPageBase):
         #ret = self.start_celery(mainfunc, None, *())
         ret = mainfunc()
         msg = ret['msg']
-        F.socketio.emit("modal", {'title':'DB Tool', 'data' : msg}, namespace='/framework', to='all')
+        F.socketio.emit("modal", {'title':'DB Tool', 'data' : msg}, namespace='/framework')
 
     
 

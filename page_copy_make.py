@@ -52,7 +52,7 @@ class PageCopyMake(PluginPageBase):
         func = self.start
         ret = self.start_celery(func, None, *())
         msg = f"{ret}<br>파일 생성을 완료하였습니다."
-        F.socketio.emit("modal", {'title':'DB 생성 완료', 'data' : msg}, namespace='/framework', to='all')
+        F.socketio.emit("modal", {'title':'DB 생성 완료', 'data' : msg}, namespace='/framework')
 
 
     @staticmethod
