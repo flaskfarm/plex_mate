@@ -49,6 +49,8 @@ class Task(object):
 
             if yaml.get('스캔모드') == "웹":
                 '''
+                섹션ID가 all 인 경우:
+                    전체 스캔
                 섹션ID 정보가 있을 경우:
                     섹션에 추가된 폴더와 작업의 "폴더"를 비교 후 하위 경로를 새로고침
                 섹션ID 정보가 없을 경우:
@@ -56,11 +58,27 @@ class Task(object):
                 폴더 정보가 있을 경우:
                     부분 스캔
                 폴더 정보가 없을 경우:
-                    전체 스캔
+                    섹션 스캔
 
                 Plex Dash 앱에서 library_sections 테이블의 scanned_at 컬럼의 정보를 통해 최근 스캔 시간을 표시중
                 이 컬럼은 전체 섹션을 스캔(path 파라미터 없이)했을 때만 갱신되는 것으로 보임
                 '''
+                if yaml.get('섹션ID') == 'all':
+                    sections = PlexDBHandle.library_sections()
+                    for section in sections:
+                        try:
+                            if should_refresh:
+                                locations = PlexDBHandle.section_location(library_id=section['id'])
+                                for location in locations:
+                                    try:
+                                        vfs_refresh(location['root_path'], recursive, async_)
+                                    except:
+                                        logger.error(traceback.format_exc())
+                            PlexWebHandle.section_scan(section['id'])
+                            logger.debug(f"스캔 전송: section_id={section['id']}")
+                        except:
+                            logger.error(traceback.format_exc())
+                    return
                 if not yaml.get('폴더') and not yaml.get('섹션ID'):
                     logger.error(f'스캔 대상을 명시해 주세요: {yaml}')
                     return
@@ -76,7 +94,7 @@ class Task(object):
                         PlexWebHandle.path_scan(section_id, location)
                         logger.debug(f'스캔 전송: section_id={section_id} path={location}')
                 if not yaml.get('폴더'):
-                    # 폴더 키워드가 없을 경우 전체 스캔
+                    # 폴더 키워드가 없을 경우 섹션 스캔
                     PlexWebHandle.section_scan(yaml.get('섹션ID'))
                     logger.debug(f'스캔 전송: section_id={yaml.get("섹션ID")}')
                 return

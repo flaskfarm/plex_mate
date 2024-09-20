@@ -1,5 +1,5 @@
 title: "PLEX MATE"
-version: "1.1.22"
+version: "1.1.23"
 package_name: "plex_mate"
 developer: "flaskfarm"
 description: "PLEX와 동일 기기에서 동작하는 툴"
