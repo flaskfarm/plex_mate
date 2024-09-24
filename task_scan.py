@@ -45,7 +45,6 @@ class Task:
             db_item.meta_info = PlexDBHandle.get_info_by_part_id(rows[0]['id'])
         else:
             rows = PlexDBHandle.get_media_streams_file_like(db_item.target)
-            P.logger.warning(rows)
             if rows:
                 db_item.meta_info = PlexDBHandle.get_info_by_stream_id(rows[0]['id'])
         if rows:
