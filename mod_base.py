@@ -10,6 +10,8 @@ from .plex_web import PlexWebHandle
 from .setup import *
 from .task_base import Task
 
+logger = P.logger
+
 
 class ModuleBase(PluginModuleBase):
     

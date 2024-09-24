@@ -5,6 +5,8 @@ import time
 from .plex_db import PlexDBHandle
 from .setup import *
 
+logger = P.logger
+
 
 class PageToolSimple(PluginPageBase):
     def __init__(self, P, parent):

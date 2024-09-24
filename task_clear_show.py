@@ -13,6 +13,9 @@ TAG = {
     'theme' : ['music', 'themes']
 }
 
+logger = P.logger
+
+
 class Task(object):
 
     @staticmethod

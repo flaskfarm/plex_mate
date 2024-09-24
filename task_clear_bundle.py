@@ -5,6 +5,8 @@ from support import SupportFile, d
 from .plex_db import PlexDBHandle, dict_factory
 from .setup import *
 
+logger = P.logger
+
 
 class Task(object):
     @staticmethod

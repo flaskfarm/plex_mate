@@ -8,6 +8,7 @@ from .setup import *
 
 subtitle_exts  = ['*.srt', '*.smi', '*.ass', '*.ssa']
 SUBTITLE_EXTS  = r'|'.join([fnmatch.translate(x) for x in subtitle_exts])
+logger = P.logger
 
 
 class Task(object):

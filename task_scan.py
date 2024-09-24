@@ -8,6 +8,8 @@ from .plex_web import PlexWebHandle
 from .setup import *
 
 name = 'scan'
+logger = P.logger
+
 
 class Task:
     scan_queue = None
@@ -37,15 +39,16 @@ class Task:
 
 
     def __check_media_part_data(db_item):
-        media_part_data = PlexDBHandle.get_media_parts(db_item.target)
-
-        #if len(media_part_data) == 1:
-        if len(media_part_data) > 0:
-            '''
-            DB에 동일한 파일이 각각 다른 ID로 중복 입력되어 있는 경우가 있음
-            '''
-            db_item.mediapart_id = media_part_data[0]['id']
-            db_item.meta_info = PlexDBHandle.get_info_by_part_id(media_part_data[0]['id'])
+        rows: list[dict] = PlexDBHandle.get_media_parts(db_item.target)
+        if rows:
+            db_item.mediapart_id = rows[0]['id']
+            db_item.meta_info = PlexDBHandle.get_info_by_part_id(rows[0]['id'])
+        else:
+            rows = PlexDBHandle.get_media_streams_file_like(db_item.target)
+            P.logger.warning(rows)
+            if rows:
+                db_item.meta_info = PlexDBHandle.get_info_by_stream_id(rows[0]['id'])
+        if rows:
             db_item.set_status('FINISH_ADD_ALREADY_IN_DB', save=True)
             return True
         return False

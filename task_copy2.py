@@ -9,6 +9,8 @@ from .setup import *
 
 INSERT_ROWS = 10000
 
+logger = P.logger
+
 
 class Task(object):
 

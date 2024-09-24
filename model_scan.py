@@ -2,6 +2,8 @@ from sqlalchemy import and_, desc, func, not_, or_
 
 from .setup import *
 
+logger = P.logger
+
 
 class ModelScanItem(ModelBase):
     P = P

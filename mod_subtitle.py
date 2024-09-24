@@ -5,6 +5,8 @@ from .plex_db import PlexDBHandle
 from .setup import *
 from .task_subtitle import Task
 
+logger = P.logger
+
 
 class ModuleSubtitle(PluginModuleBase):
    

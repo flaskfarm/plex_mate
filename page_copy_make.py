@@ -5,6 +5,8 @@ from tool import ToolUtil
 from .plex_db import PlexDBHandle
 from .setup import *
 
+logger = P.logger
+
 
 class PageCopyMake(PluginPageBase):
     def __init__(self, P, parent):

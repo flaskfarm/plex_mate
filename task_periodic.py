@@ -8,6 +8,8 @@ from .plex_web import PlexWebHandle
 from .setup import *
 from .extensions import get_scan_targets, vfs_refresh
 
+logger = P.logger
+
 
 class Task(object):
     @classmethod

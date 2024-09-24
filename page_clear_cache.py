@@ -1,5 +1,7 @@
 from .setup import *
 
+logger = P.logger
+
 
 class PageClearCache(PluginPageBase):
     def __init__(self, P, parent):

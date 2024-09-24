@@ -2,6 +2,8 @@ from support import SupportFile, SupportOSCommand, SupportSubprocess
 
 from .setup import *
 
+logger = P.logger
+
 
 class Task(object):
     

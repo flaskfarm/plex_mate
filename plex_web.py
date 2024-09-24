@@ -4,6 +4,8 @@ import requests
 
 from .setup import *
 
+logger = P.logger
+
 
 class PlexWebHandle(object):
     

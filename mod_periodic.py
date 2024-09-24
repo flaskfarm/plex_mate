@@ -7,6 +7,8 @@ from .plex_web import PlexWebHandle
 from .setup import *
 from .task_periodic import Task
 
+logger = P.logger
+
 #########################################################
 
 class ModulePeriodic(PluginModuleBase):

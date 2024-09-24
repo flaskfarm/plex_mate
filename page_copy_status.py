@@ -1,6 +1,8 @@
 from .setup import *
 from .task_copy import Task
 
+logger = P.logger
+
 
 class PageCopyStatus(PluginPageBase):
     

@@ -1,5 +1,7 @@
 from .setup import *
 
+logger = P.logger
+
 
 class ModelPeriodicItem(ModelBase):
     P = P

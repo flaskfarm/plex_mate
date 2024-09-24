@@ -4,6 +4,8 @@ from .task_clear_movie import Task as TaskMovie
 from .task_clear_music import Task as TaskMusic
 from .task_clear_show import Task as TaskShow
 
+logger = P.logger
+
 
 class PageClearLibraryBase(PluginPageBase):
     

@@ -2,6 +2,8 @@ from .plex_db import PlexDBHandle
 from .setup import *
 from .task_copy2 import Task
 
+logger = P.logger
+
 
 class ModuleCopy2(PluginModuleBase):
     def __init__(self, P):

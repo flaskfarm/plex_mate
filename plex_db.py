@@ -5,6 +5,8 @@ from support import SupportFile, SupportSubprocess, d
 
 from .setup import *
 
+logger = P.logger
+
 
 def dict_factory(cursor, row):
     d = {}
@@ -249,16 +251,43 @@ class PlexDBHandle(object):
     def get_media_parts(cls, file):
         return PlexDBHandle.select_arg("SELECT id FROM media_parts WHERE file = ?", (file,))
     
+
+    @classmethod
+    def get_media_streams_file_like(cls, file: str) -> list[dict] | None:
+        file = file.replace(' ', '%20')
+        return PlexDBHandle.select_arg('SELECT id, media_item_id FROM media_streams WHERE url LIKE ?', (f'%{file}%',))
+
+
     @classmethod
     def get_media_parts_file_like(cls, file):
-        sql = "SELECT file FROM media_parts WHERE file LIKE '%" + file + "%'"
-        logger.error(sql)
-        return PlexDBHandle.select(sql)
+        try:
+            sql = "SELECT file FROM media_parts WHERE file LIKE '%" + file + "%'"
+            return PlexDBHandle.select(sql)
+        except:
+            logger.error(traceback.format_exc())
+            logger.error(sql)
+            logger.debug(f'Retry...')
+            return PlexDBHandle.select_arg('SELECT file FROM media_parts WHERE file LIKE ?', (f'%{file}%',))
         
     
     @classmethod
     def get_info_by_part_id(cls, part_id):
         return PlexDBHandle.select_arg("SELECT * FROM library_sections, metadata_items, media_items, media_parts WHERE library_sections.id=metadata_items.library_section_id AND metadata_items.id = media_items.metadata_item_id AND media_items.id = media_parts.media_item_id AND media_parts.id = ?", (part_id,))
+
+
+    @classmethod
+    def get_info_by_stream_id(cls, stream_id: str | int) -> list[dict] | None:
+        return PlexDBHandle.select_arg(
+            """
+            SELECT *
+            FROM library_sections, metadata_items, media_items, media_streams
+            WHERE library_sections.id = metadata_items.library_section_id
+                AND metadata_items.id = media_items.metadata_item_id
+                AND media_items.id = media_streams.media_item_id
+                AND media_streams.id = ?
+            """,
+            (stream_id,)
+        )
 
 
     #SELECT * FROM library_sections, metadata_items, media_items WHERE library_sections.id=metadata_items.library_section_id AND metadata_items.id = media_items.metadata_item_id AND media_items.id = 2088
