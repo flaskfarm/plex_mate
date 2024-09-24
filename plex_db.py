@@ -302,20 +302,26 @@ class PlexDBHandle(object):
     def get_metaid_by_directory(cls, section_id, directory):
         section_info = cls.library_section(section_id)
         #P.logger.error(section_info)
-        query = """
+        query = f"""
             SELECT 
-                metadata_items.id AS metadata_items_id, 
+                metadata_items.id AS metadata_items_id,
 				metadata_items.parent_id,
-                metadata_items.library_section_id AS library_section_id, 
-                metadata_items.metadata_type AS metadata_type, 
+                metadata_items.library_section_id AS library_section_id,
+                metadata_items.metadata_type AS metadata_type,
                 media_items.id AS media_items_id,
                 media_parts.id AS media_parts_id,
                 media_parts.directory_id AS media_parts_directory_id,
                 media_parts.file AS file
             FROM metadata_items, media_items, media_parts 
-            WHERE metadata_items.id = media_items.metadata_item_id AND media_items.id = media_parts.media_item_id AND metadata_items.library_section_id = """
-        query += str(section_id) + " AND file LIKE '" + directory + "%'"
-        data = cls.select(query)
+            WHERE metadata_items.id = media_items.metadata_item_id
+                AND media_items.id = media_parts.media_item_id
+                AND metadata_items.library_section_id = {section_id}
+                AND file LIKE ?
+            """
+        data = cls.select_arg(query, (f'%{directory}%',))
+        if not data:
+            P.logger.error(f'No metadata: section={section_id} path={directory}')
+            return
 
         #P.logger.error(data)
         if section_info['section_type'] == 1:
