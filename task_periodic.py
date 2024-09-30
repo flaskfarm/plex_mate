@@ -45,7 +45,8 @@ class Task(object):
                 skip_scan = False
 
             if skip_scan:
-                vfs_refresh(yaml.get('폴더', '/'), recursive, async_)
+                for location in get_scan_targets(yaml.get('폴더', '/'), yaml.get('섹션ID')):
+                    vfs_refresh(location, recursive, async_)
                 logger.info(f'작업 종료: {yaml.get("job_id")}')
                 return
 
