@@ -160,6 +160,7 @@ class ModulePeriodic(PluginModuleBase):
         #else:
         #    ret = Task.start(idx, 'scheduler')
         #    #ret = func(self, *args)
+        logger.debug(f"주기적 스캔 jobid: {idx} END..")
 
     def one_execute(self, idx):
         try:

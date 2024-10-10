@@ -149,4 +149,13 @@ class PlexWebHandle(object):
         except Exception as e: 
             logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())
-            
+    
+    # 2024.10.10 섹션 모든메타새로고침 
+    @classmethod
+    def refresh_section_force(cls, section_id):
+        try:
+            url = f"{P.ModelSetting.get('base_url')}/library/sections/{section_id}/refresh?force=1&X-Plex-Token={P.ModelSetting.get('base_token')}"
+            res = requests.get(url)
+        except Exception as e: 
+            logger.error(f"Exception:{str(e)}")
+            logger.error(traceback.format_exc())

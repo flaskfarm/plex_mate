@@ -101,6 +101,11 @@ class Task(object):
                     PlexWebHandle.section_scan(yaml.get('섹션ID'))
                     logger.debug(f'스캔 전송: section_id={yaml.get("섹션ID")}')
                 return
+            
+            # 2024.10.10 섹션 모든메타새로고침
+            elif yaml.get('스캔모드') == "모든메타새로고침":
+                PlexWebHandle.refresh_section_force(yaml.get('섹션ID'))
+                return
 
             '''
             바이너리 스캔은 섹션 단위를 하나의 프로세스로 스캔하도록 설계되어 있으므로 섹션ID가 필수
