@@ -301,7 +301,7 @@ class Task:
                 if db_item.mode == 'ADD':
                     metaid = PlexDBHandle.get_metaid_by_directory(db_item.section_id, db_item.scan_folder)
                     if metaid != None:
-                        logger.info(f"스캔: meta resresh {metaid}")
+                        logger.info(f"스캔: meta refresh {metaid}")
                         PlexWebHandle.refresh_by_id(metaid)
         except Exception as e:
             logger.error(f"Exception:{str(e)}")

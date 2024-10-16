@@ -842,3 +842,13 @@ class TrashPage(ExtPageBase):
             return self.returns('success', '작업을 멈추는 중입니다.')
         else:
             return self.returns('warning', '실행중이 아닙니다.')
+
+    def plugin_load(self) -> None:
+        '''override'''
+        super().plugin_load()
+        P.ModelSetting.set('scan_trash_task_status', 'ready')
+
+    def plugin_unload(self) -> None:
+        '''override'''
+        super().plugin_unload()
+        P.ModelSetting.set('scan_trash_task_status', 'ready')
