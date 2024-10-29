@@ -20,10 +20,6 @@ class Task:
     @F.celery.task
     def start():
         ModelScanItem.set_status_incompleted_to_ready()
-        for db_item in ModelScanItem.get_list_by_status('FINISH_SCANNING'):
-            if db_item.mode not in ['ADD']:
-                continue
-            db_item.set_status('READY', save=True)
         if Task.scan_queue is None:
             Task.scan_queue = queue.Queue()
         if Task.scan_thread is None:

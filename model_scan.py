@@ -178,8 +178,9 @@ class ModelScanItem(ModelBase):
     def set_status_incompleted_to_ready(cls):
         with F.app.app_context():
             ret = db.session.query(cls).filter(
-                not_(cls.status.like('FINISH_%')),
-                cls.mode == 'ADD'
+                ((not_(cls.status.like('FINISH_%'))) & (cls.mode == 'ADD')) | \
+                ((cls.status == 'FINISH_SCANNING') & (cls.mode == 'ADD')) | \
+                (cls.status.like('ENQUEUE_%'))
             ).update({'status':'READY'}, synchronize_session="fetch")
             db.session.commit()
             return ret
