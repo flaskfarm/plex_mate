@@ -45,8 +45,14 @@ class Task(object):
                 skip_scan = False
 
             if skip_scan:
-                for location in get_scan_targets(yaml.get('폴더', '/'), yaml.get('섹션ID')):
-                    vfs_refresh(location, recursive, async_)
+                user_folder = yaml.get('폴더', '/')
+                targets = get_scan_targets(user_folder, yaml.get('섹션ID'))
+                if targets:
+                    for location in targets:
+                        vfs_refresh(location, recursive, async_)
+                else:
+                    logger.warning(f'라이브러리에 등록된 경로가 아닙니다: {user_folder}')
+                    vfs_refresh(user_folder, recursive, async_)
                 logger.info(f'작업 종료: {yaml.get("job_id")}')
                 return
 
@@ -101,7 +107,7 @@ class Task(object):
                     PlexWebHandle.section_scan(yaml.get('섹션ID'))
                     logger.debug(f'스캔 전송: section_id={yaml.get("섹션ID")}')
                 return
-            
+
             # 2024.10.10 섹션 모든메타새로고침
             elif yaml.get('스캔모드') == "모든메타새로고침":
                 PlexWebHandle.refresh_section_force(yaml.get('섹션ID'))
