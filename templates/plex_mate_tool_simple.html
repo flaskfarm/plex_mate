@@ -90,7 +90,7 @@
 <div class="input-group col-sm-9">
   <select id="remove_trash_section_id" name="empty_episode_process_section_id" class="form-control form-control-sm">
     {% for item in arg['library_list'] %}
-      {% if item['section_type'] == 2 %}
+      {% if item['section_type'] in [2, 8] %}
         <option value="{{ item['id'] }}">{{item['name']}}</option>
       {% endif %}   
     {% endfor %}
