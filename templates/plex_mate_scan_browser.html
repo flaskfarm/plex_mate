@@ -175,7 +175,7 @@ function setBrowserMaxheight(){
 }
 
 function browserCommand(cmd) {
-    let query = 'path=' + cmd.path;
+    let query = 'path=' + encodeURIComponent(cmd.path);
     query += '&scanByBin=' + (cmd.scanByBin ? cmd.scanByBin : '');
     query += '&recursive=' + (cmd.recursive ? cmd.recursive : '');
     query += '&async=' + (cmd.async ? cmd.async : '');
