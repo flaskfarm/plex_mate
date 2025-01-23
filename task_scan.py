@@ -39,7 +39,7 @@ class Task:
         if rows:
             db_item.mediapart_id = rows[0]['id']
             db_item.meta_info = PlexDBHandle.get_info_by_part_id(rows[0]['id'])
-        else:
+        elif not os.path.isdir(db_item.target):
             rows = PlexDBHandle.get_media_streams_file_like(db_item.target)
             if rows:
                 db_item.meta_info = PlexDBHandle.get_info_by_stream_id(rows[0]['id'])
