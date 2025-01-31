@@ -162,6 +162,8 @@ class Task:
                             else:
                                 item.set_status('FINISH_NOT_FIND_LIBRARY', save=True)
                                 continue
+                            if P.ModelSetting.get_bool('scan_use_vfs_refresh') and not os.path.exists(item.target):
+                                vfs_refresh(item.target)
                             if os.path.exists(item.target):
                                 if os.path.isdir(item.target):
                                     refresh_target = item.target
