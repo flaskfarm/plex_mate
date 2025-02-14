@@ -10,6 +10,7 @@ class PageClearCache(PluginPageBase):
             f'{self.parent.name}_{self.name}_auto_start' : 'False',
             f'{self.parent.name}_{self.name}_interval' : '0 5 * * *',
             f'{self.parent.name}_{self.name}_max_size' : '20',
+            f'{self.parent.name}_{self.name}_retrieve_category' : 'False',
         }
         self.scheduler_desc = 'Plex PhotoTranscoder 삭제 스케쥴링'
 
@@ -22,13 +23,14 @@ class PageClearCache(PluginPageBase):
 
     def process_command(self, command, arg1, arg2, arg3, req):
         try:
-            ret = {}
             if command == 'cache_size':
-                self.get_module('base').task_interface('size', (P.ModelSetting.get('base_path_phototranscoder'),))
-                ret = {'ret':'success', 'msg':'명령을 전달하였습니다. 잠시 후 결과 알림을 확인하세요.'}
+                cmd = 'size'
             elif command == 'cache_clear':
-                self.get_module('base').task_interface('clear', (P.ModelSetting.get('base_path_phototranscoder'),))
-                ret = {'ret':'success', 'msg':'명령을 전달하였습니다. 잠시 후 결과 알림을 확인하세요.'}
+                cmd = 'clear'
+            else:
+                cmd = command
+            self.get_module('base').task_interface(cmd, (P.ModelSetting.get('base_path_phototranscoder'),))
+            ret = {'ret':'success', 'msg':'명령을 전달하였습니다. 잠시 후 결과 알림을 확인하세요.'}
             return jsonify(ret)
         except Exception as e: 
             P.logger.error(f'Exception:{str(e)}')

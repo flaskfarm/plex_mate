@@ -12,6 +12,9 @@
   * 스캔
 
 ## Changelog
+- 1.1.34 (2025.02.14)
+  - PhotoTranscoder 폴더 삭제시 범주 복구 기능 추가
+
 - 1.1.33 (2025.01.31)
   - REFRESH 모드에 vfs/refresh 적용
 

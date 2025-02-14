@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 
-{{ macros.m_button_group([['globalSettingSaveBtn', '설정 저장'], ['globalOneExecuteBtn', '1회 실행'], ['globalImmediatelyExecuteBtn', '즉시 실행']])}}
+{{ macros.m_button_group([['globalSettingSaveBtn', '설정 저장'], ['globalImmediatelyExecutePageBtn', '즉시 실행']])}}
 {{ macros.m_row_start('5') }}
 {{ macros.m_row_end() }}
 
@@ -17,6 +17,9 @@
     {{ macros.setting_input_int('clear_cache_max_size', '최대 크기',  desc=['이 크기 이상일 경우 삭제', '0이면 항상 삭제', 'GB 단위'], value=arg['clear_cache_max_size']) }}
     {{ macros.m_hr() }}
     {{ macros.setting_buttons([['get_size_phototranscoder_btn', '크기 확인'], ['clear_phototranscoder_btn', '비우기']]) }}
+    {{ macros.m_hr() }}
+    {{ macros.setting_checkbox('clear_cache_retrieve_category', '캐시 삭제 후 범주 복구', value=arg['clear_cache_retrieve_category'], desc=['영화, TV 쇼의 범주 탭이 오작동하지 않도록 캐시를 재생성합니다.']) }}
+    {{ macros.setting_buttons([['clear_cache_retrieve_category_btn', '지금 실행']]) }}
   {{ macros.m_tab_content_end() }}  
 
   {{ macros.m_tab_content_start('auto', false) }}
@@ -43,6 +46,11 @@ $("body").on('click', '#get_size_phototranscoder_btn', function(e){
 $("body").on('click', '#clear_phototranscoder_btn', function(e){
   e.preventDefault();
   globalSendCommandPage('cache_clear');
+});
+
+$("#clear_cache_retrieve_category_btn").on('click', function(e){
+  e.preventDefault();
+  globalSendCommandPage('retrieve_category');
 });
 
 </script>    

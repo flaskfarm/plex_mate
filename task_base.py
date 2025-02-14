@@ -1,3 +1,5 @@
+import urllib.parse
+
 from support import SupportFile, SupportOSCommand, SupportSubprocess
 
 from .setup import *
@@ -53,6 +55,9 @@ class Task(object):
         else:
             ret = SupportFile.rmtree(args[0])
             os.makedirs(args[0], exist_ok=True)
+        # 범주
+        if P.ModelSetting.get_bool('clear_cache_retrieve_category'):
+            Task.retrieve_category()
         return Task.get_size(args)
 
 
@@ -136,3 +141,51 @@ class Task(object):
                 shutil.move(source_path, target_folder)
         ret['log'] = '정상 완료'
         return ret
+
+    @classmethod
+    @celery.task()
+    def retrieve_category(args) -> None:
+        logger.debug(f'START retrieve_category()')
+        params = {
+            'includeCollections': 1,
+            'includeExternalMedia': 1,
+            'includeAdvanced': 1,
+            'includeMeta': 1,
+            'X-Plex-Features': 'external-media%2Cindirect-media%2Chub-style-list',
+            'X-Plex-Model': 'bundled',
+            'X-Plex-Container-Start': 0,
+            'X-Plex-Container-Size': 500,
+            'X-Plex-Text-Format': 'plain',
+            'X-Plex-Language': 'ko',
+            'X-Plex-Token': P.ModelSetting.get('base_token'),
+        }
+        headers = {
+            'Accept': 'application/json',
+        }
+        try:
+            sections = (section['id'] for section in P.PlexDBHandle.library_sections() if section['section_type'] in [1, 2])
+        except:
+            logger.error(traceback.format_exc())
+            return
+        for section in sections:
+            url = urllib.parse.urljoin(P.ModelSetting.get('base_url'), f'/library/sections/{section}/categories')
+            try:
+                data = requests.request('GET', url, headers=headers, params=params).json()
+            except:
+                logger.error(traceback.format_exc())
+                logger.error(f'{section=}')
+                continue
+            directory = data.get('MediaContainer', {}).get('Directory')
+            if not directory:
+                continue
+            for dir in directory:
+                url_photo = urllib.parse.urljoin(P.ModelSetting.get('base_url'), dir['thumb'])
+                params = {
+                    'X-Plex-Token': P.ModelSetting.get('base_token')
+                }
+                try:
+                    requests.request('GET', url_photo, params=params)
+                except:
+                    logger.error(traceback.format_exc())
+                    logger.error(dir)
+        logger.debug(f'END retrieve_category()')

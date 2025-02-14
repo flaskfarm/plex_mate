@@ -191,6 +191,8 @@ class ModuleBase(PluginModuleBase):
             func = Task.clear
         elif command == 'agent_update':
             func = Task.agent_update
+        elif command == 'retrieve_category':
+            func = Task.retrieve_category
         
         ret = self.start_celery(func, None, *args)
 
@@ -222,6 +224,8 @@ class ModuleBase(PluginModuleBase):
                 }
                 #P.logger.error(ret)
                 F.socketio.emit("modal", modal_data, namespace='/framework')  
+        else:
+            F.socketio.emit("notify", {'type': 'info', 'msg': f'작업을 완료했습니다: {command}'}, namespace='/framework')
 
 
 
