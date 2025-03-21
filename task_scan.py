@@ -192,20 +192,29 @@ class Task:
                                 continue
                         if P.ModelSetting.get_bool('scan_use_vfs_refresh'):
                             vfs_forget(item.target)
-                        if os.path.exists(item.target) == False:
-                            if item.mode == 'REMOVE_FOLDER':
-                                item.scan_folder = item.target
+                        '''
+                        REMOVE 모드에서 파일/폴더 존재 여부를 판단할 경우 대량의 파일을 하나씩 REMOVE 처리해야 함.
+                        부모 폴더만 스캔해도 되도록 존재 여부를 판단하지 않게 수정.
+                        '''
+                        #if os.path.exists(item.target) == False:
+                        if item.mode == 'REMOVE_FOLDER':
+                            item.scan_folder = item.target
+                        else:
+                            if item.target.startswith('/'):
+                                item.scan_folder = item.target.rsplit('/', 1)[0]
                             else:
-                                if item.target.startswith('/'):
-                                    item.scan_folder = item.target.rsplit('/', 1)[0]
-                                else:
-                                    item.scan_folder = item.target.rsplit('\\', 1)[0]
+                                item.scan_folder = item.target.rsplit('\\', 1)[0]
+                        for queue_item in ModelScanItem.queue_list:
+                            if queue_item.scan_folder == item.scan_folder and queue_item.mode == item.mode:
+                                item.set_status("FINISH_ALREADY_IN_QUEUE")
+                                break
+                        else:
                             item.set_status("ENQUEUE_REMOVE")
                             item.init_for_queue()
                             Task.scan_queue.put(item)
-                        else:
-                            if item.created_time + timedelta(minutes=P.ModelSetting.get_int("scan_max_wait_time")) < now:
-                                item.set_status("FINISH_TIMEOVER")
+                        #else:
+                        #    if item.created_time + timedelta(minutes=P.ModelSetting.get_int("scan_max_wait_time")) < now:
+                        #        item.set_status("FINISH_TIMEOVER")
                 except Exception as e:
                     logger.error(f"Exception:{str(e)}")
                     logger.error(traceback.format_exc())
