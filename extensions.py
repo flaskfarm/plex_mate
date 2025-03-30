@@ -83,7 +83,6 @@ def rc_command(function: callable) -> callable:
         cmd = [
             rclone.ModelSetting.get('rclone_path'),
             '--timeout=0',
-            f'--log-file={F.config["path_data"]}/log/{__package__}.log',
             'rc',
             command,
             f'--url={server["address"]}'
@@ -189,39 +188,24 @@ def with_servers(function: callable) -> callable:
 @with_servers
 def vfs_forget(target: str, server: dict = None) -> None:
     is_file = pathlib.Path(target).is_file()
-    remote_path = update_path(pathlib.Path(target).as_posix(), {server['local']: server['remote']})
+    remote_path = update_path(target, {server['local']: server['remote']})
     P.logger.info(vfs__forget(server, remote_path, is_file))
 
 
 @with_servers
 def vfs_refresh(target: str, recursive: bool = False, async_: bool = False, server: dict = None) -> None:
-    target_path = pathlib.Path(target)
-    remote_path = pathlib.Path(update_path(target_path.as_posix(), {server['local']: server['remote']}))
-    parents: list[pathlib.Path] = list(remote_path.parents)
-    if target_path.is_file():
-        to_be_tested = parents.pop(0).as_posix()
+    remote_path = pathlib.Path(update_path(target, {server['local']: server['remote']}))
+    for parent in remote_path.parents:
+        result = vfs__refresh(server, str(parent))
+        P.logger.info(f'RC result: {result}')
+        if result.get('result', {}).get(str(parent), '').lower() == 'ok':
+            break
     else:
-        #P.logger.debug(f'It is a directory or not exists locally: {str(target_path)}')
-        to_be_tested = remote_path.as_posix()
-    not_exists_paths = []
-    result = vfs__refresh(server, to_be_tested, recursive, async_)
-    while not result['result'].get(to_be_tested) == 'OK':
-        if result['result'].get(to_be_tested) == 'file does not exist':
-            not_exists_paths.insert(0, to_be_tested)
-        if parents:
-            to_be_tested = parents.pop(0).as_posix()
-            result = vfs__refresh(server, to_be_tested, recursive, async_)
-        else:
-            P.logger.warning('Hit the top-level path.')
-            break
-    for path in not_exists_paths:
-        if target_path.exists():
-            break
-        result = vfs__refresh(server, path, recursive, async_)
-        if not result['result'].get(path) == 'OK':
-            # If it is a file -> 'invalid argument'
-            break
-    P.logger.info(f'RC result: {result}')
+        P.logger.error(f'It has hit the root path: "{str(remote_path)}"')
+        return
+    if not pathlib.Path(target).is_file():
+        result = vfs__refresh(server, str(remote_path), recursive, async_)
+        P.logger.info(f'RC result: {result}')
 
 
 def update_path(target: str, mappings: dict) -> str:
