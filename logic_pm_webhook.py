@@ -579,12 +579,12 @@ class LogicPMWebhook(PluginModuleBase):
             use_cache_preview = P.ModelSetting.get_bool(f'{name}_use_preview')
             cache_library_sections_full = self.get_int_list('cache_library_sections_full')
             cache_library_sections_preview = self.get_int_list('cache_library_sections_preview')
+            session_id = data.get('Player', {}).get('uuid')
             use_intro_auto_copy = P.ModelSetting.get_bool(f'{name}_intro_auto_copy')
             state = data.get('event', '').strip()
             intro_copy_sections = self.get_int_list('intro_copy_sections')
             if use_cache_full and (not cache_library_sections_full or library_section_id in cache_library_sections_full) and state in ['media.play', 'media.stop']:
                 CacheDBHandler.cleanup_older_than()
-                session_id = data.get('Player', {}).get('uuid')
                 view_offset = data.get('Metadata', {}).get('viewOffset', 0)
                 if session_id or rating_key :
                     if state == 'media.play':
