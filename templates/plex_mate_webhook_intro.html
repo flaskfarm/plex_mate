@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block content %}
+
+<form id="intro_history_form" class="form-inline" style="text-align:left">
+  <div class="container-fluid mb-3">
+    <div class="d-flex align-items-center flex-wrap gap-2">
+      <select id="intro_order" name="order" class="form-control form-control-sm" style="width: auto;">
+        <option value="desc">최근순</option>
+        <option value="asc">오래된순</option>
+      </select>
+
+      <select id="intro_filter_section" class="form-control form-control-sm" style="width: auto;">
+        <option value="">전체 섹션</option>
+      </select>
+
+      <select id="intro_filter_status" class="form-control form-control-sm" style="width: auto;">
+        <option value="">전체 상태</option>
+        <option value="AUTO">AUTO</option>
+        <option value="LOCAL">LOCAL</option>
+      </select>
+
+      <button id="intro_history_refresh_btn" class="btn btn-sm btn-secondary">새로고침</button>
+    </div>
+  </div>
+</form>
+
+<div id="intro_history_list"></div>
+
+<script type="text/javascript">
+
+let currentPage = 1;
+
+function loadIntroHistory(page = 1) {
+  currentPage = page;
+  const order = $('#intro_order').val();
+  const sectionId = $('#intro_filter_section').val();
+  const status = $('#intro_filter_status').val();
+
+  $.ajax({
+    url: '/plex_mate/ajax/webhook/intro_history',
+    type: 'GET',
+    data: {
+      order: order,
+      section_id: sectionId,
+      status: status,
+      page: page
+    },
+    dataType: 'json',
+    success: function (res) {
+      if (res.ret === 'success') {
+        let html = '';
+        const uniqueSections = new Set();
+
+        for (let item of res.data) {
+          if (sectionId && item.section_id != sectionId) continue;
+          if (status && item.status != status) continue;
+
+          html += '<div class="card mb-2 p-2">';
+          html += `<div><strong>시간:</strong> ${item.created_time}</div>`;
+          html += `<div><strong>섹션 ID:</strong> ${item.section_id}</div>`;
+          let colorClass = item.status === 'LOCAL' ? 'text-danger' : 'text-primary';
+          html += `<div><strong>상태:</strong> <span class="${colorClass} fw-bold">${item.status}</span></div>`;
+          html += `<div><strong>경로:</strong> ${item.file_path}</div>`;
+          html += '</div>';
+
+          if (item.section_id) uniqueSections.add(item.section_id);
+        }
+        let sectionOptions = '<option value="">전체 섹션</option>';
+        const sorted = Array.from(uniqueSections).sort((a, b) => a - b);
+        for (let id of sorted) {
+          sectionOptions += `<option value="${id}">${id}</option>`;
+        }
+        $('#intro_filter_section').html(sectionOptions).val(sectionId);
+        $('#intro_history_list').html(html);
+        renderPagination(res.page, res.total_page);
+      } else {
+        notify(res.msg || '이력 불러오기 실패', 'warning');
+      }
+    },
+    error: function () {
+      notify('서버 오류', 'danger');
+    }
+  });
+}
+
+function renderPagination(current, total) {
+  let html = '<nav class="mt-3"><ul class="pagination pagination-sm justify-content-center">';
+  for (let i = 1; i <= total; i++) {
+    html += `<li class="page-item ${i === current ? 'active' : ''}">
+      <a class="page-link" href="#" onclick="loadIntroHistory(${i}); return false;">${i}</a>
+    </li>`;
+  }
+  html += '</ul></nav>';
+  $('#intro_history_list').append(html);
+}
+
+
+$(document).ready(function() {
+  loadIntroHistory();
+});
+
+$('#intro_order, #intro_filter_section, #intro_filter_status').change(function() {
+  loadIntroHistory(1);  
+});
+$('#intro_history_refresh_btn').click(function(e){
+  e.preventDefault();
+  loadIntroHistory(currentPage); 
+});
+
+$('#intro_order').change(function() {
+  loadIntroHistory();
+});
+
+$('#intro_history_refresh_btn').click(function(e){
+  e.preventDefault();
+  loadIntroHistory();
+});
+$('#intro_order, #intro_filter_section, #intro_filter_status').change(function() {
+  loadIntroHistory();
+});
+</script>
+
+{% endblock %}

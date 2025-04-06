@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <!-- 왼쪽: 설정 저장 -->
+  <div>
+    {{ macros.m_button('globalSettingSaveBtn', '설정 저장') }}
+  </div>
+
+  <!-- 오른쪽: Dry Run + 인트로 마커 일괄 실행 -->
+  <div class="d-flex justify-content-end align-items-center mb-3">
+    <strong style="margin-right: 10px;">Dry Run</strong>
+    <div style="margin-right: 20px;">
+      <input id="dryrun" name="dryrun" class="form-control form-control-sm" type="checkbox" data-toggle="toggle" checked>
+    </div>
+    {{ macros.m_button('manual_intro_sync_btn', '인트로 마커 일괄 실행') }}
+  </div>
+</div>
+{{ macros.m_row_start('5') }}
+{{ macros.m_row_end() }}
+
+<!-- 탭 헤더 -->
+<nav>
+  {{ macros.m_tab_head_start() }}
+    {{ macros.m_tab_head('basic', '기본 설정', True) }}
+    {{ macros.m_tab_head('db', 'DB 설정', False) }}
+  {{ macros.m_tab_head_end() }}
+</nav>
+
+<form id="setting">
+  <div class="tab-content" id="nav-tabContent">
+    
+    <!-- 기본 탭 -->
+    {{ macros.m_tab_content_start('basic', True) }}
+      {{ macros.setting_checkbox('webhook_use_discord', '디스코드 알림 사용', value=arg['webhook_use_discord']) }}
+      <div id="webhook_discord_url_div" style="display: none;">
+        {{ macros.setting_input_text('webhook_discord_events', '허용 이벤트', value=arg['webhook_discord_events'], desc=['지원: play, pause, stop, resume, scrobble, new. 빈칸 시 모두 허용']) }}
+        {{ macros.setting_input_text('webhook_discord_url', '디스코드 웹훅 URL', value=arg['webhook_discord_url'], desc=['webhook 주소를 입력하세요']) }}
+      </div>
+      {{ macros.setting_checkbox('webhook_use_full', '전체 캐시 사용 (Full)', value=arg['webhook_use_full']) }}
+      <div id="webhook_use_full_div" style="display: none;">
+        {{ macros.setting_input_text_and_buttons('cache_library_sections_full', 'Full 캐시 라이브러리 ID', [['load_cache_full_sections_btn', '라이브러리 조회']], value=arg['cache_library_sections_full'], desc=['쉼표로 구분, 빈칸 시 전체']) }}
+        <div id="cache_full_sections_result" class="mt-2 ps-2"></div>
+      </div>
+
+      {{ macros.setting_checkbox('webhook_use_preview', '미리보기 캐시 사용 (Preview)', value=arg['webhook_use_preview']) }}
+      <div id="webhook_use_preview_div" style="display: none;">
+        {{ macros.setting_input_text_and_buttons('cache_library_sections_preview', 'Preview 캐시 라이브러리 ID', [['load_cache_preview_sections_btn', '라이브러리 조회']], value=arg['cache_library_sections_preview'], desc=['쉼표로 구분, 빈칸 시 전체']) }}
+        <div id="cache_preview_sections_result" class="mt-2 ps-2"></div>
+      </div>
+
+      {{ macros.setting_checkbox('webhook_use_intro_marker', '인트로 마커 사용', value=arg['webhook_use_intro_marker']) }}
+      <div id="webhook_use_intro_marker_div" style="display: none;">
+        {{ macros.setting_input_text_and_buttons('intro_library_sections', '인트로 대상 섹션 ID', [['load_intro_sections_btn', '라이브러리 조회']], value=arg['intro_library_sections'], desc=['쉼표로 구분, 빈칸 시 전체']) }}
+        <div id="intro_sections_result" class="mt-2 ps-2"></div>
+        {{ macros.setting_checkbox('webhook_intro_match_similar', '파일명 매칭 허용', value=arg['webhook_intro_match_similar']) }}
+        {{ macros.setting_checkbox('webhook_intro_auto_copy', '마커 복사 사용', value=arg['webhook_intro_auto_copy'], desc=['ON : 이전 회차 마커 복사, LOCAL 수신 후 UPDATE']) }}
+        <div id="intro_copy_section_div" style="display: none;">
+        {{ macros.setting_input_text_and_buttons('intro_copy_sections', '마커 복사용 SECTION ID', [['load_intro_copy_sections_btn', '라이브러리 조회']], value=arg.get('intro_copy_sections', ''), desc=['쉼표로 구분, 빈칸 시 전체']) }}
+        <div id="intro_copy_sections_result" class="mt-2 ps-2"></div>
+        </div>
+        
+      </div>
+
+      {{ macros.setting_input_textarea('plex_server_uuid', '허용 Plex 서버 UUID', value=arg['plex_server_uuid'], row='4', desc=['Preferences.xml 파일의 MachineIdentifier 값', '빈칸 시 모두 허용', '구분자 엔터']) }}
+      {{ macros.setting_input_textarea('directory_mapping', '경로 매핑', value=arg['directory_mapping'], row='4', desc=['앞쪽 경로를 뒤쪽 경로로 바꿉니다.', '예시: /mnt/gds2:/data/plex_source','구분자 엔터']) }}
+    {{ macros.m_tab_content_end() }}
+
+    {{ macros.m_tab_content_start('db', False) }}
+
+      {{ macros.setting_input_text_and_buttons('basic_db_delete_day', 'DB 삭제 기간', [['globalDbDeleteDayBtn', '기간 적용 삭제', [['tag_id','basic_db_delete_day']]], ['globalDbDeleteBtn', '전체 삭제']], value=arg['basic_db_delete_day'], col='6') }} 
+      {{ macros.setting_checkbox('basic_db_auto_delete', 'DB 자동 삭제', value=arg['basic_db_auto_delete'], desc=['On : 기간 적용하여 DB를 자동 삭제합니다.']) }}
+
+      {{ macros.setting_checkbox('intro_sync_auto_start', '인트로 스케쥴링 작동', value=arg['intro_sync_auto_start'], desc=['ON : 플러그인 시작 시 스케쥴러에 자동 등록됩니다.']) }}
+      
+      {{ macros.setting_input_int('intro_sync_interval', '스케쥴링 실행 정보', value=arg['intro_sync_interval'], desc=['On : Inverval(minute 단위) 설정. 최소 60분']) }}
+
+      {{ macros.m_hr() }}
+
+      {{ macros.setting_input_text_and_buttons('intro_json_file_path', '인증 JSON 경로', [['select_intro_json_file_btn', '파일 선택']], value=arg['intro_json_file_path'], desc=['JSON 파일 경로']) }}
+
+    {{ macros.m_tab_content_end() }}
+
+  </div>
+</form>
+
+<script type="text/javascript">
+function toggleSectionVisibility(checkboxId, divId) {
+  const checked = $('#' + checkboxId).is(':checked');
+  const $target = $('#' + divId);
+  if (checked) $target.stop(true, true).slideDown(200);
+  else $target.stop(true, true).slideUp(200);
+}
+
+function toggleIntroCopySection() {
+  const isEnabled = $('#webhook_intro_auto_copy').is(':checked');
+  if (isEnabled) {
+    $('#intro_copy_section_div').stop(true, true).slideDown(200);
+  } else {
+    $('#intro_copy_section_div').stop(true, true).slideUp(200);
+  }
+}
+
+function toggleDiscordUrlInput() {
+  const enabled = $('#webhook_use_discord').is(':checked');
+  const $target = $('#webhook_discord_url_div');
+  if (enabled) $target.stop(true, true).slideDown(200);
+  else $target.stop(true, true).slideUp(200);
+}
+
+$(document).ready(function() {
+  toggleDiscordUrlInput(); 
+  $('#webhook_use_discord').change(toggleDiscordUrlInput); 
+});
+
+$(document).ready(function(){
+  toggleSectionVisibility('webhook_use_full', 'webhook_use_full_div');
+  toggleSectionVisibility('webhook_use_preview', 'webhook_use_preview_div');
+  toggleSectionVisibility('webhook_use_intro_marker', 'webhook_use_intro_marker_div');
+  toggleIntroCopySection();
+
+  $('#webhook_use_full').change(() => toggleSectionVisibility('webhook_use_full', 'webhook_use_full_div'));
+  $('#webhook_use_preview').change(() => toggleSectionVisibility('webhook_use_preview', 'webhook_use_preview_div'));
+  $('#webhook_use_intro_marker').change(() => toggleSectionVisibility('webhook_use_intro_marker', 'webhook_use_intro_marker_div'));
+  $('#webhook_intro_auto_copy').change(toggleIntroCopySection);
+  
+  $('#load_cache_full_sections_btn').click(function(e){
+    e.preventDefault();
+    requestLibrarySections('cache_library_sections_full', 'cache_full_sections_result');
+  });
+  $('#load_cache_preview_sections_btn').click(function(e){
+    e.preventDefault();
+    requestLibrarySections('cache_library_sections_preview', 'cache_preview_sections_result');
+  });
+  $('#load_intro_sections_btn').click(function(e){
+    e.preventDefault();
+    requestLibrarySections('intro_library_sections', 'intro_sections_result');
+  });
+  $('#manual_intro_sync_btn').click(function(e){
+    e.preventDefault();
+    requestManual_intro_sync();
+  });
+  $('#load_intro_copy_sections_btn').click(function(e){
+  e.preventDefault();
+  requestLibrarySections('intro_copy_sections', 'intro_copy_sections_result');
+});
+});
+
+function requestLibrarySections(targetInput, resultDivId) {
+  $.ajax({
+    url: '/plex_mate/ajax/webhook/library_sections',
+    type: 'GET',
+    dataType: 'json',
+    success: function (res) {
+      if (res.ret === 'success') {
+        let html = '<div class="d-flex flex-wrap" style="margin-left: 100px;">';
+        res.data.forEach(item => {
+          html += `<button type="button" class="btn btn-outline-primary btn-sm me-2 mb-2" onclick="addSectionId('${targetInput}', ${item.id})">${item.name} (${item.id})</button>`;
+        });
+        html += '</div>';
+        $('#' + resultDivId).html(html);
+      } else {
+        notify('라이브러리 목록 불러오기 실패', 'warning');
+      }
+    },
+    error: function () {
+      notify('서버 요청 실패', 'danger');
+    }
+  });
+}
+
+function addSectionId(inputId, sectionId) {
+  let input = $('#' + inputId);
+  let existing = input.val().split(',').map(s => s.trim()).filter(Boolean);
+  if (!existing.includes(String(sectionId))) {
+    existing.push(sectionId);
+    input.val(existing.join(','));
+  }
+}
+
+function requestManual_intro_sync(){
+  const $btn = $('#manual_intro_sync_btn');
+  $btn.prop('disabled', true).text('동기화 중...');
+  const dryrun = $('#dryrun').is(':checked') ? 'true' : 'false';
+  $.ajax({
+    url: "/plex_mate/ajax/webhook/manual",
+    type: "POST",
+    data: { dryrun: dryrun },  
+    success: function(res){
+      notify(res.msg, res.ret === 'success' ? 'success' : 'warning');
+      $btn.prop('disabled', false).text('인트로 마커 일괄 실행');
+    },
+    error: function(err){
+      notify("요청 실패", "danger");
+      $btn.prop('disabled', false).text('인트로 마커 일괄 실행');
+    }
+  });
+}
+
+
+$("body").on('click', '#select_intro_json_file_btn', function(e){
+  e.preventDefault();
+  globalSelectLocalFile("JSON 파일 선택", '/', function(ret){
+    $('#intro_json_file_path').val(ret);
+  });
+});
+
+</script>
+
+{% endblock %}
