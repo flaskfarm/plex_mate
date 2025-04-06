@@ -84,6 +84,14 @@ setting = {
                 ]
             },
             {
+                'uri': 'webhook',
+                'name': '웹훅',
+                'list': [
+                    {'uri': 'setting', 'name': '설정'},
+                    {'uri': 'intro', 'name': '인트로 이력'},
+                ]
+            },
+            {
                 'uri': 'manual',
                 'name': '매뉴얼',
                 'list': [
@@ -116,8 +124,21 @@ try:
     from .mod_scan import ModelScanItem, ModuleScan
     from .mod_subtitle import ModuleSubtitle
     from .mod_tool import ModuleTool
-
-    P.set_module_list([ModuleBase, ModuleScan, ModulePeriodic, ModuleTool, ModuleClear, ModuleCopy, ModuleCopy2, ModuleSubtitle])
+    from .logic_pm_webhook import LogicPMWebhook
+    DEFINE_DEV = False
+    if os.path.exists(os.path.join(os.path.dirname(__file__), 'logic_pm_intro.py')):
+        DEFINE_DEV = True
+    try:
+        if DEFINE_DEV:
+            from .logic_pm_intro import LogicIntroSync
+        else:
+            from support import SupportSC
+            LogicIntroSync = SupportSC.load_module_P(P, 'logic_pm_intro').LogicIntroSync
+    except Exception as e:
+        P.logger.error(f'Exception:{str(e)}')
+        P.logger.error(traceback.format_exc())
+    
+    P.set_module_list([ModuleBase, ModuleScan, ModulePeriodic, ModuleTool, ModuleClear, ModuleCopy, ModuleCopy2, ModuleSubtitle, LogicPMWebhook, LogicIntroSync, LogicIntroSync])
 
     # 외부 호출
     from .plex_bin_scanner import PlexBinaryScanner
