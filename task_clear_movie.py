@@ -11,7 +11,8 @@ TAG = {
     'poster' : ['thumb', 'posters'],
     'art' : ['art', 'art'],
     'banner' : ['banner', 'banners'],
-    'theme' : ['music', 'themes']
+    'theme' : ['music', 'themes'],
+    'logo' : ['clear_logo', 'clearLogos'],
 }
 
 logger = P.logger
@@ -22,6 +23,9 @@ class Task(object):
     @staticmethod
     @celery.task(bind=True)
     def start(self, command, section_id, dryrun):
+        if command == 'start4':
+            logger.warning(f'4단계는 현재 지원하지 않습니다.')
+            return 'stop'
         config = P.load_config()
         logger.warning(command)
         logger.warning(section_id)
@@ -29,66 +33,71 @@ class Task(object):
         logger.warning(dryrun)
 
         db_file = P.ModelSetting.get('base_path_db')
-        con = sqlite3.connect(db_file)
-        cur = con.cursor()
-        query = config.get('파일정리 영화 쿼리', 'SELECT * FROM metadata_items WHERE metadata_type = 1 AND library_section_id = ? ORDER BY title')
-        ce = con.execute(query, (section_id,))
-        ce.row_factory = dict_factory
-        fetch = ce.fetchall()
-        status = {'is_working':'run', 'total_size':0, 'remove_size':0, 'count':len(fetch), 'current':0}
-        for movie in fetch:
-            try:
-                if P.ModelSetting.get_bool('clear_movie_task_stop_flag'):
-                    return 'stop'
-                time.sleep(0.05)
-                status['current'] += 1
-                data = {'mode':'movie', 'status':status, 'command':command, 'section_id':section_id, 'dryrun':dryrun, 'process':{}}
-                data['db'] = movie
-   
-                Task.analysis(data, con, cur)
-                data['status']['total_size'] += data['meta']['total']
-                data['status']['remove_size'] += data['meta']['remove']
-                if 'media' in data:
-                    data['status']['total_size'] += data['media']['total']
-                    data['status']['remove_size'] += data['media']['remove']
-                if F.config['use_celery']:
-                    self.update_state(state='PROGRESS', meta=data)
-                else:
-                    self.receive_from_task(data, celery=False)
-            except Exception as e:
-                logger.error(f'Exception:{str(e)}')
-                logger.error(traceback.format_exc())
-                logger.error(movie['title'])
-        logger.warning(f"종료")
-        return 'wait'
+        with sqlite3.connect(db_file) as con:
+            cur = con.cursor()
+            query = config.get('파일정리 영화 쿼리', 'SELECT * FROM metadata_items WHERE metadata_type = 1 AND library_section_id = ? ORDER BY title')
+            ce = con.execute(query, (section_id,))
+            ce.row_factory = dict_factory
+            query_count = query.replace("SELECT *", "SELECT COUNT(*)")
+            row_count = con.execute(query_count, (section_id,)).fetchone()
+            status = {'is_working':'run', 'total_size':0, 'remove_size':0, 'count':row_count[0], 'current':0}
+            for movie in ce:
+                try:
+                    if P.ModelSetting.get_bool('clear_movie_task_stop_flag'):
+                        return 'stop'
+                    time.sleep(0.05)
+                    status['current'] += 1
+                    data = {'mode':'movie', 'status':status, 'command':command, 'section_id':section_id, 'dryrun':dryrun, 'process':{}}
+                    data['db'] = movie
+
+                    Task.analysis(data, con, cur)
+                    data['status']['total_size'] += data['meta']['total']
+                    data['status']['remove_size'] += data['meta']['remove']
+                    if 'media' in data:
+                        data['status']['total_size'] += data['media']['total']
+                        data['status']['remove_size'] += data['media']['remove']
+                    if F.config['use_celery']:
+                        self.update_state(state='PROGRESS', meta=data)
+                    else:
+                        self.receive_from_task(data, celery=False)
+                except Exception as e:
+                    logger.error(f'Exception:{str(e)}')
+                    logger.error(traceback.format_exc())
+                    logger.error(movie['title'])
+            logger.warning(f"종료")
+            return 'wait'
 
 
 
     @staticmethod
     def analysis(data, con, cur):
-        Task.thumb_process(data)
+        Task.thumb_process(data, con)
 
         if data['command'] == 'start1':
             return
         
         # 2단계 TAG별 URL 로 세팅하고 xml 파일만 남기고 제거
         if data['dryrun'] == False:
-            if 'poster' not in data['process']:
-                Task.process_agent_none(data, con, cur)
-                return
             sql = 'UPDATE metadata_items SET '
-            if data['process']['poster']['url'] != '':
-                sql += ' user_thumb_url = "{}", '.format(data['process']['poster']['url'])
-            if data['process']['art']['url'] != '':
-                sql += ' user_art_url = "{}", '.format(data['process']['art']['url'])
-            if data['process']['banner']['url'] != '':
-                sql += ' user_banner_url = "{}", '.format(data['process']['banner']['url'])
-            if sql != 'UPDATE metadata_items SET ':
+            should_execute = False
+            for key in TAG:
+                if url := data['process'].get(key, {}).get('url', ''):
+                    should_execute = True
+                    sql += f" user_{TAG[key][0]}_url = '{url}', "
+            if should_execute:
                 sql = sql.strip().rstrip(',')
                 sql += '  WHERE id = {} ;'.format(data['db']['id'])
                 sql_filepath = os.path.join(path_data, 'tmp', f"movie_{data['db']['id']}.sql")
                 PlexDBHandle.execute_query(sql, sql_filepath=sql_filepath)
+            else:
+                Task.process_agent_none(data, con, cur)
         
+        c_upload_path = os.path.join(data['meta']['metapath'], 'Uploads')
+        if os.path.exists(c_upload_path):
+            if data['dryrun'] == False:
+                data['meta']['remove'] += SupportFile.size(start_path=c_upload_path)
+                SupportFile.rmtree(c_upload_path)
+                logger.debug(f"삭제: {c_upload_path} ({data['db']['title']})")
         c_metapath = os.path.join(data['meta']['metapath'], 'Contents')  
         if os.path.exists(c_metapath):
             for f in os.listdir(c_metapath):
@@ -99,6 +108,7 @@ class Task(object):
                         if os.path.exists(tag_path):
                             if data['dryrun'] == False:
                                 data['meta']['remove'] += SupportFile.size(start_path=tag_path)
+                                logger.debug(f"삭제: {tag_path} ({data['db']['title']})")
                                 SupportFile.rmtree(tag_path)
                             
                     tmp = os.path.join(_path, 'extras')
@@ -158,7 +168,8 @@ class Task(object):
         media_ce.row_factory = dict_factory
         data['media'] = {'total':0, 'remove':0}
 
-        for item in media_ce.fetchall():
+        mediapath = None
+        for item in media_ce:
             if item['hash'] == '':
                 continue
             mediapath = os.path.join(P.ModelSetting.get('base_path_media'), 'localhost', item['hash'][0], f"{item['hash'][1:]}.bundle")
@@ -197,23 +208,26 @@ class Task(object):
                         else:
                             P.logger.debug(f"아트 파일 없음. 분석 {data['db']['title']}")
                             PlexWebHandle.analyze_by_id(data['db']['id'])
-        Task.remove_empty_folder(mediapath)
+        if mediapath:
+            Task.remove_empty_folder(mediapath)
 
 
     @staticmethod
     def xml_analysis(combined_xmlpath, data):
+        if not os.path.exists(combined_xmlpath):
+            #P.logger.debug(f"Info.xml 없음 {data['db']['title']} : {combined_xmlpath}")
+            return
         import xml.etree.ElementTree as ET
 
         tree = ET.parse(combined_xmlpath)
         root = tree.getroot()
-        data['info'] = {}
-        data['info']['posters'] = []
-        for tag in ['posters', 'art', 'banners']:
-            data['info'][tag] = []
-            if root.find(tag) is None:
+        for tag in TAG:
+            found = root.find(TAG[tag][1])
+            if found is None:
                 continue
 
-            for item in root.find(tag).findall('item'):
+            data['info'].setdefault(tag, [])
+            for item in found.findall('item'):
                 entity = {}
                 if 'url' not in item.attrib:
                     continue
@@ -229,7 +243,7 @@ class Task(object):
 
     # xml 정보를 가져오고, 중복된 이미지를 지운다
     @staticmethod
-    def thumb_process(data):
+    def thumb_process(data, con):
         data['meta'] = {'remove':0}
         if data['db']['metadata_type'] == 1:
             data['meta']['metapath'] = os.path.join(P.ModelSetting.get('base_path_metadata'), 'Movies', data['db']['hash'][0], f"{data['db']['hash'][1:]}.bundle")
@@ -241,15 +255,38 @@ class Task(object):
         data['meta']['total'] = SupportFile.size(start_path=data['meta']['metapath'])
         if data['command'] == 'start0':
             return
-        if os.path.exists(combined_xmlpath) == False:
-            return
+
+        '''
+        2025.04.05 halfaider
+        새로운 Plex 기본 에이전트는 Info.xml을 사용하지 않고 DB에 포스터 url을 저장함
+        '''
+        data['info'] = {key: [] for key in TAG}
+        for key in TAG:
+            tagging_cursor = con.execute(
+                f"""SELECT id, text, thumb_url
+                FROM taggings
+                WHERE thumb_url = ? AND metadata_item_id = ?""",
+                (data['db'][f'user_{TAG[key][0]}_url'], data['db']['id'])
+            )
+            tagging_cursor.row_factory = dict_factory
+            tagging_row = tagging_cursor.fetchone()
+            if tagging_row and tagging_row.get('text', '').startswith('http'):
+                data['info'][key].append({
+                    'url': tagging_row['text'],
+                    'filename': tagging_row.get('thumb_url', '').split('/')[-1],
+                    'provider': 'tv.plex.agents.movie',
+                })
 
         Task.xml_analysis(combined_xmlpath, data)
     
+        if not any(data['info'].values()):
+            # 기존에는 Info.xml 이 없으면 리턴했음
+            return
+
         data['process'] = {}
         for tag, value in TAG.items():
             data['process'][tag] = {
-                'db' : data['db'][f'user_{value[0]}_url'],
+                'db' : data['db'][f'user_{value[0]}_url'] or '',
                 'db_type' : '', 
                 'url' : '',
                 'filename' : '',
@@ -257,10 +294,10 @@ class Task(object):
             }
 
         for tag, value in TAG.items():
-            if data['process'][tag]['db'] != '':
+            if data['process'][tag]['db']:
                 data['process'][tag]['db_type'] = data['process'][tag]['db'].split('//')[0]
                 data['process'][tag]['filename'] = data['process'][tag]['db'].split('/')[-1]
-                for item in data['info'][value[1]]:
+                for item in data['info'][tag]:
                     if data['process'][tag]['filename'] == item['filename']:
                         data['process'][tag]['url'] = item['url']
                         break
@@ -371,7 +408,7 @@ class Task(object):
         media_ce.row_factory = dict_factory
         data['media'] = {'total':0, 'remove':0}
 
-        for item in media_ce.fetchall():
+        for item in media_ce:
             if item['hash'] == '':
                 continue
             mediapath = os.path.join(P.ModelSetting.get('base_path_media'), 'localhost', item['hash'][0], f"{item['hash'][1:]}.bundle")

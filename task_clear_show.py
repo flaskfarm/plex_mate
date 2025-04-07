@@ -1,4 +1,5 @@
 import sqlite3
+import pathlib
 
 from support import SupportFile, d
 
@@ -10,7 +11,8 @@ TAG = {
     'poster' : ['thumb', 'posters'],
     'art' : ['art', 'art'],
     'banner' : ['banner', 'banners'],
-    'theme' : ['music', 'themes']
+    'theme' : ['music', 'themes'],
+    'logo' : ['clear_logo', 'clearLogos'],
 }
 
 logger = P.logger
@@ -21,57 +23,61 @@ class Task(object):
     @staticmethod
     @F.celery.task(bind=True)
     def start(self, command, section_id, dryrun):
+        if command == 'start4':
+            logger.warning(f'4단계는 현재 지원하지 않습니다.')
+            return 'stop'
         config = P.load_config()
         dryrun = True if dryrun == 'true'  else False
 
         db_file = P.ModelSetting.get('base_path_db')
-        con = sqlite3.connect(db_file)
-        cur = con.cursor()
-        #ce = con.execute('SELECT * FROM metadata_items WHERE metadata_type = 1 AND library_section_id = ? ORDER BY title', (section_id,))
-        #ce = con.execute('SELECT * FROM metadata_items WHERE metadata_type = 1 AND library_section_id = ? AND user_thumb_url NOT LIKE "upload%" AND (user_thumb_url NOT LIKE "http%" OR refreshed_at is NULL) ORDER BY title', (section_id,))
-        query = config.get('파일정리 TV 쿼리', 'SELECT * FROM metadata_items WHERE metadata_type = 2 AND library_section_id = ? ORDER BY title')  
-        #query = "SELECT * FROM metadata_items WHERE metadata_type = 2 AND library_section_id = ? and title like '기분%' ORDER BY title"   
-        ce = con.execute(query, (section_id,))
-        ce.row_factory = dict_factory
-        fetch = ce.fetchall()
-        status = {'is_working':'run', 'total_size':0, 'remove_size':0, 'count':len(fetch), 'current':0}
+        with sqlite3.connect(db_file) as con:
+            cur = con.cursor()
+            #ce = con.execute('SELECT * FROM metadata_items WHERE metadata_type = 1 AND library_section_id = ? ORDER BY title', (section_id,))
+            #ce = con.execute('SELECT * FROM metadata_items WHERE metadata_type = 1 AND library_section_id = ? AND user_thumb_url NOT LIKE "upload%" AND (user_thumb_url NOT LIKE "http%" OR refreshed_at is NULL) ORDER BY title', (section_id,))
+            query = config.get('파일정리 TV 쿼리', 'SELECT * FROM metadata_items WHERE metadata_type = 2 AND library_section_id = ? ORDER BY title')
+            #query = "SELECT * FROM metadata_items WHERE metadata_type = 2 AND library_section_id = ? and title like '기분%' ORDER BY title"
+            ce = con.execute(query, (section_id,))
+            ce.row_factory = dict_factory
+            query_count = query.replace("SELECT *", "SELECT COUNT(*)")
+            row_count = con.execute(query_count, (section_id,)).fetchone()
+            status = {'is_working':'run', 'total_size':0, 'remove_size':0, 'count':row_count[0], 'current':0}
 
-        for show in fetch:
-            try:
-                if P.ModelSetting.get_bool('clear_show_task_stop_flag'):
-                    return 'stop'
-                time.sleep(0.05)
-                status['current'] += 1
-                data = {'mode':'show', 'status':status, 'command':command, 'section_id':section_id, 'dryrun':dryrun, 'process':{}, 'file_count':0, 'remove_count':0}
-                data['db'] = show
+            for show in ce:
+                try:
+                    if P.ModelSetting.get_bool('clear_show_task_stop_flag'):
+                        return 'stop'
+                    time.sleep(0.05)
+                    status['current'] += 1
+                    data = {'mode':'show', 'status':status, 'command':command, 'section_id':section_id, 'dryrun':dryrun, 'process':{}, 'file_count':0, 'remove_count':0}
+                    data['db'] = show
 
-                Task.show_process(data, con, cur)
-            
-                data['status']['total_size'] += data['meta']['total']
-                data['status']['remove_size'] += data['meta']['remove']
-                if 'media' in data:
-                    data['status']['total_size'] += data['media']['total']
-                    data['status']['remove_size'] += data['media']['remove']
-                #P.logic.get_module('clear').receive_from_task(data, celery=False)
-                #continue
-                """
-                if 'use_filepath' in data:
-                    del data['use_filepath']
-                if 'remove_filepath' in data:
-                    del data['remove_filepath']
-                if 'seasons' in data:
-                    del data['seasons']
-                """
-                if F.config['use_celery']:
-                    self.update_state(state='PROGRESS', meta=data)
-                else:
-                    self.receive_from_task(data, celery=False)
-            except Exception as e:
-                P.logger.error(f'Exception:{str(e)}')
-                P.logger.error(traceback.format_exc())
-                P.logger.error(show['title'])
-        P.logger.warning(f"종료")
-        return 'wait'
+                    Task.show_process(data, con, cur)
+
+                    data['status']['total_size'] += data['meta']['total']
+                    data['status']['remove_size'] += data['meta']['remove']
+                    if 'media' in data:
+                        data['status']['total_size'] += data['media']['total']
+                        data['status']['remove_size'] += data['media']['remove']
+                    #P.logic.get_module('clear').receive_from_task(data, celery=False)
+                    #continue
+                    """
+                    if 'use_filepath' in data:
+                        del data['use_filepath']
+                    if 'remove_filepath' in data:
+                        del data['remove_filepath']
+                    if 'seasons' in data:
+                        del data['seasons']
+                    """
+                    if F.config['use_celery']:
+                        self.update_state(state='PROGRESS', meta=data)
+                    else:
+                        self.receive_from_task(data, celery=False)
+                except Exception as e:
+                    P.logger.error(f'Exception:{str(e)}')
+                    P.logger.error(traceback.format_exc())
+                    P.logger.error(show['title'])
+            P.logger.warning(f"종료")
+            return 'wait'
 
 
 
@@ -87,18 +93,13 @@ class Task(object):
             return
         combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'Info.xml')
         
-        if os.path.exists(combined_xmlpath) == False:
-            P.logger.error(f"Info.xml 없음 {data['db']['title']} : {combined_xmlpath}")
-            return 
         data['use_filepath'] = []
         data['remove_filepath'] = []
         data['seasons'] = {}
         data['media'] = {'total':0, 'remove':0}
-        ret = Task.xml_analysis(combined_xmlpath, data, data)
-        if ret == False:
-            P.logger.warning(f"{data['db']['title']} 쇼 분석 실패")
-            return
-        
+
+        Task.xml_analysis(combined_xmlpath, data, data, con)
+
         season_cs = con.execute('SELECT * FROM metadata_items WHERE metadata_type = 3 and parent_id = ? ORDER BY "index"', (data['db']['id'],))
         season_cs.row_factory = dict_factory
         for season in season_cs.fetchall():
@@ -117,11 +118,11 @@ class Task(object):
                     if season_index not in data['seasons']:
                         data['seasons'][season_index] = {'db':season}
                         combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'seasons', f"{season_index}.xml")
-                        ret = Task.xml_analysis(combined_xmlpath, data['seasons'][season_index], data)
+                        ret = Task.xml_analysis(combined_xmlpath, data['seasons'][season_index], data, con)
                         data['seasons'][season_index]['episodes'] = {}
                     data['seasons'][season_index]['episodes'][episode_index] = {'db':episode}
                     combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'seasons', f"{season_index}", "episodes", f"{episode_index}.xml")
-                    ret = Task.xml_analysis(combined_xmlpath, data['seasons'][season_index]['episodes'][episode_index], data, is_episode=True)
+                    ret = Task.xml_analysis(combined_xmlpath, data['seasons'][season_index]['episodes'][episode_index], data, con, is_episode=True)
                 except Exception as e:
                     P.logger.error(f'Exception:{str(e)}')
                     P.logger.error(traceback.format_exc())
@@ -129,29 +130,15 @@ class Task(object):
         if data['command'] in ['start22', 'start3', 'start4']:
             # 쇼 http로 
             sql = 'UPDATE metadata_items SET '
-            if data['process']['poster']['url'] != '':
-                gdrive_url = Task.process_step4(data, data['process']['poster']['url'])
-                sql += ' user_thumb_url = "{}", '.format(gdrive_url)
-                try: data['use_filepath'].remove(data['process']['poster']['localpath'])
-                except: pass
-                try: data['use_filepath'].remove(data['process']['poster']['realpath'])
-                except: pass
-            if data['process']['art']['url'] != '':
-                gdrive_url = Task.process_step4(data, data['process']['art']['url'])
-                sql += ' user_art_url = "{}", '.format(gdrive_url)
-                try: data['use_filepath'].remove(data['process']['art']['localpath'])
-                except: pass
-                try: data['use_filepath'].remove(data['process']['art']['realpath'])
-                except: pass
-            if data['process']['banner']['url'] != '':
-                gdrive_url = Task.process_step4(data, data['process']['banner']['url'])
-                sql += ' user_banner_url = "{}", '.format(gdrive_url)
-                try: data['use_filepath'].remove(data['process']['banner']['localpath'])
-                except: pass
-                try: data['use_filepath'].remove(data['process']['banner']['realpath'])
-                except: pass
-            if data['process']['theme']['url'] != '':
-                sql += ' user_music_url = "{}", '.format(data['process']['theme']['url'])
+            for tag in TAG:
+                tag_data = data['process'].get(tag, {})
+                if web_url := tag_data.get('url'):
+                    gdrive_url = Task.process_step4(data, web_url)
+                    sql += f" user_{TAG[tag][0]}_url = '{gdrive_url}', "
+                    try: data['use_filepath'].remove(tag_data.get('localpath', ''))
+                    except: pass
+                    try: data['use_filepath'].remove(tag_data.get('realpath', ''))
+                    except: pass
                 
             if sql != 'UPDATE metadata_items SET ':
                 sql = sql.strip().rstrip(',')
@@ -162,27 +149,16 @@ class Task(object):
                 if 'process' not in season:
                     continue
                 sql = 'UPDATE metadata_items SET '
-                if season['process']['poster']['url'] != '':
-                    gdrive_url = Task.process_step4(data, season['process']['poster']['url'])
-                    sql += ' user_thumb_url = "{}", '.format(gdrive_url)
-                    try: data['use_filepath'].remove(season['process']['poster']['localpath'])
-                    except: pass
-                    try: data['use_filepath'].remove(season['process']['poster']['realpath'])
-                    except: pass
-                if season['process']['art']['url'] != '':
-                    gdrive_url = Task.process_step4(data, season['process']['art']['url'])
-                    sql += ' user_art_url = "{}", '.format(gdrive_url)
-                    try: data['use_filepath'].remove(season['process']['art']['localpath'])
-                    except: pass
-                    try: data['use_filepath'].remove(season['process']['art']['realpath'])
-                    except: pass
-                if season['process']['banner']['url'] != '':
-                    gdrive_url = Task.process_step4(data, season['process']['banner']['url'])
-                    sql += ' user_banner_url = "{}", '.format(gdrive_url)
-                    try: data['use_filepath'].remove(season['process']['banner']['localpath'])
-                    except: pass
-                    try: data['use_filepath'].remove(season['process']['banner']['realpath'])
-                    except: pass
+                for tag in TAG:
+                    tag_data = season['process'].get(tag, {})
+                    if web_url := tag_data.get('url'):
+                        gdrive_url = Task.process_step4(data, web_url)
+                        sql += f" user_{TAG[tag][0]}_url = '{gdrive_url}', "
+                        try: data['use_filepath'].remove(tag_data.get('localpath', ''))
+                        except: pass
+                        try: data['use_filepath'].remove(tag_data.get('realpath', ''))
+                        except: pass
+
                 if sql != 'UPDATE metadata_items SET ':
                     sql = sql.strip().rstrip(',')
                     sql += '  WHERE id = {} ;\n'.format(season['db']['id'])
@@ -353,6 +329,8 @@ class Task(object):
 
         for base, folders, files in os.walk(data['meta']['metapath']):
             for f in files:
+                if P.ModelSetting.get_bool('clear_show_task_stop_flag'):
+                    return
                 if f.endswith('.xml'):
                     continue
                 data['file_count'] += 1
@@ -365,15 +343,23 @@ class Task(object):
                         #file_size = os.path.getsize(filepath)
                         #data['meta']['remove'] += file_size
                         continue
-                
+
+                '''
+                2025.04.07 halfaider
+                기존 로직은 1~3 단계 실행시 일괄 삭제.
+                1, 2-1 단계는 url로 변경하지 않아 사용하는 파일이 삭제됨.
+                그렇다고 각 파일을 DB 조회로 판단할 경우 오래 걸림.
+                => 1, 2-1 단계에서는 삭제를 건너뛰고 2-2 이상부터 일괄 삭제, 4 단계는 기존 조건 유지.
+                '''
                 #if data['command'] in ['start4'] and not_http_count == 0:
-                if not_http_count == 0:
+                if data['command'] in ['start2-2', 'start3'] or data['command'] == 'start4' and not_http_count < 1:
+                    # metadata의 리소스 url이 모두 http
                     if data['dryrun'] == False:
-                        P.logger.info(f"삭제.메타에 http 0 : {filepath}")
+                        P.logger.info(f"일괄 삭제: {filepath}")
                         file_size = os.path.getsize(filepath)
                         data['meta']['remove'] += file_size
                         os.remove(filepath)
-                else:
+                elif data['command'] == 'start4' and not_http_count > 0:
                     tmp = f.split('.')[-1]
                     using = PlexDBHandle.select(f"SELECT id, guid, user_thumb_url FROM metadata_items WHERE user_thumb_url LIKE '%{tmp}' OR user_art_url LIKE '%{tmp}';")
                     if len(using) == 0:
@@ -416,32 +402,58 @@ class Task(object):
     
 
     @staticmethod
-    def xml_analysis(combined_xmlpath, data, show_data, is_episode=False):
+    def xml_analysis(combined_xmlpath, data, show_data, con, is_episode=False):
         #P.logger.warning(combined_xmlpath)
         import xml.etree.ElementTree as ET
 
         #text = ToolBaseFile.read(combined_xmlpath)
         #P.logger.warning(text)
         # 2021-12-11 4단계로 media파일을 디코 이미로 대체할때 시즌0 같이 아예 0.xml 파일이 없을 때도 동작하도록 추가
-        
-        if is_episode:
-            data['process'] = {}
-            data['process']['thumb'] = {
-                'db' : data['db'][f'user_thumb_url'],
-                'db_type' : data['db'][f'user_thumb_url'].split('://')[0] if data['db'][f'user_thumb_url'] != None else None,
-                'url' : '',
-                'filename' : '',
-            }
-
-            
-
 
         if os.path.exists(combined_xmlpath) == False:
             #P.logger.info(f"xml 파일 없음 : {combined_xmlpath}")
             #P.logger.error(data['process']['thumb'])
             #P.logger.debug(data)
             #P.logger.debug(is_episode)
-            return False
+            '''
+            2025.04.05 halfaider
+            새로운 Plex 기본 에이전트는 Info.xml을 사용하지 않고 DB에 포스터 url을 저장함
+            '''
+            contents_path = pathlib.Path(combined_xmlpath.split('/_combined/')[0])
+            data.setdefault('process', {})
+
+            for key in (tags := {'thumb' : ['thumb', 'thumbs']} if is_episode else TAG):
+                data['process'].setdefault(key, {
+                        'db': '',
+                        'db_type': '',
+                        'url': '',
+                        'filename': '',
+                    })
+                tagging_cursor = con.execute(
+                    f"""SELECT id, text, thumb_url
+                    FROM taggings
+                    WHERE thumb_url = ? AND metadata_item_id = ?""",
+                    (data['db'][f'user_{tags[key][0]}_url'], data['db']['id'])
+                )
+                tagging_cursor.row_factory = dict_factory
+                tagging_row = tagging_cursor.fetchone()
+                if tagging_row and (web_url := tagging_row.get('text', '')).startswith('http'):
+                    # metadata://posters/tv.plex.agents.series_ad850f879b2796738bfb6bf9c41333fdfd092900
+                    column_url = data['db'][f'user_{tags[key][0]}_url'] or ''
+                    db_type = column_url.split('://')[0]
+                    # media://8/0ee1dffac9aff7c4f02c95dd675f82167725235.bundle/Contents/Thumbnails/thumb1.jpg
+                    if not db_type.startswith('metadata'):
+                        continue
+                    data['process'][key]['db'] = column_url
+                    data['process'][key]['db_type'] = db_type
+                    data['process'][key]['filename'] = column_url.split('/')[-1]
+                    data['process'][key]['url'] = web_url
+                    local_path: pathlib.Path = contents_path / '_combined' / tags[key][1] / data['process'][key]['filename']
+                    if local_path.exists():
+                        data['process'][key]['localpath'] = str(local_path)
+                        if str(local_path) not in show_data['use_filepath']:
+                            show_data['use_filepath'].append(str(local_path))
+            return True
         if combined_xmlpath not in show_data['use_filepath']:
             show_data['use_filepath'].append(combined_xmlpath)
             
