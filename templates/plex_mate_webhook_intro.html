@@ -24,7 +24,32 @@
   </div>
 </form>
 
+<style>
+  #pagination-bottom nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: white;
+    z-index: 999;
+    border-top: 1px solid #ddd;
+    padding: 5px 0;
+  }
+</style>
+
+<div id="pagination-top"></div>
 <div id="intro_history_list"></div>
+<div id="pagination-bottom"></div>
+
+<button id="scrollTopBtn" class="btn btn-primary btn-sm" style="
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  z-index: 9999;
+  display: none;
+">↑ 맨 위로</button>
+
+
 
 <script type="text/javascript">
 
@@ -84,12 +109,12 @@ function loadIntroHistory(page = 1) {
 }
 
 function renderPagination(current, total) {
-  let html = '<nav class="mt-3"><ul class="pagination pagination-sm justify-content-center">';
+  const isMobile = window.innerWidth <= 768;
+  const maxVisible = isMobile ? 10 : 30;
 
-  const maxVisible = 30;
+  let html = '<nav><ul class="pagination pagination-sm justify-content-center mb-0">';
   let start = Math.max(1, current - Math.floor(maxVisible / 2));
   let end = start + maxVisible - 1;
-
   if (end > total) {
     end = total;
     start = Math.max(1, end - maxVisible + 1);
@@ -110,10 +135,47 @@ function renderPagination(current, total) {
   }
 
   html += '</ul></nav>';
-  $('#intro_history_list').append(html);
+
+  $('#pagination-top').html(html);
+  $('#pagination-bottom').html(html);
+
+  const scrollTop = $(window).scrollTop();
+  if (scrollTop > 200) {
+    $('#pagination-top').hide();
+    $('#pagination-bottom').show();
+  } else {
+    $('#pagination-top').show();
+    $('#pagination-bottom').hide();
+  }
 }
 
+let lastPos = 0;
 
+$(window).on('scroll', function () {
+  const pos = $(this).scrollTop();
+  const threshold = 200;
+  const nearBottom = (pos + $(window).height()) >= ($(document).height() - 100);
+
+  if (pos > 300) {
+    $('#scrollTopBtn').fadeIn();
+  } else {
+    $('#scrollTopBtn').fadeOut();
+  }
+
+  if (nearBottom || (pos > threshold && pos > lastPos)) {
+    $('#pagination-top').hide();
+    $('#pagination-bottom').show();
+  } else if (pos <= threshold || pos < lastPos) {
+    $('#pagination-top').show();
+    $('#pagination-bottom').hide();
+  }
+
+  lastPos = pos;
+});
+
+$('#scrollTopBtn').on('click', function () {
+  $('html, body').animate({ scrollTop: 0 }, 400);
+});
 
 $(document).ready(function() {
   loadIntroHistory();
@@ -133,9 +195,6 @@ $('#intro_order').change(function() {
 
 $('#intro_history_refresh_btn').click(function(e){
   e.preventDefault();
-  loadIntroHistory();
-});
-$('#intro_order, #intro_filter_section, #intro_filter_status').change(function() {
   loadIntroHistory();
 });
 </script>
