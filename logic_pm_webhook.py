@@ -9,6 +9,8 @@ from sqlalchemy import Column, Integer, String, DateTime
 from .plex_db import PlexDBHandle
 from datetime import datetime, timedelta
 
+from flask import abort
+
 logger = P.logger
 package_name = P.package_name
 name = 'webhook'
@@ -80,6 +82,10 @@ class LogicPMWebhook(PluginModuleBase):
 
         @F.app.route('/plex_mate/webhook/plex', methods=['POST'])
         def webhook_plex():
+            if F.SystemModelSetting.get_bool('use_apikey'):
+                apikey = request.args.to_dict().get('apikey')
+                if apikey != F.SystemModelSetting.get('apikey'):
+                    abort(403)
             try:
                 data = request.form.get('payload')
                 if data:
