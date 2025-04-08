@@ -305,7 +305,7 @@ class Task:
                     Task.current_scan_count += -1
                 # 2024-09-07
                 # 이제 bin scanner가 refresh까지 하지 못함. web refresh 하도록 추가
-                if db_item.mode == 'ADD':
+                if db_item.mode == 'ADD' and P.ModelSetting.get_bool('scan_refresh_after_scanning'):
                     metaid = PlexDBHandle.get_metaid_by_directory(db_item.section_id, db_item.scan_folder)
                     if metaid != None:
                         logger.info(f"스캔: meta refresh {metaid}")

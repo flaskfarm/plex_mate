@@ -1,6 +1,7 @@
 import shutil
 import threading
 import time
+import unicodedata
 
 from .plex_db import PlexDBHandle
 from .setup import *
@@ -206,11 +207,55 @@ class PageToolSimple(PluginPageBase):
             elif command == 'fix_yamlmusic':
                 self.task_interface(self.fix_yamlmusic)
                 ret['msg'] = "작업을 시작합니다."
+            elif command == 'tool_simple_title_sort':
+                sortings = self.get_title_sortings(int(arg1))
+                if not sortings:
+                    ret['msg'] = "정리할 데이터가 없습니다."
+                else:
+                    if arg2.lower() == 'false':
+                        batch_size = 100
+                        for i in range(0, len(sortings), batch_size):
+                            batch_queries = []
+                            for sorting in sortings[i:i + batch_size]:
+                                batch_queries.append(f"UPDATE metadata_items SET title_sort = '" + sorting[3].replace("'", "''") + f"' WHERE id = {sorting[0]}")
+                            PlexDBHandle.execute_query(';'.join(batch_queries))
+                        ret['msg'] = "정리를 완료했습니다."
+                    else:
+                        modal = []
+                        for sorting in sortings:
+                            modal.append(f"{sorting[0]}: [{sorting[3][0]}][{sorting[2][0] if sorting[2] else ''}]{sorting[1]}")
+                        ret['modal'] = json.dumps(modal, indent=4, ensure_ascii=False)
+                        ret['title'] = '제목 색인 정리'
             return jsonify(ret)
         except Exception as e: 
             P.logger.error(f'Exception:{str(e)}')
             P.logger.error(traceback.format_exc())
             return jsonify({'ret':'danger', 'msg':str(e)})
+
+
+    def get_title_sortings(self, section_id: int) -> list:
+        query = "SELECT id, title, title_sort, metadata_type FROM metadata_items WHERE library_section_id = ?"
+        rows: dict = PlexDBHandle.select_arg(query, (section_id,))
+        sortings = []
+        for row in rows:
+            if not row.get('title'):
+                continue
+            if row.get('title_sort'):
+                first_char = row['title_sort'][0]
+            else:
+                first_char = row['title'][0]
+            if first_char.isalnum() and not 44032 <= ord(first_char) <= 55203:
+                continue
+            new_title_sort = "".join([word for word in re.split(r'\W', row['title']) if word])
+            if not new_title_sort:
+                logger.warning(f"색인용 문자가 없습니다: '{row['title']}'")
+                new_title_sort = row['title']
+            new_title_sort = unicodedata.normalize('NFKD', new_title_sort)
+            logger.debug(f"{row['id']}: [{new_title_sort[0]}][{row['title_sort'][0] if row['title_sort'] else ''}]{row['title']}")
+            if new_title_sort != row['title_sort']:
+                sortings.append((row['id'], row['title'], row['title_sort'], new_title_sort))
+        return sortings
+
 
     def remove_meta(self, metaid):
         #ret = PlexDBHandle.section_location()

@@ -24,6 +24,7 @@
   {{ macros.m_tab_head_start() }}
     {{ macros.m_tab_head('basic', '기본 설정', True) }}
     {{ macros.m_tab_head('db', 'DB 설정', False) }}
+    {{ macros.m_tab_head('api', 'API', False) }}
   {{ macros.m_tab_head_end() }}
 </nav>
 
@@ -79,6 +80,10 @@
 
       {{ macros.setting_input_text_and_buttons('intro_json_file_path', '인증 JSON 경로', [['select_intro_json_file_btn', '파일 선택']], value=arg['intro_json_file_path'], desc=['JSON 파일 경로']) }}
 
+    {{ macros.m_tab_content_end() }}
+
+    {{ macros.m_tab_content_start('api', False) }}
+      {{ macros.info_text_go_buttons('api_webhook', '웹훅', [['globalCliboardBtn','클립보드에 복사', [['text', arg['api_webhook']]]]], value=arg['api_webhook'], desc=['Plex 서버에 입력']) }}
     {{ macros.m_tab_content_end() }}
 
   </div>
