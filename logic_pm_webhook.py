@@ -169,11 +169,22 @@ class LogicPMWebhook(PluginModuleBase):
             elif sub == 'intro_history':
                 order = req.args.get('order', 'desc')
                 page = int(req.args.get('page', 1))
+                section_id = req.args.get('section_id', '').strip()
+                status = req.args.get('status', '').strip()
                 per_page = 20
                 offset = (page - 1) * per_page
 
                 query = db.session.query(ModelWebhookIntroHistory)
-                query = query.order_by(ModelWebhookIntroHistory.id.desc() if order == 'desc' else ModelWebhookIntroHistory.id.asc())
+
+                if section_id:
+                    query = query.filter(ModelWebhookIntroHistory.section_id == int(section_id))
+                if status:
+                    query = query.filter(ModelWebhookIntroHistory.status == status)
+
+                query = query.order_by(
+                    ModelWebhookIntroHistory.id.desc() if order == 'desc' else ModelWebhookIntroHistory.id.asc()
+                )
+
                 total = query.count()
                 items = query.offset(offset).limit(per_page).all()
 
