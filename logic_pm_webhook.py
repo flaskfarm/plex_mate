@@ -3,13 +3,14 @@ import json
 import threading
 import time
 import signal
-import sqlite3
-from .setup import *
-from sqlalchemy import Column, Integer, String, DateTime
-from .plex_db import PlexDBHandle
+import urllib.parse
 from datetime import datetime, timedelta
 
 from flask import abort
+from sqlalchemy import Column, Integer, String, DateTime
+
+from .setup import *
+from .plex_db import PlexDBHandle
 
 logger = P.logger
 package_name = P.package_name
@@ -112,6 +113,10 @@ class LogicPMWebhook(PluginModuleBase):
         arg = P.ModelSetting.to_dict()
         arg['sub'] = self.name
         arg['sub2'] = sub
+        ddns = F.SystemModelSetting.get("ddns")
+        use_apikey = F.SystemModelSetting.get_bool("use_apikey")
+        apikey = F.SystemModelSetting.get("apikey")
+        arg['api_webhook'] = urllib.parse.urljoin(ddns, f'/plex_mate/webhook/plex' + f'?apikey={apikey}' if use_apikey else '')
         try:
             return render_template(f'{package_name}_{self.name}_{sub}.html', arg=arg)
         except Exception as e:
