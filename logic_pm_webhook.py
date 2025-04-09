@@ -511,7 +511,8 @@ class LogicPMWebhook(PluginModuleBase):
                 "stop": "media.stop",
                 "new": "library.new",
             }
-            allowed_events = P.ModelSetting.get_list('webhook_discord_events')
+            value = P.ModelSetting.get('webhook_discord_events')
+            allowed_events = [x.strip() for x in value.split(',') if x.strip()]
             if allowed_events:
                 allowed_plex_events = [event_dict.get(e.strip().lower()) for e in allowed_events if e.strip().lower() in event_dict]
             if not allowed_events or event_type in allowed_plex_events:
