@@ -57,9 +57,12 @@ let currentPage = 1;
 
 function loadIntroHistory(page = 1) {
   currentPage = page;
+
   const order = $('#intro_order').val();
-  const sectionId = $('#intro_filter_section').val();
   const status = $('#intro_filter_status').val();
+
+  const rawSectionId = $('#intro_filter_section').val();
+  const sectionId = rawSectionId ? parseInt(rawSectionId) : '';
 
   $.ajax({
     url: '/plex_mate/ajax/webhook/intro_history',
@@ -74,12 +77,8 @@ function loadIntroHistory(page = 1) {
     success: function (res) {
       if (res.ret === 'success') {
         let html = '';
-        const uniqueSections = new Set();
 
         for (let item of res.data) {
-          if (sectionId && item.section_id != sectionId) continue;
-          if (status && item.status != status) continue;
-
           html += '<div class="card mb-2 p-2">';
           html += `<div><strong>시간:</strong> ${item.created_time}</div>`;
           html += `<div><strong>섹션 ID:</strong> ${item.section_id}</div>`;
@@ -87,23 +86,34 @@ function loadIntroHistory(page = 1) {
           html += `<div><strong>상태:</strong> <span class="${colorClass} fw-bold">${item.status}</span></div>`;
           html += `<div><strong>경로:</strong> ${item.file_path}</div>`;
           html += '</div>';
-
-          if (item.section_id) uniqueSections.add(item.section_id);
         }
-        let sectionOptions = '<option value="">전체 섹션</option>';
-        const sorted = Array.from(uniqueSections).sort((a, b) => a - b);
-        for (let id of sorted) {
-          sectionOptions += `<option value="${id}">${id}</option>`;
-        }
-        $('#intro_filter_section').html(sectionOptions).val(sectionId);
         $('#intro_history_list').html(html);
         renderPagination(res.page, res.total_page);
+        $('html, body').animate({ scrollTop: 0 }, 300);
       } else {
         notify(res.msg || '이력 불러오기 실패', 'warning');
       }
     },
     error: function () {
       notify('서버 오류', 'danger');
+    }
+  });
+}
+
+function loadSectionOptions(selectedId = '') {
+  $.ajax({
+    url: '/plex_mate/ajax/webhook/library_sections',
+    type: 'GET',
+    dataType: 'json',
+    success: function (res) {
+      if (res.ret === 'success') {
+        let sectionOptions = '<option value="">전체 섹션</option>';
+        res.data.forEach(item => {
+          sectionOptions += `<option value="${item.id}">${item.id} (${item.name})</option>`;
+        });
+        $('#intro_filter_section').html(sectionOptions);
+        if (selectedId) $('#intro_filter_section').val(selectedId);
+      }
     }
   });
 }
@@ -177,24 +187,17 @@ $('#scrollTopBtn').on('click', function () {
   $('html, body').animate({ scrollTop: 0 }, 400);
 });
 
-$(document).ready(function() {
-  loadIntroHistory();
-});
-
 $('#intro_order, #intro_filter_section, #intro_filter_status').change(function() {
   loadIntroHistory(1);  
 });
+
 $('#intro_history_refresh_btn').click(function(e){
   e.preventDefault();
-  loadIntroHistory(currentPage); 
-});
-
-$('#intro_order').change(function() {
   loadIntroHistory();
 });
 
-$('#intro_history_refresh_btn').click(function(e){
-  e.preventDefault();
+$(document).ready(function() {
+  loadSectionOptions();
   loadIntroHistory();
 });
 </script>
