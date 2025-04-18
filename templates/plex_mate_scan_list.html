@@ -5,31 +5,42 @@
   <div class="container-fluid">
     <div class="row show-grid">
       <span class="col-md-6">
-        <select id="order" name="order" class="form-control form-control-sm">
-          <option value="desc">최근순</option>
-          <option value="asc">오래된순</option>
-        </select>
-        <select id="option1" name="option1" class="form-control form-control-sm">
-          <option value="all" selected>전체</option>
-          <option value="fp_ktv" selected>국내TV 파일처리</option>
-          <option value="gds_tool" selected>구드공 툴</option>
-        </select>
-        <select id="option2" name="option2" class="form-control form-control-sm">
-          <option value="all" selected>전체</option>
-          <option value="READY">READY</option>
-          <option value="ENQUEUE_ADD_FIND">ENQUEUE_ADD_FIND</option>
-          <option value="SCANNING">SCANNING</option>
-          <option value="FINISH_ADD">FINISH_ADD</option>
-          <option value="FINISH_ADD_ALREADY_IN_DB">FINISH_ADD_ALREADY_IN_DB</option>
-          <option value="FINISH_ALREADY_IN_QUEUE">FINISH_ALREADY_IN_QUEUE</option>
-          <option value="FINISH_NOT_FIND_LIBRARY">FINISH_NOT_FIND_LIBRARY</option>
-          <option value="FINISH_TIMEOVER">FINISH_TIMEOVER</option>
-          <option value="FINISH_SCANNING">FINISH_SCANNING</option>
-        </select>
+        <div class="input-group">
+          <select id="order" name="order" class="form-control form-control-sm">
+            <option value="desc">최근순</option>
+            <option value="asc">오래된순</option>
+          </select>
+          <select id="option1" name="option1" class="form-control form-control-sm">
+            <option value="all" selected>전체</option>
+            <option value="fp_ktv" selected>국내TV 파일처리</option>
+            <option value="gds_tool" selected>구드공 툴</option>
+          </select>
+          <select id="option3" name="option3" class="form-control form-control-sm">
+            <option value="all" selected>전체</option>
+            <option value="ADD">ADD</option>
+            <option value="REFRESH">REFRESH</option>
+            <option value="REMOVE_FILE">REMOVE_FILE</option>
+            <option value="REMOVE_FOLDER">REMOVE_FOLDER</option>
+          </select>
+          <select id="option2" name="option2" class="form-control form-control-sm">
+            <option value="all" selected>전체</option>
+            <option value="READY">READY</option>
+            <option value="ENQUEUE_ADD_FIND">ENQUEUE_ADD_FIND</option>
+            <option value="SCANNING">SCANNING</option>
+            <option value="FINISH_ADD">FINISH_ADD</option>
+            <option value="FINISH_ADD_ALREADY_IN_DB">FINISH_ADD_ALREADY_IN_DB</option>
+            <option value="FINISH_ALREADY_IN_QUEUE">FINISH_ALREADY_IN_QUEUE</option>
+            <option value="FINISH_NOT_FIND_LIBRARY">FINISH_NOT_FIND_LIBRARY</option>
+            <option value="FINISH_TIMEOVER">FINISH_TIMEOVER</option>
+            <option value="FINISH_SCANNING">FINISH_SCANNING</option>
+          </select>
+        </div>
       </span>
       <span class="col-md-6">
-        <input id="keyword" name="keyword" class="form-control form-control-sm w-50" type="text" placeholder="" aria-label="Search">
-        {{ macros.m_button_group([['globalSearchSearchBtn', '검색'], ['globalSearchResetBtn', '리셋']])}}
+        <div class="input-group">
+          <input id="keyword" name="keyword" class="form-control form-control-sm" placeholder="" aria-label="Search">
+          {{ macros.m_button_group([['globalSearchSearchBtn', '검색'], ['searchResetBtn', '리셋']])}}
+        </div>
       </span>
     </div>
   </div>
@@ -51,10 +62,12 @@ var machine = "{{arg['base_machine']}}";
 
 $(document).ready(function(){
   tmp = last_list_option.split('|');
-  if (tmp.length == 5) {
+  if (tmp.length == 6) {
     $("#order").val(tmp[0]);
     $("#keyword").val(tmp[2]);
     $("#option1").val(tmp[3]);
+    $("#option2").val(tmp[4]);
+    $("#option3").val(tmp[5]);
     //document.getElementById("option2").value = tmp[4];
     globalRequestSearch(tmp[1]);
   } else {
@@ -76,6 +89,9 @@ $("body").on('change', '#option2', function(e){
   globalRequestSearch(1);
 });
 
+$("body").on('change', '#option3', function(e){
+  globalRequestSearch(1);
+});
 
 
 function make_list(data) {
@@ -177,6 +193,16 @@ $("body").on('click', '#remove_no_append_data_btn', function(e){
 $("body").on('click', '#retryScanBtn', function(e){
   e.preventDefault();
   globalSendCommand('retry_scan', $(this).data('id'), null, null, null);
+});
+
+$("body").on('click', '#searchResetBtn', function(e){
+  e.preventDefault();
+  $("#order").val('desc');
+  $("#option1").val('all');
+  $("#option2").val('all');
+  $("#option3").val('all');
+  $("#keyword").val('');
+  globalRequestSearch(1, false);
 });
 
 </script>

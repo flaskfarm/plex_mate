@@ -196,10 +196,12 @@ def vfs_forget(target: str, server: dict = None) -> None:
 def vfs_refresh(target: str, recursive: bool = False, async_: bool = False, server: dict = None) -> None:
     remote_path = pathlib.Path(update_path(target, {server['local']: server['remote']}))
     for parent in remote_path.parents:
-        result = vfs__refresh(server, parent.as_posix())
+        result = vfs__refresh(server, parent.as_posix()) or {}
         P.logger.info(f'RC result: {result}')
-        if result.get('result', {}).get(parent.as_posix(), '').lower() == 'ok':
+        if ((result.get('result') or {}).get(parent.as_posix()) or '').lower() == 'ok':
             break
+        if (result.get('result') or {}).get('error'):
+            return
     else:
         P.logger.error(f'It has hit the root path: "{remote_path.as_posix()}"')
         return

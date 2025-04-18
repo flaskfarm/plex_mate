@@ -186,7 +186,7 @@ class ModelScanItem(ModelBase):
             return ret
 
     @classmethod
-    def make_query(cls, req, order='desc', search='', option1='all', option2='all'):
+    def make_query(cls, req, order='desc', search='', option1='all', option2='all', option3='all'):
         with F.app.app_context():
             query = cls.make_query_search(F.db.session.query(cls), search, cls.target)
 
@@ -196,6 +196,9 @@ class ModelScanItem(ModelBase):
             if option2 != 'all':
                 query = query.filter(cls.status == option2)
 
+            if option3 != 'all':
+                query = query.filter(cls.mode == option3)
+
             if order == 'desc':
                 query = query.order_by(desc(cls.id))
             else:
@@ -203,6 +206,42 @@ class ModelScanItem(ModelBase):
 
             return query
 
+
+    @classmethod
+    def web_list(cls, req) -> dict:
+        '''override'''
+        try:
+            ret = {}
+            page = 1
+            page_size = 30
+            search = ''
+            if 'page' in req.form:
+                page = int(req.form['page'])
+            if 'keyword' in req.form:
+                search = req.form['keyword'].strip()
+            option1 = req.form.get('option1', 'all')
+            option2 = req.form.get('option2', 'all')
+            option3 = req.form.get('option3') or 'all'
+            order = req.form['order'] if 'order' in req.form else 'desc'
+
+            query = cls.make_query(req, order=order, search=search, option1=option1, option2=option2, option3=option3)
+            count = query.count()
+            query = query.limit(page_size).offset((page-1)*page_size)
+            #F.logger.debug('cls count:%s', count)
+            lists = query.all()
+            ret['list'] = [item.as_dict() for item in lists]
+            ret['paging'] = cls.get_paging_info(count, page, page_size)
+            try:
+                if cls.P.ModelSetting is not None and cls.__tablename__ is not None:
+                    cls.P.ModelSetting.set(f'{cls.__tablename__}_last_list_option', f'{order}|{page}|{search}|{option1}|{option2}|{option3}')
+            except Exception as e:
+                F.logger.error(f"Exception:{str(e)}")
+                F.logger.error(traceback.format_exc())
+                F.logger.error(f'{cls.__tablename__}_last_list_option ERROR!' )
+            return ret
+        except Exception as e:
+            cls.P.logger.error(f"Exception:{str(e)}")
+            cls.P.logger.error(traceback.format_exc())
 
     """
     @classmethod
