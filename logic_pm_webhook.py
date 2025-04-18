@@ -3,6 +3,7 @@ import json
 import threading
 import time
 import signal
+import platform
 import urllib.parse
 from datetime import datetime, timedelta
 
@@ -20,18 +21,6 @@ name = 'webhook'
 
 IGNORED_NO_INTRO_SHOWS = set()
 webhook_instance = None
-
-# from .logic_pm_webhook import webhook_instance
-# @F.celery.task(name='plex_mate.logic_pm_webhook.webhook_handler')
-# def celery_handle_webhook(data):
-#     try:
-#         with F.app.app_context():
-#             if webhook_instance is not None:
-#                 webhook_instance.handle_webhook_async(data)
-#             else:
-#                 logger.error("[CeleryWebhook] webhook_instance is None. 초기화 안됨.")
-#     except Exception as e:
-#         logger.exception(f"[CeleryWebhook] 처리 실패: {e}")
 
 
 class LogicPMWebhook(PluginModuleBase):
@@ -125,41 +114,6 @@ class LogicPMWebhook(PluginModuleBase):
             return render_template('sample.html', title=f"{package_name}/{self.name}/{sub}")
 
 
-    # def process_normal(self, sub, req):
-    #     logger.error(sub)
-    #     logger.error(req)
-    #     #data = json.loads(req.form['payload'])
-    #     #data = req.form
-    #     #logger.error(d(data))
-
-    #     # "\"start\":\"{file}\""
-    #     # "mode=start|server_name={server_name}|server_machine_id={server_machine_id}|user={user}|media_type={media_type}|title={title}|file={file}|section_id={section_id}|rating_key={rating_key}|progress_percent={progress_percent}"
-    #     if sub == 'tautulli':
-    #         text = req.get_json()
-    #         logger.warning(d(text))
-            
-    #         data = {}
-    #         for tmp in text.split('|'):
-    #             tmp2 = tmp.split('=', 1)
-    #             logger.info(tmp2)
-    #             data[tmp2[0]] = tmp2[1]
-            
-
-    #         #data = json.loads("{" + params + "}")
-    #         logger.error(d(data))
-
-    #         #if data['mode'] == 'start':
-    #         self.start(data)
-    #     elif sub == 'plex':
-    #         data = json.loads(req.form['payload'])
-    #         data = req.form
-    #         logger.error(d(data))
-
-
-
-    #     return "OK"
-
-   
 
     def process_ajax(self, sub, req):
         try:
@@ -312,17 +266,33 @@ class LogicPMWebhook(PluginModuleBase):
             return []
 
 
+    #def stop_cache_process(self, rating_key):
+    #    proc = self.cache_process_map.get(rating_key)
+    #    if proc:
+    #        try:
+    #            if proc.poll() is None:
+    #                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    #                logger.info(f"[Cache] 프로세스 종료: rating_key={rating_key}, PID={proc.pid}")
+    #        except Exception as e:
+    #            logger.error(f"[Cache] 프로세스 종료 실패: {e}")
+    #        finally:
+    #            self.cache_process_map.pop(rating_key, None)
+
     def stop_cache_process(self, rating_key):
         proc = self.cache_process_map.get(rating_key)
         if proc:
             try:
                 if proc.poll() is None:
-                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                    if platform.system() == 'Windows':
+                        proc.send_signal(signal.CTRL_BREAK_EVENT)
+                    else:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
                     logger.info(f"[Cache] 프로세스 종료: rating_key={rating_key}, PID={proc.pid}")
             except Exception as e:
                 logger.error(f"[Cache] 프로세스 종료 실패: {e}")
             finally:
                 self.cache_process_map.pop(rating_key, None)
+
 
     def get_ffmpeg_path(self, default='ffmpeg'):
         try:
@@ -357,16 +327,20 @@ class LogicPMWebhook(PluginModuleBase):
                         media_path = media_path.replace(path, self.directory_mapping[path])
 
             offset_seconds = int(viewOffset) // 1000 if viewOffset else 0
-            offset_time = time.strftime('%-H:%M:%S', time.gmtime(offset_seconds))
+            seconds = viewOffset / 1000
+            offset_time = time.strftime('%H:%M:%S', time.gmtime(offset_seconds))            
 
-            command = ['ffmpeg', '-hide_banner', '-loglevel', 'error']
+            command = [FFMPEG, '-hide_banner', '-loglevel', 'error']
             if cache_type == "full" and viewOffset:
                 command += ['-ss', offset_time]
             elif cache_type == "preview":
                 command += ['-t', str(300)]
-            command += ['-i', media_path, '-c', 'copy', '-f', 'null', '/dev/null']
-
-            proc = subprocess.Popen(command, preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            null_output = 'NUL' if platform.system() == 'Windows' else '/dev/null'
+            command += ['-i', media_path, '-c', 'copy', '-f', 'null', null_output]
+            if platform.system() == 'Windows':
+                proc = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+            else:
+                proc = subprocess.Popen(command, preexec_fn=os.setsid, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self.cache_process_map[rating_key] = proc
 
             logger.info(
@@ -787,6 +761,7 @@ class CacheDBHandler:
                 db.session.commit()
             except Exception as e:
                 logger.error(f"[CacheTrack] 오래된 기록 삭제 실패: {e}")
+
 
 
 #     #########################################################
