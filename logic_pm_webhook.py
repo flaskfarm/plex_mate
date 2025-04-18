@@ -265,19 +265,6 @@ class LogicPMWebhook(PluginModuleBase):
             logger.error(f"[Intro] 최근 회차 에피소드 ID 조회 오류: {e}")
             return []
 
-
-    #def stop_cache_process(self, rating_key):
-    #    proc = self.cache_process_map.get(rating_key)
-    #    if proc:
-    #        try:
-    #            if proc.poll() is None:
-    #                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-    #                logger.info(f"[Cache] 프로세스 종료: rating_key={rating_key}, PID={proc.pid}")
-    #        except Exception as e:
-    #            logger.error(f"[Cache] 프로세스 종료 실패: {e}")
-    #        finally:
-    #            self.cache_process_map.pop(rating_key, None)
-
     def stop_cache_process(self, rating_key):
         proc = self.cache_process_map.get(rating_key)
         if proc:
