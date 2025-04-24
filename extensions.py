@@ -146,12 +146,14 @@ def job__status(server: dict, job_id: int) -> dict:
 
 
 @rc_command
-def vfs__refresh(server: dict, remote_path: str, recursive: bool = False, async_: bool = False) -> dict:
+def vfs__refresh(server: dict, remote_path: str = None, recursive: bool = False, async_: bool = False) -> dict:
     data = {
         'server': server,
         'async': async_,
-        'args': [f'dir={remote_path}', '--fast-list'],
+        'args': ['--fast-list'],
     }
+    if remote_path:
+        data['args'].append(f'dir={remote_path}')
     if recursive:
         data['args'].append('recursive=true')
     if server['vfs']:
@@ -195,16 +197,18 @@ def vfs_forget(target: str, server: dict = None) -> None:
 @with_servers
 def vfs_refresh(target: str, recursive: bool = False, async_: bool = False, server: dict = None) -> None:
     remote_path = pathlib.Path(update_path(target, {server['local']: server['remote']}))
-    for parent in remote_path.parents[:-1]:
-        result = vfs__refresh(server, parent.as_posix()) or {}
+    for parent in remote_path.parents:
+        if parent == parent.parent:
+            result = vfs__refresh(server) or {}
+        else:    
+            result = vfs__refresh(server, parent.as_posix()) or {}
         P.logger.info(f'RC result: {result}')
         if ((result.get('result') or {}).get(parent.as_posix()) or '').lower() == 'ok':
             break
         if (result.get('result') or {}).get('error'):
             return
     else:
-        P.logger.error(f'It has hit the root path: "{remote_path.as_posix()}"')
-        return
+        P.logger.warning(f'It has hit the root path: "{remote_path.as_posix()}"')
     if not pathlib.Path(target).is_file():
         result = vfs__refresh(server, remote_path.as_posix(), recursive, async_)
         P.logger.info(f'RC result: {result}')

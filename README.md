@@ -12,6 +12,9 @@
   * 스캔
 
 ## Changelog
+- 1.2.12 (2025.04.24)
+    - root 폴더 vfs/refresh 가능하도록 수정
+
 - 1.2.11 (2025.04.24)
     - root 폴더는 vfs/refresh 제외
 
