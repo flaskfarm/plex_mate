@@ -195,7 +195,7 @@ def vfs_forget(target: str, server: dict = None) -> None:
 @with_servers
 def vfs_refresh(target: str, recursive: bool = False, async_: bool = False, server: dict = None) -> None:
     remote_path = pathlib.Path(update_path(target, {server['local']: server['remote']}))
-    for parent in remote_path.parents:
+    for parent in remote_path.parents[:-1]:
         result = vfs__refresh(server, parent.as_posix()) or {}
         P.logger.info(f'RC result: {result}')
         if ((result.get('result') or {}).get(parent.as_posix()) or '').lower() == 'ok':
