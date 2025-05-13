@@ -12,6 +12,7 @@ from sqlalchemy import Column, Integer, String, DateTime
 
 from .setup import *
 from .plex_db import PlexDBHandle
+from .page_tool_simple import PageToolSimple
 
 logger = P.logger
 package_name = P.package_name
@@ -28,12 +29,14 @@ class LogicPMWebhook(PluginModuleBase):
     db_default = {
         'webhook_use_discord': 'False',  
         'webhook_discord_events': '', 
-        'webhook_discord_url': '',     
+        'webhook_discord_url': '',    
+        'webhook_title_sort': 'False',
         'webhook_use_full': 'False',
         'webhook_use_preview': 'False',
         'webhook_use_intro_marker': 'False',
         'webhook_intro_match_similar': 'False',
         'webhook_intro_auto_copy': 'False',
+        'title_library_sections': '',
         'cache_library_sections_full': '',
         'cache_library_sections_preview': '',
         'intro_library_sections': '',
@@ -60,6 +63,9 @@ class LogicPMWebhook(PluginModuleBase):
         self.cache_process_map = {}
         self._register_webhook_route()
         self.web_list_model = ModelWebhookIntroHistory
+        self.title_sort_pending_sections = set()
+        self.title_sort_timer = None
+        self.title_sort_lock = threading.Lock()
         raw = P.ModelSetting.get('directory_mapping') or ''
         self.directory_mapping = {}
         for line in raw.strip().splitlines():
@@ -559,6 +565,29 @@ class LogicPMWebhook(PluginModuleBase):
             logger.exception(f"[Discord] 알림 전송 실패: {e}")
 
 
+    def debounce_title_sort(self):
+        with self.title_sort_lock:
+            if self.title_sort_timer:
+                self.title_sort_timer.cancel()
+
+            self.title_sort_timer = threading.Timer(5.0, self.flush_title_sort_queue)
+            self.title_sort_timer.start()
+
+    def flush_title_sort_queue(self):
+        with self.title_sort_lock:
+            sections_to_sort = list(self.title_sort_pending_sections)
+            self.title_sort_pending_sections.clear()
+            self.title_sort_timer = None
+
+        for section_id in sections_to_sort:
+            try:
+                page_tool = PageToolSimple(P, self)
+                with F.app.app_context():
+                    response = page_tool.process_command('tool_simple_title_sort', section_id, 'false', None, None)
+                    logger.info(f"[TitleSort] 정리 완료: 섹션 {section_id} → {response.get_json()}")
+            except Exception as e:
+                logger.error(f"[TitleSort] 섹션 {section_id} 처리 중 오류: {e}")
+                
     def handle_webhook_async(self, data):
         try:
             if P.ModelSetting.get_bool('webhook_use_discord'):
@@ -572,7 +601,9 @@ class LogicPMWebhook(PluginModuleBase):
             cache_library_sections_full = self.get_int_list('cache_library_sections_full')
             cache_library_sections_preview = self.get_int_list('cache_library_sections_preview')
             session_id = data.get('Player', {}).get('uuid')
+            webhook_title_sort = P.ModelSetting.get_bool(f'{name}_title_sort')
             use_intro_auto_copy = P.ModelSetting.get_bool(f'{name}_intro_auto_copy')
+            title_library_sections = self.get_int_list('title_library_sections')
             state = data.get('event', '').strip()
             intro_copy_sections = self.get_int_list('intro_copy_sections')
             if use_cache_full and (not cache_library_sections_full or library_section_id in cache_library_sections_full) and state in ['media.play', 'media.stop']:
@@ -619,6 +650,14 @@ class LogicPMWebhook(PluginModuleBase):
                         self.insert_intro_marker_if_possible(int(rating_key))
                 except Exception as e:
                     logger.error(f"[Intro] 최근 추가된 에피소드 마커 삽입 중 오류: {e}")
+
+            elif webhook_title_sort and state == 'library.new' and (not title_library_sections or library_section_id in title_library_sections):
+                try:
+                    with self.title_sort_lock:
+                        self.title_sort_pending_sections.add(library_section_id)
+                    self.debounce_title_sort()
+                except Exception as e:
+                    logger.error(f"[TitleSort] 처리 중 오류: {e}")
 
         except Exception as e:
             logger.error(f"[Webhook] 처리 오류: {e}")
