@@ -175,6 +175,8 @@ class Task(object):
             query += f"INSERT INTO {TABLE} ({insert_col}) VALUES ({insert_value});" 
 
         ret = PlexDBHandle.execute_query(query)
+        if ret:
+            logger.warning(f'Step 2: {ret}')
         logger.info(f"INSERT 2 {TABLE}") 
         #Task.target_con.commit()
         Task.copy_result[TABLE] = len(data)
@@ -221,11 +223,15 @@ class Task(object):
             query += f"INSERT INTO {TABLE} ({insert_col}) VALUES ({insert_value});"
             count += 1
             if count % INSERT_ROWS == 0:
-                PlexDBHandle.execute_query(query)     
+                ret = PlexDBHandle.execute_query(query)
+                if ret:
+                    logger.warning(f'Step 3: {ret}')
                 #logger.info(f"INSERT 3 {TABLE}: {count}")
                 Task.message(f" --- 추가: {count} / {len(data)}")
                 query = ""
         ret = PlexDBHandle.execute_query(query)
+        if ret:
+            logger.warning(f'Step 3: {ret}')
         Task.copy_result[TABLE] = len(data)
         Task.message(f" --- 추가: {Task.copy_result[TABLE]} / {len(data)}")
 
@@ -269,10 +275,14 @@ class Task(object):
             query += f"INSERT INTO {TABLE} ({insert_col}) VALUES ({insert_value});"
             count += 1
             if count % INSERT_ROWS == 0:
-                PlexDBHandle.execute_query(query)       
+                ret = PlexDBHandle.execute_query(query)
+                if ret:
+                    logger.warning(f'Step 4: {ret}')
                 Task.message(f" --- 추가: {count} / {len(data)}")
                 query = ""
         ret = PlexDBHandle.execute_query(query)
+        if ret:
+            logger.warning(f'Step 4: {ret}')
         Task.copy_result[TABLE] = len(data)
         Task.message(f" --- 추가: {Task.copy_result[TABLE]} / {len(data)}")
 
@@ -319,10 +329,14 @@ class Task(object):
             query += f"INSERT INTO {TABLE} ({insert_col}) VALUES ({insert_value});"
             count += 1
             if count % INSERT_ROWS == 0:
-                PlexDBHandle.execute_query(query)       
+                ret = PlexDBHandle.execute_query(query)
+                if ret:
+                    logger.warning(f'Step 5: {ret}')
                 Task.message(f" --- 추가: {count} / {len(data)}")
                 query = ""
         ret = PlexDBHandle.execute_query(query)
+        if ret:
+            logger.warning(f'Step 5: {ret}')
         Task.copy_result[TABLE] = len(data)
         Task.message(f" --- 추가: {Task.copy_result[TABLE]} / {len(data)}")
 
@@ -369,10 +383,14 @@ class Task(object):
             query += f"INSERT INTO {TABLE} ({insert_col}) VALUES ({insert_value});"
             count += 1
             if count % INSERT_ROWS == 0:
-                PlexDBHandle.execute_query(query)       
+                ret = PlexDBHandle.execute_query(query)
+                if ret:
+                    logger.warning(f'Step 6: {ret}')
                 Task.message(f" --- 추가: {count} / {len(data)}")
                 query = ""
         ret = PlexDBHandle.execute_query(query)
+        if ret:
+            logger.warning(f'Step 6: {ret}')
         Task.copy_result[TABLE] = len(data)
         Task.message(f" --- 추가: {Task.copy_result[TABLE]} / {len(data)}")
 
@@ -418,10 +436,14 @@ class Task(object):
             query += f"INSERT INTO {TABLE} ({insert_col}) VALUES ({insert_value});"
             count += 1
             if count % INSERT_ROWS == 0:
-                PlexDBHandle.execute_query(query)       
+                ret = PlexDBHandle.execute_query(query)
+                if ret:
+                    logger.warning(f'Step 7: {ret}')
                 Task.message(f" --- 추가: {count} / {len(data)}")
                 query = ""
         ret = PlexDBHandle.execute_query(query)
+        if ret:
+            logger.warning(f'Step 7: {ret}')
         Task.copy_result[TABLE] = len(data)
         Task.message(f" --- 추가: {Task.copy_result[TABLE]} / {len(data)}")
 
@@ -464,10 +486,14 @@ class Task(object):
             query += f"INSERT INTO {TABLE} ({insert_col}) VALUES ({insert_value});"
             count += 1
             if count % INSERT_ROWS == 0:
-                PlexDBHandle.execute_query(query)       
+                ret = PlexDBHandle.execute_query(query)
+                if ret:
+                    logger.warning(f'Step 8: {ret}')
                 Task.message(f" --- 추가: {count} / {len(data)}")
                 query = ""
         ret = PlexDBHandle.execute_query(query)
+        if ret:
+            logger.warning(f'Step 8: {ret}')
         Task.copy_result[TABLE] = len(data)
         Task.message(f" --- 추가: {Task.copy_result[TABLE]} / {len(data)}")
 
@@ -510,10 +536,14 @@ class Task(object):
             query += f"INSERT INTO {TABLE} ({insert_col}) VALUES ({insert_value});"
             count += 1
             if count % INSERT_ROWS == 0:
-                PlexDBHandle.execute_query(query)       
+                ret = PlexDBHandle.execute_query(query)
+                if ret:
+                    logger.warning(f'Step 9: {ret}')
                 Task.message(f" --- 추가: {count} / {len(data)}")
                 query = ""
         ret = PlexDBHandle.execute_query(query)
+        if ret:
+            logger.warning(f'Step 9: {ret}')
         Task.copy_result[TABLE] = len(data)
         Task.message(f" --- 추가: {Task.copy_result[TABLE]} / {len(data)}")
 
