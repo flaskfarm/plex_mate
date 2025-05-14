@@ -631,7 +631,7 @@ class LogicPMWebhook(PluginModuleBase):
                     if next_rating_key:
                         self.cache_video(session_id, next_rating_key, 0, 'preview')
 
-            elif use_intro_auto_copy and state == 'library.new' and (not intro_copy_sections or library_section_id in intro_copy_sections) :
+            if use_intro_auto_copy and state == 'library.new' and (not intro_copy_sections or library_section_id in intro_copy_sections) :
                 try:
                     if type == 'show':
                         if self.is_ignored_show(rating_key):
@@ -651,7 +651,7 @@ class LogicPMWebhook(PluginModuleBase):
                 except Exception as e:
                     logger.error(f"[Intro] 최근 추가된 에피소드 마커 삽입 중 오류: {e}")
 
-            elif webhook_title_sort and state == 'library.new' and (not title_library_sections or library_section_id in title_library_sections):
+            if webhook_title_sort and state == 'library.new' and (not title_library_sections or library_section_id in title_library_sections):
                 try:
                     with self.title_sort_lock:
                         self.title_sort_pending_sections.add(library_section_id)
