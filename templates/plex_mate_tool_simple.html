@@ -113,6 +113,9 @@
 {{ macros.m_hr() }}
 {{ macros.setting_input_text_and_buttons('tool_simple_remove_db_by_folder', '폴더로 DB 정리', [['remove_db_by_folder_btn', '삭제']], value=arg['tool_simple_remove_db_by_folder'], desc=['폴더']) }}
 
+{{ macros.m_hr() }}
+{{ macros.setting_input_text_and_buttons('default_agent_meta_id',  '기본 에이전트 TMDb 정보 갱신', [['default_agent_meta_update_btn', 'TMDb로 갱신']], value='', desc=['metadata_item_id 입력. Plex 기본 에이전트 메타를 TMDb 정보로 갱신합니다.']) }}
+
 {{ macros.setting_top('제목 색인 정리') }}
 <div class="input-group col-sm-9">
   <select id="tool_simple_title_sort_section_id" name="tool_simple_title_sort_section_id" class="form-control form-control-sm">
@@ -219,11 +222,15 @@ $("#tool_simple_title_sort_btn").on('click', function(e){
   globalSendCommandPage('tool_simple_title_sort', $('#tool_simple_title_sort_section_id').val(), 'False');
 });
 
+$("body").on('click', '#default_agent_meta_update_btn', function(e){
+  e.preventDefault();
+  globalSendCommandPage('default_agent_meta_update', $('#default_agent_meta_id').val());
+});
+
 $("#tool_simple_title_sort_preview_btn").on('click', function(e){
   e.preventDefault();
   globalSendCommandPage('tool_simple_title_sort', $('#tool_simple_title_sort_section_id').val(), 'True');
 });
-
 
 
 </script>    
