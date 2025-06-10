@@ -38,6 +38,35 @@
         {{ macros.setting_input_text('webhook_discord_events', '허용 이벤트', value=arg['webhook_discord_events'], desc=['지원: play, pause, stop, resume, scrobble, new. 빈칸 시 모두 허용']) }}
         {{ macros.setting_input_text('webhook_discord_url', '디스코드 웹훅 URL', value=arg['webhook_discord_url'], desc=['webhook 주소를 입력하세요']) }}
       </div>
+      {{ macros.setting_checkbox('webhook_agent_meta_update', '기본 에이전트 TMDb 정보 갱신', value=arg['webhook_agent_meta_update']) }}
+        <div id="webhook_agent_meta_update_div" style="display: none;">
+          {{ macros.setting_input_text_and_buttons('tmdb_api_key', 'TMDB API KEY', value=arg.get('tmdb_api_key', ''), desc=['TMDb에서 발급받은 개인 API KEY를 입력하세요']) }}
+          {{ macros.setting_input_text_and_buttons('agent_meta_update_sections', '기본 에이전트 TMDb 정보 갱신 ID', [['load_agent_meta_update_btn', '라이브러리 조회']], value=arg['agent_meta_update_sections'], desc=['쉼표로 구분, 빈칸 시 전체']) }}
+          <div id="webhook_agent_meta_update_result" class="mt-2 ps-2"></div>
+        <div class="d-flex justify-content-center align-items-center mt-3 ps-2">
+          <div class="d-flex flex-wrap align-items-center">
+            <div class="form-check form-switch me-4">
+              <input class="form-check-input" type="checkbox" id="agent_meta_lock_title" name="agent_meta_lock_title" {% if arg['agent_meta_lock_title'] == 'True' %}checked{% endif %}>
+              <label class="form-check-label" for="agent_meta_lock_title">제목 (title)</label>
+            </div>
+            <div class="form-check form-switch me-4" style="margin-left: 10px;"">
+              <input class="form-check-input" type="checkbox" id="agent_meta_lock_title_sort" name="agent_meta_lock_title_sort" {% if arg['agent_meta_lock_title_sort'] == 'True' %}checked{% endif %}>
+              <label class="form-check-label" for="agent_meta_lock_title_sort">정렬 (title_sort)</label>
+            </div>
+            <div class="form-check form-switch me-4" style="margin-left: 10px;"">
+              <input class="form-check-input" type="checkbox" id="agent_meta_lock_summary" name="agent_meta_lock_summary" {% if arg['agent_meta_lock_summary'] == 'True' %}checked{% endif %}>
+              <label class="form-check-label" for="agent_meta_lock_summary">줄거리 (summary)</label>
+            </div>
+            <div class="form-check form-switch me-4" style="margin-left: 10px;"">
+              <input class="form-check-input" type="checkbox" id="agent_meta_lock_year" name="agent_meta_lock_year" {% if arg['agent_meta_lock_year'] == 'True' %}checked{% endif %}>
+              <label class="form-check-label" for="agent_meta_lock_year">연도 (year)</label>
+            </div>
+          </div>
+          <div class="ms-4 fw-semibold" style="font-size: 0.95rem; margin-left: 1rem;">
+            Update 후 <strong>lock</strong> 할 항목
+          </div>
+        </div>
+      </div>
       {{ macros.setting_checkbox('webhook_title_sort', '제목 색인 정리', value=arg['webhook_title_sort']) }}
         <div id="webhook_title_sort_div" style="display: none;">
           {{ macros.setting_input_text_and_buttons('title_library_sections', '제목 색인 정리 라이브러리 ID', [['load_title_library_sections_btn', '라이브러리 조회']], value=arg['title_library_sections'], desc=['쉼표로 구분, 빈칸 시 전체']) }}
@@ -124,18 +153,24 @@ $(document).ready(function() {
 });
 
 $(document).ready(function(){
+  toggleSectionVisibility('webhook_agent_meta_update', 'webhook_agent_meta_update_div');
   toggleSectionVisibility('webhook_title_sort', 'webhook_title_sort_div');
   toggleSectionVisibility('webhook_use_full', 'webhook_use_full_div');
   toggleSectionVisibility('webhook_use_preview', 'webhook_use_preview_div');
   toggleSectionVisibility('webhook_use_intro_marker', 'webhook_use_intro_marker_div');
   toggleIntroCopySection();
 
+  $('#webhook_agent_meta_update').change(() => toggleSectionVisibility('webhook_agent_meta_update', 'webhook_agent_meta_update_div'));
   $('#webhook_title_sort').change(() => toggleSectionVisibility('webhook_title_sort', 'webhook_title_sort_div'));
   $('#webhook_use_full').change(() => toggleSectionVisibility('webhook_use_full', 'webhook_use_full_div'));
   $('#webhook_use_preview').change(() => toggleSectionVisibility('webhook_use_preview', 'webhook_use_preview_div'));
   $('#webhook_use_intro_marker').change(() => toggleSectionVisibility('webhook_use_intro_marker', 'webhook_use_intro_marker_div'));
   $('#webhook_intro_auto_copy').change(toggleIntroCopySection);
 
+  $('#load_agent_meta_update_btn').click(function(e){
+  e.preventDefault();
+  requestLibrarySections('agent_meta_update_sections', 'webhook_agent_meta_update_result');
+  });
   $('#load_title_library_sections_btn').click(function(e){
   e.preventDefault();
   requestLibrarySections('title_library_sections', 'webhook_title_sort_result');
