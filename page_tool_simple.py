@@ -2,10 +2,10 @@ import shutil
 import threading
 import time
 import unicodedata
-
+from support import SupportString, SupportYaml
 from .plex_db import PlexDBHandle
 from .setup import *
-
+from datetime import datetime, timezone, timedelta
 logger = P.logger
 
 
@@ -207,6 +207,26 @@ class PageToolSimple(PluginPageBase):
             elif command == 'fix_yamlmusic':
                 self.task_interface(self.fix_yamlmusic)
                 ret['msg'] = "작업을 시작합니다."
+            elif command == 'default_agent_meta_update':
+                metadata_item_id = arg1
+                try:
+                    row = PlexDBHandle.select_arg(
+                        "SELECT metadata_type FROM metadata_items WHERE id = ?",
+                        (metadata_item_id,)
+                    )
+                    if not row:
+                        ret['ret'] = 'fail'
+                        ret['msg'] = f"metadata_item_id {metadata_item_id} 이 존재하지 않습니다."
+                    elif row[0]['metadata_type'] not in (1, 2):
+                        ret['ret'] = 'fail'
+                        ret['msg'] = f"metadata_item_id {metadata_item_id} 의 metadata_type이 1(movie) 또는 2(show)가 아닙니다."
+                    else:
+                        result = self.update_by_default_agent_tmdb(metadata_item_id)
+                        ret.update(result)
+                except Exception as e:
+                    logger.error(f"[MetaUpdate] 수동 메타 업데이트 중 예외: {e}")
+                    ret['ret'] = 'fail'
+                    ret['msg'] = f"예외 발생: {e}"
             elif command == 'tool_simple_title_sort':
                 sortings = self.get_title_sortings(int(arg1))
                 if not sortings:
@@ -233,12 +253,499 @@ class PageToolSimple(PluginPageBase):
             return jsonify({'ret':'danger', 'msg':str(e)})
 
 
+    def tmdb_info(self, tmdb_code, is_show):
+        import tmdbsimple as tmdb
+        api_key = P.ModelSetting.get('tmdb_api_key')
+        if not api_key:
+            logger.warning("TMDb API 키가 설정되어 있지 않습니다.")
+            return None
+        tmdb.API_KEY = api_key
+        try:
+            tmdb_info = tmdb.TV(tmdb_code).info(language='ko') if is_show else tmdb.Movies(tmdb_code).info(language='ko')
+            return tmdb_info
+        except Exception as e:
+            logger.debug(f"TMDB 정보 가져오기 실패: {e}")
+            return None
+
+    def parse_season_folder(self, name: str):
+        match = re.search(
+            r'^(Season|시즌)\s(?P<force_season_num>\d{1,8})((\s|\.)?(?P<season_title>.*?))?$',
+            name.strip(),
+            re.IGNORECASE
+        )
+        if match:
+            return {
+                'season_folder': name.strip(),
+                'force_season_num': int(match.group('force_season_num')),
+                'season_title': match.group('season_title') or None
+            }
+        return {'season_folder': name.strip()}  
+
+    def extract_url(self, value):
+
+        if isinstance(value, str):
+            return value
+        elif isinstance(value, list) and value:
+            first = value[0]
+            if isinstance(first, str):
+                return first
+            elif isinstance(first, dict) and 'url' in first:
+                return first['url']
+        return None
+
+    def get_yaml_metadata(self, row, yaml_data):
+        mtype = row.get('metadata_type')
+        index = row.get('metadata_index')
+        season_index = row.get('season_index')
+
+        result = {
+            'title': None,
+            'summary': None,
+            'originally_available_at': None,
+            'poster': None,
+            'thumb': None,
+            'art': None
+        }
+
+        if not yaml_data:
+            return result
+
+        if mtype in [1, 2]:
+            posters = yaml_data.get('posters')
+            result['title'] = yaml_data.get('title')
+            result['summary'] = yaml_data.get('summary')
+            result['originally_available_at'] = yaml_data.get('originally_available_at')
+            result['poster'] = self.extract_url(posters)
+            result['art'] = yaml_data.get('art')
+
+        elif mtype == 3:
+            season = next((s for s in yaml_data.get('seasons', []) if s.get('index') == index), None)
+            if season:
+                season_posters = season.get('posters')
+                result['title'] = season.get('title')
+                result['summary'] = season.get('summary')
+                result['originally_available_at'] = season.get('originally_available_at')
+                result['poster'] = self.extract_url(season_posters)
+                result['art'] = season.get('art')
+
+        elif mtype == 4:
+            season = next((s for s in yaml_data.get('seasons', []) if s.get('index') == season_index), None)
+            if season:
+                episode = next((e for e in season.get('episodes', []) if e.get('index') == index), None)
+                if episode:
+                    result['title'] = episode.get('title')
+                    result['summary'] = episode.get('summary')
+                    result['originally_available_at'] = episode.get('originally_available_at')
+                    result['thumbs'] = episode.get('thumbs')
+
+        return result
+    
+    def enrich_rows(self, rows: list[dict]) -> list[dict]:
+
+        first_episode = next((r for r in rows if r['metadata_type'] == 4 and r.get('file_path')), None)
+        normalized = [dict(r) for r in rows]
+
+        for row in normalized:
+            mtype = row['metadata_type']
+            file_path = row.get('file_path')
+
+            if mtype == 1 and file_path:
+                row['yaml_path'] = os.path.join(os.path.dirname(file_path), 'movie.yaml')
+
+            elif mtype == 2 and first_episode:
+                rel_path = os.path.relpath(first_episode['file_path'], first_episode['section_root'])
+                parts = rel_path.split(os.sep)
+                if len(parts) >= 1:
+                    show_name = parts[0]
+                    row['section_root'] = first_episode['section_root']
+                    row['yaml_path'] = os.path.join(first_episode['section_root'], show_name, 'show.yaml')
+
+            elif mtype == 3:
+                row_id = row.get('id')
+                ep = next((r for r in rows if r.get('metadata_type') == 4 and r.get('file_path') and r.get('parent_id') == row_id), None)
+                if ep:
+                    season_folder = os.path.basename(os.path.dirname(ep['file_path']))
+                    row['section_root'] = ep['section_root']
+                    row.update(self.parse_season_folder(season_folder))
+
+            elif mtype == 4:
+                parent_id = row.get('parent_id')
+                season_row = next((sr for sr in normalized if sr['metadata_type'] == 3 and sr['id'] == parent_id), None)
+                if season_row and 'metadata_index' in season_row:
+                    row['season_index'] = season_row.get('metadata_index') or season_row.get('index')
+
+        lookup = {
+            (r.get('season_index'), r.get('index')): r
+            for r in normalized if r['metadata_type'] == 4
+        }
+
+        for row in normalized:
+            if row['metadata_type'] == 3:
+                mi = row.get('metadata_index')
+                if mi and mi >= 100:
+                    base_row = next(
+                        (s for s in normalized
+                        if s['metadata_type'] == 3 and s.get('metadata_index') == mi % 100),
+                        None
+                    )
+                    if base_row:
+                        row['base_row'] = base_row
+
+            elif row['metadata_type'] == 4:
+                si = row.get('season_index')
+                ei = row.get('index')
+                if si and si >= 100:
+                    row['base_row'] = lookup.get((si % 100, ei))
+
+
+        normalized.sort(key=lambda r: (
+            r['metadata_type'],
+            r.get('season_index', 0),
+            r.get('index', 0),
+            r['id']
+        ))
+
+        return normalized
+
+    def update_by_default_agent_tmdb(self, metadata_item_id, title_lock=False, title_sort_lock=False, summary_lock=False, year_lock=False):
+        query = """
+        WITH RECURSIVE descendants(
+            id, metadata_type, parent_id, title, title_sort,
+            summary, year, originally_available_at, user_fields, changed_at,
+            guid, duration, user_thumb_url, user_art_url, tmdb_id, library_section_id,
+            "index", original_title, content_rating, tags_director, tags_writer, tags_star, audience_rating
+        ) AS (
+            SELECT 
+                mdi.id, mdi.metadata_type, mdi.parent_id,
+                mdi.title, mdi.title_sort, mdi.summary, mdi.year,
+                datetime(mdi.originally_available_at, 'unixepoch'),
+                mdi.user_fields, mdi.changed_at,
+                mdi.guid, mdi.duration, mdi.user_thumb_url, mdi.user_art_url,
+                REPLACE(t.tag, 'tmdb://', ''),
+                mdi.library_section_id,
+                mdi."index",
+                mdi.original_title, mdi.content_rating, mdi.tags_director, mdi.tags_writer, mdi.tags_star, mdi.audience_rating
+            FROM metadata_items mdi
+            JOIN taggings tg ON tg.metadata_item_id = mdi.id
+            JOIN tags t ON t.id = tg.tag_id
+            WHERE t.tag_type = 314
+            AND t.tag LIKE 'tmdb://%'
+            AND mdi.id = ?
+
+            UNION ALL
+
+            SELECT 
+                m.id, m.metadata_type, m.parent_id,
+                m.title, m.title_sort, m.summary, m.year,
+                datetime(m.originally_available_at, 'unixepoch'),
+                m.user_fields, m.changed_at,
+                m.guid, m.duration, m.user_thumb_url, m.user_art_url,
+                NULL,  -- tmdb_id는 NULL
+                m.library_section_id,
+                m."index",
+                m.original_title, m.content_rating, m.tags_director, m.tags_writer, m.tags_star, m.audience_rating
+            FROM metadata_items m
+            JOIN descendants d ON m.parent_id = d.id
+        )
+
+        SELECT 
+            d.*, 
+            d."index" AS metadata_index,
+            mp.file AS file_path,
+            sl.root_path AS section_root
+        FROM descendants d
+        LEFT JOIN media_items mi ON mi.metadata_item_id = d.id
+        LEFT JOIN media_parts mp ON mp.media_item_id = mi.id
+        LEFT JOIN section_locations sl 
+        ON d.library_section_id = sl.library_section_id
+        AND mp.file LIKE sl.root_path || '%'
+        ORDER BY d.metadata_type ASC, d.id ASC;
+        """
+        retry_interval = 30  
+        max_attempts = 10
+
+        for attempt in range(1, max_attempts + 1):
+            data = PlexDBHandle.select_arg(query, (int(metadata_item_id),))
+            if data:
+                break
+            if attempt < max_attempts:
+                logger.warning(f"[MetaUpdate] metadata_item_id {metadata_item_id} 데이터가 없음. {retry_interval}초 후 재시도... (시도 {attempt}/{max_attempts})")
+                time.sleep(retry_interval)
+            else:
+                logger.error(f"[MetaUpdate] metadata_item_id {metadata_item_id} 데이터 조회 실패 (최대 재시도 초과)")
+                return {'ret': 'fail', 'msg': f'{retry_interval * max_attempts}초간 대기했지만 metadata_id={metadata_item_id} 데이터가 조회되지 않았습니다.'}
+
+        if not data[0]['guid'].startswith('plex://'):
+
+            return {'ret': 'success', 'msg': '기본 에이전트가 아닙니다.'}
+
+        updated_data = self.enrich_rows(data)
+
+        yaml_data = None
+        tmdb_data = None
+
+        show_row = next((r for r in updated_data if r['metadata_type'] in [1, 2]), None)
+        if show_row and os.path.exists(show_row.get('yaml_path', '')):
+            yaml_data = SupportYaml.read_yaml(show_row['yaml_path'])
+        
+        if show_row and show_row.get('tmdb_id'):
+            is_show = show_row['metadata_type'] == 2
+            tmdb_data = self.tmdb_info(show_row['tmdb_id'], is_show)
+            if not tmdb_data:
+                return {'ret': 'fail', 'msg': 'TMDb 데이터 가져오기 실패'}
+        
+        updated_count = 0
+
+        for row in updated_data:
+
+            update_fields, updated_fields, locked_codes, msg_parts = [], [], [], []
+            mtype = row['metadata_type']
+            updated = False
+            yaml_tdata = None
+
+            db_year = int(row['year']) if row['year'] else None
+            yaml_tdata = self.get_yaml_metadata(row, yaml_data) if yaml_data else {}
+
+            new_title = None
+            db_title = row['title']
+            if tmdb_data and mtype in [1, 2]:
+                tmdb_date = None
+                tmdb_date = tmdb_data.get('release_date') or tmdb_data.get('first_air_date')
+                tmdb_year = int(tmdb_date[:4]) if tmdb_date else None
+                if tmdb_year and int(tmdb_year) != 1900 and (not db_year or db_year != tmdb_year):
+                    timestamp = int(datetime.strptime(tmdb_date, '%Y-%m-%d').timestamp())
+                    update_fields.append(f"originally_available_at = {timestamp}")
+                    update_fields.append(f"year = {tmdb_year}")
+                    updated_fields.extend(['originally_available_at', 'year'])
+                    msg_parts.append(f"연도 갱신: {db_year} -> {tmdb_year}")
+
+                new_title = (yaml_tdata.get('title') or tmdb_data.get('title') or tmdb_data.get('name') or '').strip()
+            elif mtype == 3:
+                new_title = row.get('season_title') or ''
+            elif yaml_tdata and mtype == 4:  
+                new_title = (yaml_tdata.get('title') or '').strip()
+            if new_title and db_title != new_title:
+                safe_title = new_title.replace("'", "''")
+                update_fields.append(f"title = '{safe_title}'")
+                updated_fields.append('title')
+                msg_parts.append(f"제목 변경: {db_title} -> {new_title}")
+                if title_sort_lock:
+                    first_char = new_title.lstrip()[0]
+                    if first_char.isalnum() and not 44032 <= ord(first_char) <= 55203:
+                        pass
+                    else:
+                        title_sort_cleaned = "".join([word for word in re.split(r'\W', new_title) if word])
+                        if not title_sort_cleaned:
+                            title_sort_cleaned = new_title
+                        title_sort_normalized = unicodedata.normalize("NFKD", title_sort_cleaned)
+                        safe_title_sort = title_sort_normalized.replace("'", "''")
+
+                        if row['title_sort'] != title_sort_normalized:
+                            update_fields.append(f"title_sort = '{safe_title_sort}'")
+                            updated_fields.append('title_sort')
+                            logger.debug(f"title_sort 업데이트: '{row['title_sort']}' -> '{safe_title_sort}'")
+                else:
+                    if row['title_sort'] != new_title:
+                        update_fields.append(f"title_sort = '{safe_title}'")
+                        updated_fields.append('title_sort')
+
+            db_summary = row['summary']
+            tmdb_summary = tmdb_data.get('overview') if tmdb_data else None
+            
+            safe_summary = None
+            if mtype in [1, 2]:
+                new_summary = (yaml_tdata.get('summary') or tmdb_summary)
+                if new_summary and not SupportString.is_include_hangul(db_summary) and SupportString.is_include_hangul(new_summary) :
+                    if new_summary and isinstance(new_summary, str):
+                        safe_summary = new_summary.replace("'", "''")
+            elif mtype == 3:
+                yaml_summary = yaml_tdata.get('summary') if yaml_tdata else None
+                base_row = row.get('base_row')
+                base_summary = base_row.get('summary') if base_row else None
+                new_summary = yaml_summary or base_summary
+                if new_summary and isinstance(new_summary, str) and new_summary != db_summary:
+                    safe_summary = new_summary.replace("'", "''")
+            elif mtype == 4:
+                if yaml_tdata:
+                    new_summary = yaml_tdata.get('summary')
+                    if new_summary and isinstance(new_summary, str):
+                        db_summary_clean = re.sub(r'\s+', ' ', db_summary.strip() if db_summary else '')
+                        new_summary_clean = re.sub(r'\s+', ' ', new_summary.strip())
+                        if new_summary_clean != db_summary_clean:
+                            safe_summary = new_summary.replace("'", "''")
+            if safe_summary :
+                update_fields.append(f"summary = '{safe_summary}'")
+                updated_fields.append('summary')
+                msg_parts.append("요약(한글) 갱신")
+
+            if mtype == 3 and 'base_row' in row:
+                for field in ['guid', 'year', 'updated_at', 'extra_data']:
+                    base_val = row['base_row'].get(field)
+                    current_val = row.get(field)
+
+                    if field == 'year':
+                        if current_val != base_val:
+                            update_fields.append(f"{field} = {base_val}")
+                            updated_fields.append(field)
+                        continue
+
+                    elif field == 'updated_at':
+                        if isinstance(base_val, datetime):
+                            base_val_str = base_val.strftime('%Y-%m-%d %H:%M:%S')
+                        else:
+                            base_val_str = str(base_val) if base_val is not None else None
+
+                        if base_val_str:
+                            try:
+                                dt = datetime.strptime(base_val_str, '%Y-%m-%d %H:%M:%S')
+                                dt_plus = dt + timedelta(seconds=1)
+                                updated_str = dt_plus.strftime('%Y-%m-%d %H:%M:%S')
+                                if current_val != updated_str:
+                                    update_fields.append(f"{field} = '{updated_str}'")
+                                    updated_fields.append(field)
+                            except Exception as e:
+                                logger.warning(f"updated_at 파싱 실패: {base_val_str} → {e}")
+                        continue
+
+                    elif isinstance(base_val, str):
+                        escaped_val = base_val.replace("'", "''")
+                        if current_val != base_val:
+                            update_fields.append(f"{field} = '{escaped_val}'")
+                            updated_fields.append(field)
+                        continue
+
+                    if current_val != base_val:
+                        update_fields.append(f"{field} = '{base_val}'" if base_val is not None else f"{field} = NULL")
+                        updated_fields.append(field)
+
+
+            elif mtype == 4 and 'base_row' in row and row['base_row'] :
+                for field in ['guid', 'title', 'title_sort', 'summary', 'original_title', 'duration', 'content_rating', 'tags_director', 'tags_writer', 'tags_star', 'originally_available_at', 'audience_rating']:
+                    base_val = row['base_row'].get(field)
+                    current_val = row.get(field)
+                    if field in ['title', 'title_sort', 'summary'] :
+                        if field in updated_fields or current_val:
+                            continue
+
+                    if field == 'originally_available_at':
+
+                        if isinstance(base_val, str):
+                            try:
+                                date_str = base_val[:10]
+                                dt_utc = datetime.strptime(date_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+                                base_val_ts = int(dt_utc.timestamp())
+                            except Exception as e:
+                                logger.warning(f"날짜 파싱 실패: {base_val} → {e}")
+                                base_val_ts = None
+                        else:
+                            base_val_ts = base_val
+
+                        if isinstance(current_val, str):
+                            try:
+                                dt_utc = datetime.strptime(current_val, '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
+                                current_val_ts = int(dt_utc.timestamp())
+                            except:
+                                current_val_ts = None
+                        else:
+                            current_val_ts = current_val
+
+                        if current_val_ts != base_val_ts:
+                            logger.debug(current_val_ts)
+                            logger.debug(base_val_ts)
+                            val = base_val_ts
+                            update_fields.append(f"{field} = '{val}'" if val is not None else f"{field} = NULL")
+                            updated_fields.append(field)
+                    else:
+                        if current_val != base_val:
+                            val = base_val.replace("'", "''") if isinstance(base_val, str) else base_val
+                            update_fields.append(f"{field} = '{val}'" if val is not None else f"{field} = NULL")
+                            updated_fields.append(field)
+
+            new_url = None
+            tmdb_url = None
+            if mtype in [1, 2]:
+                image_fields = [
+                ('poster', 'poster_path', 'user_thumb_url'),
+                ('art', 'backdrop_path', 'user_art_url'),
+                ]
+                for kind, path_key, db_field in image_fields:
+                    current = row.get(db_field, '')
+                    if current and not current.startswith('media://'):
+                        continue
+                    if tmdb_data.get(path_key):
+                        tmdb_url = f"https://image.tmdb.org/t/p/original{tmdb_data[path_key]}"
+                        new_url = (yaml_tdata.get(kind) or tmdb_url)
+                    if new_url:
+                        safe_img_url = new_url.replace("'", "''")
+                        update_fields.append(f"{db_field} = '{safe_img_url}'")
+                        updated = True
+            elif mtype == 3:
+                poster_url = (yaml_tdata.get('poster') if yaml_tdata else None) \
+                    or (row.get('base_row') or {}).get('user_thumb_url')
+                if poster_url and row.get('user_thumb_url') != poster_url:
+                    safe_poster_url = poster_url.replace("'", "''")
+                    update_fields.append(f"user_thumb_url = '{safe_poster_url}'")
+                    updated_fields.append('user_thumb_url')
+                    updated = True
+
+            elif mtype == 4:
+                base_row = row.get('base_row')
+                thumb_url = yaml_tdata.get('thumbs') or (base_row and base_row.get('user_thumb_url'))
+
+                if thumb_url and not thumb_url.startswith('media://') and thumb_url != row.get('user_thumb_url'):
+                    safe_thumb_url = thumb_url.replace("'", "''")
+                    update_fields.append(f"user_thumb_url = '{safe_thumb_url}'")
+                    updated_fields.append('user_thumb_url')
+                    updated = True
+
+            if title_lock and 'title' in updated_fields:
+                locked_codes.append(1)
+            if mtype in [1, 2, 4] and title_sort_lock and 'title_sort' in updated_fields:
+                locked_codes.append(2)
+            if summary_lock and 'summary' in updated_fields:
+                locked_codes.append(7)  
+            if mtype in [1, 2] and year_lock and 'originally_available_at' in updated_fields:
+                locked_codes.append(13)
+                locked_codes.append(14)   
+
+            if locked_codes:
+
+                current_user_fields = row.get('user_fields') or ''
+                match = re.search(r'lockedFields=([\d|]+)', current_user_fields)
+                existing = set(map(int, match.group(1).split('|'))) if match else set()
+                merged = sorted(existing.union(locked_codes))
+                locked_str = 'lockedFields=' + '|'.join(map(str, merged))
+                if 'lockedFields=' in current_user_fields:
+                    user_fields_new = re.sub(r'lockedFields=[\d|]*', locked_str, current_user_fields)
+                else:
+                    user_fields_new = f"{current_user_fields}||{locked_str}" if current_user_fields else locked_str
+
+                update_fields.append(f"user_fields = '{user_fields_new}'")
+                updated = True
+
+            if updated:
+                update_fields.append(f"updated_at = {int(datetime.strptime(row['updated_at'], '%Y-%m-%d %H:%M:%S').timestamp()) + 1}" if row.get('updated_at') else f"updated_at = {int(time.time())}")
+                update_fields.append(f"changed_at = {int(row['changed_at']) + 1 if row.get('changed_at') is not None else 1}")
+
+            if update_fields:
+                update_sql = f"UPDATE metadata_items SET {', '.join(update_fields)} WHERE id = {row['id']};"
+                logger.debug(f"[TMDB 업데이트] {update_sql}")
+                result = PlexDBHandle.execute_query(update_sql)
+                if result is False:
+                    return {'ret': 'fail', 'msg': 'DB 업데이트 실패'}
+                updated_count += 1
+
+        if updated_count > 0:
+            return {'ret': 'success', 'msg': f'{updated_count}개 항목 업데이트'}
+        else:
+            return {'ret': 'success', 'msg': '변경할 항목이 없습니다.'}
+
     def get_title_sortings(self, section_id: int) -> list:
         query = "SELECT id, title, title_sort, metadata_type FROM metadata_items WHERE library_section_id = ?"
         rows: dict = PlexDBHandle.select_arg(query, (section_id,))
         sortings = []
         for row in rows:
-            if not row.get('title'):
+            if row.get('metadata_type') > 10 or not row.get('title'):
                 continue
             if row.get('title_sort'):
                 first_char = row['title_sort'][0]
@@ -255,7 +762,6 @@ class PageToolSimple(PluginPageBase):
             if new_title_sort != row['title_sort']:
                 sortings.append((row['id'], row['title'], row['title_sort'], new_title_sort))
         return sortings
-
 
     def remove_meta(self, metaid):
         #ret = PlexDBHandle.section_location()
