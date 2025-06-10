@@ -262,6 +262,15 @@ class Task:
         return len(failed_list)
     """
 
+    def get_int_list(key):
+        raw = P.ModelSetting.get(key) or ''
+        items = []
+        for line in raw.strip().splitlines():
+            for part in line.split(','):
+                part = part.strip()
+                if part.isdigit():
+                    items.append(int(part))
+        return items
 
     def process_item_add_on_queue(db_item:ModelScanItem):
         try:
@@ -269,14 +278,49 @@ class Task:
                 pass
             else:
                 Task.current_scan_count += 1
-                PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.scan_folder, callback_function=Task.subprcoess_callback_function, callback_id=f"pm_scan_{db_item.id}")
+                use_web_request = P.ModelSetting.get_bool('scan_use_web_request')
+                scan_web_sections = Task.get_int_list('scan_web_sections')
+                if use_web_request and db_item.section_id and (not scan_web_sections or int(db_item.section_id) in scan_web_sections):
+                    threading.Thread(target=Task.handle_web_scan, args=(db_item,)).start()
+                else:
+                    PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.scan_folder, callback_function=Task.subprcoess_callback_function, callback_id=f"pm_scan_{db_item.id}")
             
         except Exception as e:
             logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())
 
 
-    def subprcoess_callback_function(call_id, mode, log):
+    def handle_web_scan(db_item, max_wait=300, interval=30):
+        Task.subprcoess_callback_function(f"pm_scan_{db_item.id}", "START", "Web scan started")
+        web_target = db_item.scan_folder
+        section_type = db_item.section_type or None
+        if section_type and str(section_type) == "2":
+            try:
+                query = f"SELECT root_path FROM section_locations WHERE '{db_item.scan_folder}' LIKE root_path || '%' ORDER BY LENGTH(root_path) DESC LIMIT 1;"
+                result = PlexDBHandle.select(query)
+                root_path = result[0]['root_path'] if result else None
+                if root_path and os.path.normpath(db_item.scan_folder) != os.path.normpath(root_path):
+                    rel_path = os.path.relpath(db_item.scan_folder, root_path)
+                    parts = rel_path.split(os.sep)
+                    show_name = parts[0]
+                    web_target =  os.path.join(root_path, show_name)
+                    P.logger.debug(f"[handle_web_scan] Adjusted web_target: {web_target}")
+            except Exception as e:
+                logger.error(f"Exception:{str(e)}")
+                logger.error(traceback.format_exc())
+        PlexWebHandle.path_scan(db_item.section_id, web_target)
+
+        waited = 0
+        while waited < max_wait:
+            if Task.__check_media_part_data(db_item):
+                Task.subprcoess_callback_function(f"pm_scan_{db_item.id}", "END", "Web scan completed (media found)", web=True)
+                return
+            time.sleep(interval)
+            waited += interval
+
+        Task.subprcoess_callback_function(f"pm_scan_{db_item.id}", "END", "Web scan timeout - media not found", web=False)
+
+    def subprcoess_callback_function(call_id, mode, log, web=False):
         logger.debug(f"[{mode}] [{log}]")
         try:
             db_item = ModelScanItem.get_by_id(call_id.split('_')[-1])
@@ -297,7 +341,10 @@ class Task:
                     새로운 상태 추가
                     FINISH_SCANNING: 스캔은 끝났지만 media_parts 테이블에 파일이 추가됐는지 확인이 안 되는 상태
                     '''
-                    if Task.__check_media_part_data(db_item):
+                    if web:
+                        db_item.set_status('FINISH_ADD', save=True)
+                        PlexDBHandle.update_show_recent()
+                    elif Task.__check_media_part_data(db_item):
                         db_item.set_status('FINISH_ADD', save=True)
                         PlexDBHandle.update_show_recent()
                     else:
