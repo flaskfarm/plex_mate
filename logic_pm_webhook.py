@@ -29,13 +29,20 @@ class LogicPMWebhook(PluginModuleBase):
     db_default = {
         'webhook_use_discord': 'False',  
         'webhook_discord_events': '', 
-        'webhook_discord_url': '',    
+        'webhook_discord_url': '',  
+        'webhook_agent_meta_update': 'False', 
+        'tmdb_api_key' : '',
+        'agent_meta_lock_title': 'False',
+        'agent_meta_lock_title_sort': 'False',
+        'agent_meta_lock_summary': 'False',
+        'agent_meta_lock_year': 'False',
         'webhook_title_sort': 'False',
         'webhook_use_full': 'False',
         'webhook_use_preview': 'False',
         'webhook_use_intro_marker': 'False',
         'webhook_intro_match_similar': 'False',
         'webhook_intro_auto_copy': 'False',
+        'agent_meta_update_sections': '',
         'title_library_sections': '',
         'cache_library_sections_full': '',
         'cache_library_sections_preview': '',
@@ -66,6 +73,9 @@ class LogicPMWebhook(PluginModuleBase):
         self.title_sort_pending_sections = set()
         self.title_sort_timer = None
         self.title_sort_lock = threading.Lock()
+        self.agent_meta_update_pending_keys = set()
+        self.agent_meta_update_lock = threading.Lock()
+        self.agent_meta_update_timer = None
         raw = P.ModelSetting.get('directory_mapping') or ''
         self.directory_mapping = {}
         for line in raw.strip().splitlines():
@@ -320,7 +330,7 @@ class LogicPMWebhook(PluginModuleBase):
                         media_path = media_path.replace(path, self.directory_mapping[path])
 
             offset_seconds = int(viewOffset) // 1000 if viewOffset else 0
-            seconds = viewOffset / 1000
+            #seconds = viewOffset / 1000
             offset_time = time.strftime('%H:%M:%S', time.gmtime(offset_seconds))            
 
             command = [FFMPEG, '-hide_banner', '-loglevel', 'error']
@@ -564,14 +574,37 @@ class LogicPMWebhook(PluginModuleBase):
         except Exception as e:
             logger.exception(f"[Discord] 알림 전송 실패: {e}")
 
+    def debounce(self, timer_attr, lock_attr, flush_method_name, delay=5.0):
+        lock = getattr(self, lock_attr)
+        with lock:
+            timer = getattr(self, timer_attr, None)
+            if timer:
+                timer.cancel()
 
-    def debounce_title_sort(self):
-        with self.title_sort_lock:
-            if self.title_sort_timer:
-                self.title_sort_timer.cancel()
+            new_timer = threading.Timer(delay, getattr(self, flush_method_name))
+            setattr(self, timer_attr, new_timer)
+            new_timer.start()
 
-            self.title_sort_timer = threading.Timer(5.0, self.flush_title_sort_queue)
-            self.title_sort_timer.start()
+    def flush_meta_update_queue(self):
+        with self.agent_meta_update_lock:
+            rating_keys = list(self.agent_meta_update_pending_keys)
+            self.agent_meta_update_pending_keys.clear()
+            self.agent_meta_update_timer = None
+
+        for rating_key in rating_keys:
+            try:
+                page_tool = PageToolSimple(P, self)
+                result = page_tool.update_by_default_agent_tmdb(
+                    rating_key,
+                    title_lock=P.ModelSetting.get_bool('agent_meta_lock_title'),
+                    title_sort_lock=P.ModelSetting.get_bool('agent_meta_lock_title_sort'),
+                    summary_lock=P.ModelSetting.get_bool('agent_meta_lock_summary'),
+                    year_lock=P.ModelSetting.get_bool('agent_meta_lock_year')
+                )
+                logger.info(f"[MetaUpdate] batch, rating_key={rating_key}, result={result}")
+            except Exception as e:
+                logger.error(f"[MetaUpdate] batch rating_key={rating_key} 처리 중 오류: {e}")
+
 
     def flush_title_sort_queue(self):
         with self.title_sort_lock:
@@ -601,8 +634,14 @@ class LogicPMWebhook(PluginModuleBase):
             cache_library_sections_full = self.get_int_list('cache_library_sections_full')
             cache_library_sections_preview = self.get_int_list('cache_library_sections_preview')
             session_id = data.get('Player', {}).get('uuid')
+            webhook_agent_meta_update = P.ModelSetting.get_bool(f'{name}_agent_meta_update')
             webhook_title_sort = P.ModelSetting.get_bool(f'{name}_title_sort')
             use_intro_auto_copy = P.ModelSetting.get_bool(f'{name}_intro_auto_copy')
+            agent_meta_update_sections = self.get_int_list('agent_meta_update_sections')
+            agent_meta_lock_title = P.ModelSetting.get_bool(f'agent_meta_lock_title')
+            agent_meta_lock_title_sort = P.ModelSetting.get_bool(f'agent_meta_lock_title_sort')
+            agent_meta_lock_summary = P.ModelSetting.get_bool(f'agent_meta_lock_summary')
+            agent_meta_lock_year = P.ModelSetting.get_bool(f'agent_meta_lock_year')
             title_library_sections = self.get_int_list('title_library_sections')
             state = data.get('event', '').strip()
             intro_copy_sections = self.get_int_list('intro_copy_sections')
@@ -651,11 +690,40 @@ class LogicPMWebhook(PluginModuleBase):
                 except Exception as e:
                     logger.error(f"[Intro] 최근 추가된 에피소드 마커 삽입 중 오류: {e}")
 
+            if webhook_agent_meta_update and state == 'library.new' and (not agent_meta_update_sections or library_section_id in agent_meta_update_sections):
+                tmdb_key = P.ModelSetting.get('tmdb_api_key')
+                if not tmdb_key:
+                    logger.warning("[MetaUpdate] TMDb API 키가 설정되어 있지 않아 스킵합니다.")
+                    return
+
+                if type == 'episode':
+                    show_id = data.get('Metadata', {}).get('grandparentRatingKey')
+                    if show_id:
+                        with self.agent_meta_update_lock:
+                            self.agent_meta_update_pending_keys.add(int(show_id))
+                        self.debounce('agent_meta_update_timer', 'agent_meta_update_lock', 'flush_meta_update_queue')
+                    return
+
+                try:
+                    if rating_key:
+                        page_tool = PageToolSimple(P, self)
+                        result = page_tool.update_by_default_agent_tmdb(
+                            rating_key,
+                            title_lock=agent_meta_lock_title,
+                            title_sort_lock=agent_meta_lock_title_sort,
+                            summary_lock=agent_meta_lock_summary,
+                            year_lock=agent_meta_lock_year
+                        )
+                        logger.info(f"[MetaUpdate] type={type}, rating_key={rating_key}, result={result}")
+                except Exception as e:
+                    logger.error(f"[MetaUpdate] rating_key={rating_key} 처리 중 오류: {e}")
+
+
             if webhook_title_sort and state == 'library.new' and (not title_library_sections or library_section_id in title_library_sections):
                 try:
                     with self.title_sort_lock:
                         self.title_sort_pending_sections.add(library_section_id)
-                    self.debounce_title_sort()
+                    self.debounce('title_sort_timer', 'title_sort_lock', 'flush_title_sort_queue')
                 except Exception as e:
                     logger.error(f"[TitleSort] 처리 중 오류: {e}")
 
