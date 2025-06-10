@@ -19,6 +19,11 @@
       {{ macros.setting_input_int('scan_filecheck_thread_interval', '파일체크 주기', value=arg['scan_filecheck_thread_interval'], desc=['단위 : 초']) }}
       {{ macros.m_hr() }}
 
+      {{ macros.setting_checkbox('scan_use_web_request', 'Plex 웹 요청 사용', value=arg['scan_use_web_request'], desc=['Web API를 통해 스캔을 요청합니다.']) }}
+      <div id="scan_use_web_request_div" style="display: none;">
+        {{ macros.setting_input_text_and_buttons('scan_web_sections', '웹 요청 라이브러리 ID', [['load_web_sections_btn', '라이브러리 조회']], value=arg.get('scan_web_sections', ''), desc=['쉼표로 구분, 빈칸 시 전체']) }}
+        <div id="scan_web_sections_result" class="mt-2 ps-2"></div>
+      </div>
       {{ macros.setting_checkbox('scan_use_vfs_refresh', 'rclone vfs/refresh 사용', value=arg['scan_use_vfs_refresh'], desc=['rclone 플러그인 설치 필요']) }}
       <div id="scan_use_vfs_refresh_div" class="collapse">
       {{ macros.setting_input_textarea('scan_vfs_change_rule', 'vfs/refresh 규칙', col='12', row='3', value=arg['scan_vfs_change_rule'], desc=['A|B|C|D(옵션)|E(옵션) 가 하나의 규칙. 규칙 구분자 엔터', '{local_path}|{remote_path}|{address}#{remote_name}|{user_name}|{password}', '/mnt/gds/GDRIVE|/GDRIVE|172.17.0.1:5275#gds2|admin|nimda', '/mnt/gds||http://admin:nimda@localhost:5572']) }}
@@ -54,8 +59,57 @@
 
 $(document).ready(function(){
   use_collapse("scan_use_vfs_refresh");
+  toggleSectionVisibility('scan_use_web_request', 'scan_use_web_request_div');
+  $('#scan_use_web_request').change(() => toggleSectionVisibility('scan_use_web_request', 'scan_use_web_request_div'));
+  $('#load_web_sections_btn').click(function(e){
+    e.preventDefault();
+    requestLibrarySections('scan_web_sections', 'scan_web_sections_result');
+  });
 });
 
+function toggleSectionVisibility(checkboxId, divId) {
+  const checked = $('#' + checkboxId).is(':checked');
+  const $target = $('#' + divId);
+  if (checked) $target.stop(true, true).slideDown(200);
+  else $target.stop(true, true).slideUp(200);
+}
+
+function requestLibrarySections(targetInput, resultDivId) {
+  $.ajax({
+    url: '/plex_mate/ajax/webhook/library_sections',
+    type: 'GET',
+    dataType: 'json',
+    success: function (res) {
+      if (res.ret === 'success') {
+        let html = '<div class="d-flex flex-wrap" style="margin-left: 100px;">';
+        res.data.forEach(item => {
+          html += `<button type="button" class="btn btn-outline-primary btn-sm me-2 mb-2" onclick="addSectionId('${targetInput}', ${item.id})">${item.name} (${item.id})</button>`;
+        });
+        html += '</div>';
+        $('#' + resultDivId).html(html);
+      } else {
+        notify('라이브러리 목록 불러오기 실패', 'warning');
+      }
+    },
+    error: function () {
+      notify('서버 요청 실패', 'danger');
+    }
+  });
+}
+
+function addSectionId(inputId, sectionId) {
+  let input = $('#' + inputId);
+  let existing = input.val().split(',').map(s => s.trim()).filter(Boolean);
+  if (!existing.includes(String(sectionId))) {
+    existing.push(sectionId);
+    input.val(existing.join(','));
+  }
+}
+
+$('#load_web_sections_btn').click(function(e){
+  e.preventDefault();
+  requestLibrarySections('scan_web_sections', 'scan_web_sections_result');
+});
 
 $('#scan_use_vfs_refresh').change(function() {use_collapse('scan_use_vfs_refresh');});
 
