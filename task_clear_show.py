@@ -495,7 +495,7 @@ class Task(object):
 
         for tag, value in tags.items():
             if value[1] in data['xml_info']:
-                if data['process'][tag]['db'] != '':
+                if data['process'][tag]['db']:
                     #P.logger.error(data['process'][tag]['db'])
                     data['process'][tag]['db_type'] = data['process'][tag]['db'].split('://')[0]
                     if data['process'][tag]['db_type'] != 'metadata':
