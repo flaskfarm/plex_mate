@@ -2,6 +2,7 @@ from .model_scan import ModelScanItem
 from .setup import *
 from .task_scan import Task
 from .extensions import check_timeover, BrowserPage, TrashPage
+from .plex_web import PlexWebHandle
 
 name = 'scan'
 class ModuleScan(PluginModuleBase):
@@ -62,6 +63,13 @@ class ModuleScan(PluginModuleBase):
                 callback_id = req.form.get('callback_id'),
                 callback_url = req.form.get('callback_url'),
             ).save()
+
+        elif sub == 'manual_refresh':
+            meta_id = req.form.get('metadata_item_id')
+            if not meta_id:
+                return jsonify({'ret': 'fail', 'msg': 'id 가 존재하지 않습니다.'})
+            ret = {'ret':'success', 'msg': f'{meta_id} 수신 성공'}
+            PlexWebHandle.manual_refresh(meta_id, plugin_instance=self)
 
         return jsonify(ret)
 
