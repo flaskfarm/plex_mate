@@ -18,10 +18,17 @@ class PageClearCache(PluginPageBase):
         arg = P.ModelSetting.to_dict()
         arg['is_include'] = F.scheduler.is_include(self.get_scheduler_name())
         arg['is_running'] = F.scheduler.is_running(self.get_scheduler_name())
+        try:
+            sections = [(-1, '전체 섹션')]
+            sections.extend([(section['id'], section['name']) for section in P.PlexDBHandle.library_sections() if section['section_type'] in [1, 2]])
+        except Exception:
+            logger.exception('라이브러리 섹션 정보를 가져올 수 없습니다.')
+            sections = [(0, '섹션 정보 없음')]
+        arg['library_sections'] = sections
         return render_template(f'{P.package_name}_{self.parent.name}_{self.name}.html', arg=arg)
 
-
     def process_command(self, command, arg1, arg2, arg3, req):
+        task_interface = self.get_module('base').task_interface
         try:
             if command == 'cache_size':
                 cmd = 'size'
@@ -29,10 +36,20 @@ class PageClearCache(PluginPageBase):
                 cmd = 'clear'
             else:
                 cmd = command
-            self.get_module('base').task_interface(cmd, (P.ModelSetting.get('base_path_phototranscoder'),))
+
+            if cmd == 'retrieve_category':
+                try:
+                    section_id = int(arg1)
+                except (ValueError, TypeError):
+                    section_id = -1
+                args = section_id
+            else:
+                args = (P.ModelSetting.get('base_path_phototranscoder'),)
+
+            task_interface(cmd, args)
             ret = {'ret':'success', 'msg':'명령을 전달하였습니다. 잠시 후 결과 알림을 확인하세요.'}
             return jsonify(ret)
-        except Exception as e: 
+        except Exception as e:
             P.logger.error(f'Exception:{str(e)}')
             P.logger.error(traceback.format_exc())
             return jsonify({'ret':'danger', 'msg':str(e)})

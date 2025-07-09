@@ -1,3 +1,4 @@
+import pathlib
 import urllib.parse
 
 from support import SupportFile, SupportOSCommand, SupportSubprocess
@@ -57,7 +58,7 @@ class Task(object):
             os.makedirs(args[0], exist_ok=True)
         # 범주
         if P.ModelSetting.get_bool('clear_cache_retrieve_category'):
-            Task.retrieve_category()
+            P.get_module('base').task_interface2('retrieve_category', -1)
         return Task.get_size(args)
 
 
@@ -143,9 +144,26 @@ class Task(object):
         return ret
 
     @classmethod
-    @celery.task()
-    def retrieve_category(args) -> None:
-        logger.debug(f'START retrieve_category()')
+    @celery.task(bind=False)
+    def retrieve_category(section_id: int = -1) -> None:
+        '''
+        2025-07-02 halfaider
+
+        증상:
+            user_art_url이 웹 url인 경우 범주 페이지에서 캐시 이미지를 생성할 때 플렉스 서버가 다운 됨
+            10개의 범주가 웹 url을 사용할 경우 10번 다운 되고 나서야 정상화 됨
+            metadata:// 형식의 주소는 대상 파일이 존재하지 않더라도 서버가 다운되는 현상이 없음
+        대안:
+            범주 페이지 접속시 웹 url의 캐시 이미지를 생성하는 과정이 발생하지 않도록
+            ../Cache/PhotoTranscoder 폴더를 비운 직후 미리 범주의 배경 이미지 캐시를 요청
+        예외:
+            웹 url이 유효하지 않아서 캐시 이미지를 미리 생성하지 못하는 경우가 있음
+        조치:
+            가능하면 user_art_url을 metadata:// 형식으로 복구
+        '''
+        logger.info(f'Start retrieving category: {section_id=}')
+        token = P.ModelSetting.get('base_token')
+        base_url = P.ModelSetting.get('base_url')
         params = {
             'includeCollections': 1,
             'includeExternalMedia': 1,
@@ -157,35 +175,83 @@ class Task(object):
             'X-Plex-Container-Size': 500,
             'X-Plex-Text-Format': 'plain',
             'X-Plex-Language': 'ko',
-            'X-Plex-Token': P.ModelSetting.get('base_token'),
+            'X-Plex-Token': token,
         }
         headers = {
             'Accept': 'application/json',
+            'X-Plex-Token': token
         }
+        art_tag_id = None
+        update_quries = []
         try:
-            sections = (section['id'] for section in P.PlexDBHandle.library_sections() if section['section_type'] in [1, 2])
-        except:
-            logger.error(traceback.format_exc())
+            if section_id > 0:
+                sections = {section_id}
+            else:
+                sections = {section['id'] for section in P.PlexDBHandle.library_sections() if section['section_type'] in [1, 2]}
+        except Exception:
+            logger.exception('라이브러리 섹션을 가져올 수 없어서 작업을 중단합니다.')
             return
         for section in sections:
-            url = urllib.parse.urljoin(P.ModelSetting.get('base_url'), f'/library/sections/{section}/categories')
+            url_category = urllib.parse.urljoin(base_url, f'/library/sections/{section}/categories')
             try:
-                data = requests.request('GET', url, headers=headers, params=params).json()
-            except:
-                logger.error(traceback.format_exc())
-                logger.error(f'{section=}')
+                response = requests.get(url_category, headers=headers, params=params)
+                response.raise_for_status()
+                data = response.json()
+                directory = data['MediaContainer']['Directory']
+            except Exception:
+                logger.exception(f'범주 데이터를 가져올 수 없습니다: {section=}')
                 continue
-            directory = data.get('MediaContainer', {}).get('Directory')
-            if not directory:
-                continue
-            for dir in directory:
-                url_photo = urllib.parse.urljoin(P.ModelSetting.get('base_url'), dir['thumb'])
-                params = {
-                    'X-Plex-Token': P.ModelSetting.get('base_token')
-                }
+            for category in directory:
+                # 범주의 대표 메타데이터를 조회
                 try:
-                    requests.request('GET', url_photo, params=params)
-                except:
-                    logger.error(traceback.format_exc())
-                    logger.error(dir)
-        logger.debug(f'END retrieve_category()')
+                    query = dict(urllib.parse.parse_qsl(category['thumb']))
+                    paths = (query.get('url') or '').split('/')
+                    if 'metadata' not in paths:
+                        continue
+                    metadata_id = paths[paths.index('metadata') + 1]
+                    row = P.PlexDBHandle.select_arg('SELECT * FROM metadata_items WHERE id = ?', (metadata_id,))[0]
+                except Exception:
+                    logger.exception(f'범주의 대표 메타데이터를 가져올 수 없습니다: {section=} {category=}')
+                    continue
+                # 대표 메타데이터의 user_art_url scheme이 http가 아니면 처리하지 않음 (metatata://는 재생성시 오류나지 않음)
+                if not (user_art_url := (row.get('user_art_url') or '')).startswith('http'):
+                    continue
+                # http면 범주 이미지를 요청해서 재생성 유도
+                url_photo = urllib.parse.urljoin(base_url, category['thumb'])
+                try:
+                    response = requests.get(url_photo, headers=headers)
+                    response.raise_for_status()
+                except Exception:
+                    # 범주 이미지 요청이 비정상적으로 응답할 경우 추가 조치
+                    logger.exception(f'범주 이미지 요청 실패: {category["key"]} {metadata_id=} {user_art_url=}')
+                    try:
+                        # 플렉스 기본 에이전트는 taggings에서 검색
+                        if row['guid'].startswith('plex://'):
+                            if art_tag_id is None:
+                                art_tag_id = P.PlexDBHandle.select('SELECT id FROM tags WHERE tag_type = 313')[0]['id']
+                            # taggings에서 metadata:// 프로토콜의 art url을 조회
+                            thumbs = P.PlexDBHandle.select_arg("SELECT thumb_url FROM taggings WHERE tag_id = ? AND metadata_item_id = ?", (art_tag_id, metadata_id))
+                            # 번들 폴더에 art 파일이 없으면 메타데이터 새로고침해서 파일을 생성해야 범주 이미지가 생성됨. 새로고침은 사용자 판단에 따라...
+                            new_user_art_url = thumbs[0]['thumb_url'] if thumbs else ''
+                        # 기본 에이전트가 아닌 경우 번들 폴더에서 검색
+                        else:
+                            match row['metadata_type']:
+                                case 1:
+                                    content_type = 'Movies'
+                                case 2:
+                                    content_type = 'TV Shows'
+                                case _:
+                                    continue
+                            bundle_path = pathlib.Path(P.ModelSetting.get('base_path_metadata'), content_type, row['hash'][0], f"{row['hash'][1:]}.bundle")
+                            art_path = bundle_path / 'Contents' / '_combined' / 'art'
+                            art_file = next(art_path.glob('*'), None)
+                            new_user_art_url = f'metadata://art/{art_file.name}' if art_file else ''
+                        if not new_user_art_url:
+                            logger.warning(f'user_art_url 복구 경로 조회 실패: {category["key"]} {metadata_id=} {user_art_url=}')
+                        logger.debug(f'user_art_url 변경: {category["key"]} {metadata_id=} {user_art_url} -> {new_user_art_url}')
+                        update_quries.append(f"UPDATE metadata_items SET user_art_url = '{new_user_art_url}' WHERE id = {metadata_id}")
+                    except Exception:
+                        logger.exception(f'{category["key"]} {metadata_id=}')
+        if update_quries:
+            P.PlexDBHandle.execute_query('BEGIN TRANSACTION;\n' + ';\n'.join(update_quries) + ';\n' + 'COMMIT;')
+        logger.info(f'End retrieving category: {section_id=}')

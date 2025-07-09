@@ -15,12 +15,29 @@
 <div class="tab-content" id="nav-tabContent">
   {{ macros.m_tab_content_start('normal', true) }}
     {{ macros.setting_input_int('clear_cache_max_size', '최대 크기',  desc=['이 크기 이상일 경우 삭제', '0이면 항상 삭제', 'GB 단위'], value=arg['clear_cache_max_size']) }}
-    {{ macros.m_hr() }}
     {{ macros.setting_buttons([['get_size_phototranscoder_btn', '크기 확인'], ['clear_phototranscoder_btn', '비우기']]) }}
     {{ macros.m_hr() }}
-    {{ macros.setting_checkbox('clear_cache_retrieve_category', '캐시 삭제 후 범주 복구', value=arg['clear_cache_retrieve_category'], desc=['영화, TV 쇼의 범주 탭이 오작동하지 않도록 캐시를 재생성합니다.']) }}
-    {{ macros.setting_buttons([['clear_cache_retrieve_category_btn', '지금 실행']]) }}
-  {{ macros.m_tab_content_end() }}  
+    {{ macros.setting_checkbox('clear_cache_retrieve_category', '캐시 삭제 후 범주 복구', value=arg['clear_cache_retrieve_category'], desc=['캐시 삭제 후 전체 섹션을 대상으로 범주 이미지 캐시를 미리 요청합니다.', '단독으로 실행할 경우 "지금 실행" 버튼을 사용하거나 API로 요청하세요.', 'POST /plex_mate/api/clear/retrieve_category', 'Request body: apikey={YOUR_APIKEY}[&section_id={SECTION_ID}]'])}}
+    <div class="row" style="padding-top: 10px; padding-bottom:10px; align-items: center;">
+      <div class="col-sm-3 set-left"></div>
+      <div class="col-sm-9">
+        <div class="input-group col-sm-5">
+          <select id="clear_cache_retrieve_category_section_id" class="form-control form-control-sm">
+            {% for item in arg['library_sections'] %}
+              {% if value is not none and value == item[0] %}
+              <option value="{{ item[0] }}" selected>{{item[1]}}</option>
+              {% else %}
+              <option value="{{ item[0] }}">{{item[1]}}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
+          <div class="btn-group btn-group-sm flex-wrap mr-2" role="group" style="padding-left:5px; padding-top:0px">
+            <button id="clear_cache_retrieve_category_btn" class="btn btn-sm btn-outline-primary">지금 실행</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  {{ macros.m_tab_content_end() }}
 
   {{ macros.m_tab_content_start('auto', false) }}
     {{ macros.global_setting_scheduler_button_page(arg['is_include'], arg['is_running']) }}
@@ -50,8 +67,9 @@ $("body").on('click', '#clear_phototranscoder_btn', function(e){
 
 $("#clear_cache_retrieve_category_btn").on('click', function(e){
   e.preventDefault();
-  globalSendCommandPage('retrieve_category');
+  selected_section = $("#clear_cache_retrieve_category_section_id").prop('value');
+  globalSendCommandPage('retrieve_category', selected_section);
 });
 
-</script>    
+</script>
 {% endblock %}
