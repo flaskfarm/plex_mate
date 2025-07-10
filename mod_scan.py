@@ -64,10 +64,12 @@ class ModuleScan(PluginModuleBase):
             callback_url = req.form.get('callback_url')
             scanner = req.form.get('scanner')
             if scanner == 'web':
-                th = threading.Thread(target=PlexWebHandle.path_scan, args=(target_section_id, target))
-                th.daemon = True
-                th.start()
-                ret['msg'] = f'{target_section_id=} {scanner=} {target=}'
+                PlexWebHandle.path_scan(target_section_id, target)
+                ret.update({
+                    'target_section_id': target_section_id,
+                    'scanner': scanner,
+                    'target': target,
+                })
             else:
                 #P.logger.warning(d(req.form))
                 ModelScanItem(
@@ -88,10 +90,13 @@ class ModuleScan(PluginModuleBase):
             target = req.form.get('target')
             recursive = (req.form.get('recursive') == 'true') or False
             async_ = (req.form.get('async') == 'true') or False
-            th = threading.Thread(target=vfs_refresh, args=(target, recursive, async_))
-            th.daemon = True
-            th.start()
-            ret['msg'] = f'{recursive=} async={async_} {target=}'
+            result = vfs_refresh(target, recursive, async_)
+            ret.update(result)
+            ret.update({
+                'recursive': recursive,
+                'async': async_,
+                'target': target,
+            })
         else:
             return {'ret':'fail', 'msg':'Bad request'}, 400
         return jsonify(ret)
