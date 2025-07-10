@@ -365,22 +365,44 @@ class LogicPMWebhook(PluginModuleBase):
 
     def get_next_episode_id_from_db(self, current_episode_guid):
         try:
-            base_guid = current_episode_guid.split('?')[0]
-            agent_prefix = base_guid.split('://')[0] + '://'
-            guid_parts = base_guid.split('://', 1)[1].split('/')
-            show_code, season, current_episode = guid_parts[0], *map(int, guid_parts[1:3])
-            next_episode_guid = f"{agent_prefix}{show_code}/{season}/{current_episode + 1}"
-
-            row = PlexDBHandle.select(f"SELECT id FROM metadata_items WHERE guid LIKE '{next_episode_guid.split('?')[0]}%' LIMIT 1")
-            if not row:
-                next_season_guid = f"{agent_prefix}//{show_code}/{int(season) + 1}/1"
-                row = PlexDBHandle.select(f"SELECT id FROM metadata_items WHERE guid LIKE '{next_season_guid}%' LIMIT 1")
-
-            if row and 'id' in row[0] and str(row[0]['id']).isdigit():
-                return int(row[0]['id'])
+            next_episode_query = f'''
+            WITH EpisodeContext AS (
+                SELECT
+                    CurrentSeason.parent_id AS show_id,
+                    CurrentSeason."index"   AS season_number,
+                    CurrentEpisode."index"  AS episode_number
+                FROM
+                    metadata_items AS CurrentEpisode
+                INNER JOIN
+                    metadata_items AS CurrentSeason ON CurrentEpisode.parent_id = CurrentSeason.id
+                WHERE
+                    CurrentEpisode.guid = ?
+            )
+            SELECT
+                NextEpisode.id, NextEpisode.guid, NextEpisode."index", NextEpisode.title, NextEpisode.parent_id
+            FROM
+                metadata_items AS NextEpisode
+            INNER JOIN
+                metadata_items AS NextSeason ON NextEpisode.parent_id = NextSeason.id,
+                EpisodeContext
+            WHERE
+                NextEpisode.metadata_type = 4
+                AND NextSeason.parent_id = EpisodeContext.show_id
+                AND (
+                    (NextSeason."index" = EpisodeContext.season_number AND NextEpisode."index" > EpisodeContext.episode_number)
+                    OR
+                    (NextSeason."index" = EpisodeContext.season_number + 1)
+                )
+            ORDER BY
+                NextSeason."index" ASC,
+                NextEpisode."index" ASC
+            LIMIT 1;
+            '''
+            rows = PlexDBHandle.select_arg(next_episode_query, (current_episode_guid,))
+            if rows:
+                return rows[0]['id']
         except Exception as e:
             logger.error(f"[NextEpisode] Plex DB 접근 오류: {e}")
-        return None
 
     def insert_intro_marker_if_possible(self, rating_key):
         try:
