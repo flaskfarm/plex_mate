@@ -4,6 +4,7 @@ import time
 import unicodedata
 from support import SupportString, SupportYaml
 from .plex_db import PlexDBHandle
+import tmdbsimple as tmdb
 from .setup import *
 from datetime import datetime, timezone, timedelta
 logger = P.logger
@@ -252,9 +253,32 @@ class PageToolSimple(PluginPageBase):
             P.logger.error(traceback.format_exc())
             return jsonify({'ret':'danger', 'msg':str(e)})
 
+    def get_tmdb_season_info(self, tmdb_id, season_number):
+
+        if not hasattr(self, 'tmdb_season_cache'):
+            self.tmdb_season_cache = {}
+
+        if tmdb_id not in self.tmdb_season_cache:
+            self.tmdb_season_cache[tmdb_id] = {}
+
+        api_key = P.ModelSetting.get('tmdb_api_key')
+        if not api_key:
+            logger.warning("TMDb API 키가 설정되어 있지 않습니다.")
+            return None
+        tmdb.API_KEY = api_key
+
+        if season_number not in self.tmdb_season_cache[tmdb_id]:
+            try:
+                season_data = tmdb.TV_Seasons(tmdb_id, season_number).info(language='ko')
+                self.tmdb_season_cache[tmdb_id][season_number] = season_data
+            except Exception as e:
+                logger.debug(f"TMDB 시즌 정보 가져오기 실패: tmdb_id={tmdb_id}, season={season_number}, error={e}")
+                self.tmdb_season_cache[tmdb_id][season_number] = None
+
+        return self.tmdb_season_cache[tmdb_id][season_number]
 
     def tmdb_info(self, tmdb_code, is_show):
-        import tmdbsimple as tmdb
+
         api_key = P.ModelSetting.get('tmdb_api_key')
         if not api_key:
             logger.warning("TMDb API 키가 설정되어 있지 않습니다.")
@@ -690,9 +714,27 @@ class PageToolSimple(PluginPageBase):
 
             elif mtype == 4:
                 base_row = row.get('base_row')
+                user_thumb_url = row.get('user_thumb_url')
                 thumb_url = yaml_tdata.get('thumbs') or (base_row and base_row.get('user_thumb_url'))
 
-                if thumb_url and not thumb_url.startswith('media://') and thumb_url != row.get('user_thumb_url'):
+                if thumb_url and not re.match(r'^(metadata|https?)://', thumb_url):
+                    thumb_url = None
+
+                if not yaml_tdata.get('thumbs') and not thumb_url and not re.match(r'^(metadata|https?)://', user_thumb_url or '') and show_row and show_row.get('tmdb_id'):
+                    tmdb_id = show_row['tmdb_id']
+                    season_index = int(row.get('season_index', 0)) % 100
+                    episode_index = row.get('index')
+
+                    tmdb_season = self.get_tmdb_season_info(tmdb_id, season_index)
+                    if tmdb_season and 'episodes' in tmdb_season:
+                        for ep in tmdb_season['episodes']:
+                            if ep.get('episode_number') == episode_index:
+                                still_path = ep.get('still_path')
+                                if still_path:
+                                    thumb_url = f"https://image.tmdb.org/t/p/original{still_path}"
+                                    break
+
+                if thumb_url and thumb_url != user_thumb_url:
                     safe_thumb_url = thumb_url.replace("'", "''")
                     update_fields.append(f"user_thumb_url = '{safe_thumb_url}'")
                     updated_fields.append('user_thumb_url')
