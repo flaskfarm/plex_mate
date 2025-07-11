@@ -33,11 +33,12 @@
       {{ macros.info_text('', '', "/mnt/gds2/GDRIVE|/GDRIVE|172.17.0.1:5275") }}
       {{ macros.info_text('', '', "rclone 인증 설정이 있을 경우 :") }}
       {{ macros.info_text('', '', "/mnt/gds2/GDRIVE|/GDRIVE|172.17.0.1:5275|userid|userpw") }}
+      </div>
       {{ macros.setting_input_int('scan_max_scan_time', '최대 스캔 시간', value=arg['scan_max_scan_time'], desc=['SCANNING 상태에서 이 시간을 초과할 경우 FINISH_TIMEOVER 처리', '0이면 비활성화', '단위: 분']) }}
       {{ macros.setting_input_text_and_buttons('scan_timeover_reset_range', '타임오버 항목 재설정', [['scan_timeover_reset_range_btn', '지금 실행']], value=arg['scan_timeover_reset_range'], desc=['이 ID 범위의 항목 중 FINISH_TIMEOVER 처리된 항목을 다시 READY로 변경', '형식: 시작ID~끝ID', '예시 : 100~110 (100, 101, 102 ... 107, 108, 109, 110)']) }}
       {{ macros.setting_checkbox('scan_refresh_after_scanning', '스캔 완료후 메타데이터 새로고침', value=arg['scan_refresh_after_scanning'], desc=['스캐너가 자동으로 메타데이터를 업데이트할 수 없는 경우 사용(Plex와 FF의 NIC가 다를 경우)', 'On: 웹으로 메타데이터 업데이트 요청', 'Off: 요청 안 함(중복 업데이트 방지)']) }}
 
-      </div>
+      
 
       {{ macros.m_hr() }}
 

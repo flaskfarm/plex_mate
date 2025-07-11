@@ -12,6 +12,9 @@
   * 스캔
 
 ## Changelog
+- 1.2.21 (2024.07.11) by soju6jan
+    - 스캔 설정 UI 조정.
+
 - 1.2.20 (2024.07.11)
     - binary scan시 LD_LIBRARY_PATH 환경변수 추가.
 
