@@ -296,7 +296,8 @@ class Task:
         section_type = db_item.section_type or None
         if section_type and str(section_type) == "2":
             try:
-                query = f"SELECT root_path FROM section_locations WHERE '{db_item.scan_folder}' LIKE root_path || '%' ORDER BY LENGTH(root_path) DESC LIMIT 1;"
+                escaped_folder = db_item.scan_folder.replace("'", "''")
+                query = f"""SELECT root_path FROM section_locations WHERE '{escaped_folder}' LIKE root_path || '%' ORDER BY LENGTH(root_path) DESC LIMIT 1;"""
                 result = PlexDBHandle.select(query)
                 root_path = result[0]['root_path'] if result else None
                 if root_path and os.path.normpath(db_item.scan_folder) != os.path.normpath(root_path):
