@@ -594,7 +594,7 @@ def start_trash_task(task: dict) -> tuple[bool, str]:
 
 
 @F.celery.task
-def start_trash_schedule() -> dict:
+def start_trash_schedule() -> tuple[bool, str]:
     anchors = P.ModelSetting.get_list('scan_trash_schedule_anchors')
     if not anchors:
         msg = f'기준 경로를 확인해 주세요.'
