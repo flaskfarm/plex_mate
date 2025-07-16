@@ -1,66 +1,85 @@
 {% extends "base.html" %}
 {% block content %}
-<form>
-    <div class="input-group mb-3">
-        <select class="custom-select col-1" id="trash-section-type">
-            <option value="movie">영화</option>
-            <option value="show">TV</option>
-            <option value="artist">음악</option>
-        </select>
-        <select class="custom-select col" id="trash-sections">
-            <option>No sections</option>
-        </select>
-        <div class="input-group-append">
-            <button class="btn btn-primary px-4" type="button" id="trash-btn-list">조회</button>
-        </div>
-        <select class="custom-select col-2" id="trash-task">
-            <option value="refresh">새로고침</option>
-            <option value="scan">스캔</option>
-            <option value="empty">비우기</option>
-            <option value="refresh_scan">새로고침 후 스캔</option>
-            <option value="refresh_scan_empty">새로고침 후 스캔 후 비우기</option>
-        </select>
-        <div class="input-group-append">
-            <button class="btn btn-primary px-5" type="button" id="trash-btn-execute" data-scan_trash_task_status="{{ args.scan_trash_task_status }}">
-                실행
-            </button>
-            <button class="btn btn-warning px-5" type="button" id="trash-btn-stop">중지</button>
-        </div>
+<nav>
+    <div class="nav nav-tabs" id="nav-tab" role="tablist">
+        <a class="nav-item nav-link active" id="nav-retrieve-tab" data-toggle="tab" data-target="#nav-retrieve" href="#" role="tab" aria-controls="nav-retrieve" aria-selected="true">조회</a>
+        <a class="nav-item nav-link" id="nav-schedule-tab" data-toggle="tab" data-target="#nav-schedule" href="#" role="tab" aria-controls="nav-schedule" aria-selected="false">일정</a>
     </div>
-</form>
-<div>
-    <h4>이용 불가 파일: <span class="badge badge-light" id="trash-total-deleted">0</span> / 스캔이 필요한 폴더: <span class="badge badge-light" id="trash-total-paths">0</span></h4>
-</div>
-<nav class="pagination" aria-label="Page navigation"></nav>
+</nav>
+<div class="tab-content" id="nav-tabContent">
+    <div class="tab-pane fade show active" id="nav-retrieve" role="tabpanel" aria-labelledby="nav-retrieve-tab">
+        <form>
+            <div class="input-group mb-3">
+                <select class="custom-select col-1" id="trash-section-type">
+                    <option value="movie">영화</option>
+                    <option value="show">TV</option>
+                    <option value="artist">음악</option>
+                </select>
+                <select class="custom-select col" id="trash-sections">
+                    <option>No sections</option>
+                </select>
+                <div class="input-group-append">
+                    <button class="btn btn-primary px-4" type="button" id="trash-btn-list">조회</button>
+                </div>
+                <select class="custom-select col-2" id="trash-task">
+                    <option value="refresh">새로고침</option>
+                    <option value="scan">스캔</option>
+                    <option value="empty">비우기</option>
+                    <option value="refresh_scan">새로고침 후 스캔</option>
+                    <option value="refresh_scan_empty">새로고침 후 스캔 후 비우기</option>
+                </select>
+                <div class="input-group-append">
+                    <button class="btn btn-primary px-5" type="button" id="trash-btn-execute" data-scan_trash_task_status="{{ args.scan_trash_task_status }}">
+                        실행
+                    </button>
+                    <button class="btn btn-warning px-5" type="button" id="trash-btn-stop">중지</button>
+                </div>
+            </div>
+        </form>
+        <div>
+            <h4>이용 불가 파일: <span class="badge badge-light" id="trash-total-deleted">0</span> / 스캔이 필요한 폴더: <span class="badge badge-light" id="trash-total-paths">0</span></h4>
+        </div>
+        <nav class="pagination" aria-label="Page navigation"></nav>
 
-<nav class="trash-pagination">
-    <ul class="pagination justify-content-center">
-        <li class="page-item disabled"><a class="page-link" aria-label="Previous"><span aria-hidden="true">&laquo;</span></a></li>
-        <li class="page-item disabled"><a class="page-link disabled" href="#">1</a></li>
-        <li class="page-item disabled"><a class="page-link" href="#"  aria-label="Next"><span aria-hidden="true">&raquo;</span></a></li>
-    </ul>
-</nav>
-<table id="trash-list" class="table table-hover table-sm table-striped align-bottom table-responsive-sm">
-    <thead>
-        <tr class="text-primary">
-            <th scope="col" class="w-auto text-center">ID</th>
-            <th scope="col" class="text-center" width="100px">이용불가</th>
-            <th scope="col" class="w-auto">파일</th>
-            <th scope="col" class="text-center" width="100px">관리</th>
-        </tr>
-    </thead>
-    <tbody class="table-group-divider align-middle accordion" id="trash-accordion">
-    </tbody>
-    <tfoot>
-    </tfoot>
-</table>
-<nav class="trash-pagination">
-    <ul class="pagination justify-content-center">
-        <li class="page-item disabled"><a class="page-link" aria-label="Previous"><span aria-hidden="true">&laquo;</span></a></li>
-        <li class="page-item disabled"><a class="page-link disabled" href="#">1</a></li>
-        <li class="page-item disabled"><a class="page-link" href="#"  aria-label="Next"><span aria-hidden="true">&raquo;</span></a></li>
-    </ul>
-</nav>
+        <nav class="trash-pagination">
+            <ul class="pagination justify-content-center">
+                <li class="page-item disabled"><a class="page-link" aria-label="Previous"><span aria-hidden="true">&laquo;</span></a></li>
+                <li class="page-item disabled"><a class="page-link disabled" href="#">1</a></li>
+                <li class="page-item disabled"><a class="page-link" href="#"  aria-label="Next"><span aria-hidden="true">&raquo;</span></a></li>
+            </ul>
+        </nav>
+        <table id="trash-list" class="table table-hover table-sm table-striped align-bottom table-responsive-sm">
+            <thead>
+                <tr class="text-primary">
+                    <th scope="col" class="w-auto text-center">ID</th>
+                    <th scope="col" class="text-center" width="100px">이용불가</th>
+                    <th scope="col" class="w-auto">파일</th>
+                    <th scope="col" class="text-center" width="100px">관리</th>
+                </tr>
+            </thead>
+            <tbody class="table-group-divider align-middle accordion" id="trash-accordion">
+            </tbody>
+            <tfoot>
+            </tfoot>
+        </table>
+        <nav class="trash-pagination">
+            <ul class="pagination justify-content-center">
+                <li class="page-item disabled"><a class="page-link" aria-label="Previous"><span aria-hidden="true">&laquo;</span></a></li>
+                <li class="page-item disabled"><a class="page-link disabled" href="#">1</a></li>
+                <li class="page-item disabled"><a class="page-link" href="#"  aria-label="Next"><span aria-hidden="true">&raquo;</span></a></li>
+            </ul>
+        </nav>
+    </div>
+    <div class="tab-pane fade" id="nav-schedule" role="tabpanel" aria-labelledby="nav-schedule-tab">
+      <form id='setting'>
+        {{ macros.m_button_group([['globalSettingSaveBtn', '설정 저장'], ['globalImmediatelyExecutePageBtn', '즉시 실행']])}}
+        {{ macros.setting_checkbox('scan_trash_schedule_enable', 'Plex 휴지통 비우기 사용', value=args['scan_trash_schedule_enable'], desc=['Plex 휴지통 비우기를 주기적으로 실행']) }}
+        {{ macros.setting_input_text('scan_trash_schedule_interval', '실행 간격', value=args['scan_trash_schedule_interval'], desc=['분 단위 혹은 Cron 설정']) }}
+        {{ macros.setting_input_text('scan_trash_schedule_section_exceptions', '제외 라이브러리', value=args['scan_trash_schedule_section_exceptions'], desc=['제외할 라이브러리의 ID 번호를 입력하세요.', '콤마(,)로 각 라이브러리를 구분합니다.']) }}
+        {{ macros.setting_input_textarea('scan_trash_schedule_anchors', '기준 경로', col='9', row='3', value=args['scan_trash_schedule_anchors'], desc=['Plex에서 기준 경로들을 모두 탐색할 수 있어야 휴지통 비우기를 실행합니다.', 'Plex상의 경로를 입력하세요.', '줄바꿈으로 각 경로를 구분합니다.']) }}
+      </form>
+    </div>
+</div>
 
 <script src="{{ url_for('.static', filename='extensions.js') }}"></script>
 <script type="text/javascript">
@@ -199,6 +218,10 @@
             if (result) {
                 notify(result.result, result.status);
             }
+        });
+        use_collapse('scan_trash_schedule_enable');
+        $('#scan_trash_schedule_enable').on('change', function() {
+            use_collapse('scan_trash_schedule_enable');
         });
     });
 
