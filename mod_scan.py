@@ -108,3 +108,10 @@ class ModuleScan(PluginModuleBase):
         thread = threading.Thread(target=func, args=())
         thread.daemon = True
         thread.start()
+
+
+    def setting_save_after(self, changes: list) -> None:
+        '''override'''
+        super().setting_save_after(changes)
+        for page in self.page_list:
+            page.setting_save_after(changes)

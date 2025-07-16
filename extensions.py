@@ -1,14 +1,16 @@
-import pathlib
-import functools
-import json
-import traceback
-import time
-import datetime
 import os
-import urllib
-import sqlite3
+import json
+import time
+import base64
 import shutil
-from typing import Any, Optional, Union
+import urllib
+import pathlib
+import sqlite3
+import datetime
+import functools
+import traceback
+
+from typing import Any, Optional, Union, Callable
 from threading import Thread
 
 import flask
@@ -18,6 +20,7 @@ from support import SupportSubprocess
 from support import AlchemyEncoder
 from plugin.create_plugin import PluginBase
 from plugin.logic_module_base import PluginModuleBase, PluginPageBase
+from framework.scheduler import Job as FrameworkJob
 
 from .setup import F, P
 from .plex_db import PlexDBHandle
@@ -127,11 +130,14 @@ def rc_command(function: callable) -> callable:
                     raise Exception(rc_result.get('error'))
                 #P.logger.debug(f'RC result: {rc_result}')
                 return rc_result
-        except:
+        except Exception:
             P.logger.error(traceback.format_exc())
             P.logger.error(f'result={result}')
             P.logger.error(f'cmd={cmd}')
-            P.logger.error(f'rclone={shutil.which(rclone.ModelSetting.get("rclone_path"))}')
+            if (rclone_path := shutil.which(rclone.ModelSetting.get("rclone_path"))) is None:
+                P.logger.error(f'rclone을 찾을 수 없습니다: {rclone_path=}')
+            else:
+                P.logger.error(f'{rclone_path=}')
             return {}
     return wrapper
 
@@ -200,7 +206,7 @@ def vfs_refresh(target: str, recursive: bool = False, async_: bool = False, serv
     for parent in remote_path.parents:
         if parent == parent.parent:
             result = vfs__refresh(server) or {}
-        else:    
+        else:
             result = vfs__refresh(server, parent.as_posix()) or {}
         P.logger.info(f'RC result: {result}')
         if ((result.get('result') or {}).get(parent.as_posix()) or '').lower() == 'ok':
@@ -243,7 +249,7 @@ def request(method: str, url: str, data: Optional[dict] = None, timeout: Union[i
             return requests.request('POST', url, json=data or {}, timeout=timeout, **kwds)
         else:
             return requests.request(method, url, data=data, timeout=timeout, **kwds)
-    except:
+    except Exception:
         tb = traceback.format_exc()
         P.logger.error(tb)
         response = requests.Response()
@@ -306,6 +312,17 @@ def plex_activities() -> dict[str, str]:
     return {
         'key': '/activities',
         'method': 'GET',
+    }
+
+
+@plex_api
+def plex_browse(path: str, include_files: bool = True) -> dict[str, str]:
+    encoded_bytes = base64.urlsafe_b64encode(path.encode('utf-8'))
+    encoded_path = encoded_bytes.decode('utf-8')
+    return {
+        'key': f'/services/browse/{encoded_path}',
+        'method': 'GET',
+        'includeFiles': 1 if include_files else 0,
     }
 
 
@@ -497,7 +514,7 @@ def default_route_socketio_page(page):
 def celery_is_available() -> bool:
     try:
         return True if F.celery.control.inspect().stats() else False
-    except:
+    except Exception:
         return False
 
 
@@ -574,6 +591,55 @@ def start_trash_task(task: dict) -> tuple[bool, str]:
         return False, f'작업 도중에 오류가 발생했습니다: {repr(e)}'
     finally:
         P.ModelSetting.set('scan_trash_task_status', 'ready')
+
+
+@F.celery.task
+def start_trash_schedule() -> dict:
+    anchors = P.ModelSetting.get_list('scan_trash_schedule_anchors')
+    if not anchors:
+        msg = f'기준 경로를 확인해 주세요.'
+        P.logger.error(msg)
+        return False, msg
+    try:
+        section_exceptions = {int(exception_id) for exception_id in P.ModelSetting.get_list('scan_trash_schedule_section_exceptions', delimeter=',') if exception_id}
+    except Exception:
+        return False, '제외 라이브러리 ID 번호가 잘못되었습니다.'
+
+    failed_anchors = []
+    for anchor in anchors:
+        anchor_path = pathlib.Path(anchor)
+        anchor = str(anchor_path)
+        result = plex_browse(str(anchor_path.parent))
+        container = result.get('MediaContainer')
+        exception = result.get('exception')
+        if exception or not container or container.get('size') < 1:
+            P.logger.error(f'기준 경로를 확인할 수 없습니다: {anchor=} {result=}')
+            failed_anchors.append(anchor)
+            continue
+        for plex_path in container.get('Path'):
+            if str(pathlib.Path(plex_path.get("path") or '')) == anchor:
+                P.logger.debug(f'기준 경로 존재: {anchor}')
+                break
+        else:
+            failed_anchors.append(anchor)
+    if failed_anchors:
+        msg = f'기준 경로를 찾을 수 없습니다: {failed_anchors}'
+        P.logger.error(msg)
+        return False, msg
+
+    sections = PlexDBHandle.library_sections()
+    for section in sections:
+        try:
+            section_id = int(section.get('id'))
+        except Exception:
+            section_id = 0
+        if section_id in section_exceptions:
+            continue
+        if plex_trashes(section_id, 1, 1):
+            P.logger.info(f'휴지통 비우기 요청: {section_id=} ({section.get("name")})')
+            plex_empty(section_id)
+
+    return True, '휴지통 비우기 일정을 완료했습니다.'
 
 
 class ThreadHasReturn(Thread):
@@ -678,7 +744,7 @@ class Base:
                     F.db.session.flush()
                 P.logger.debug(f'{table} 최종 DB 버전: {version}')
                 P.ModelSetting.set(version_key, version)
-            except:
+            except Exception:
                 P.logger.error(traceback.format_exc())
                 P.logger.error('마이그레이션 실패')
 
@@ -687,6 +753,41 @@ class Base:
 
     def socketio_emit_by_celery(self, result: dict) -> None:
         raise Exception('이 메소드를 구현하세요.')
+
+    def set_schedule(self, schedule_id: str, enable: bool = False, interval: str = '60', desc: str = '') -> tuple[bool, str]:
+        match enable, F.scheduler.is_include(schedule_id):
+            case True, True:
+                msg = '일정을 재등록 하지 못 했습니다.'
+                for _ in range(0, 60):
+                    F.scheduler.remove_job(schedule_id)
+                    if not F.scheduler.is_include(schedule_id):
+                        result = self.add_schedule(start_trash_schedule, schedule_id, interval, desc)
+                        if result:
+                            msg = '일정을 재등록 했습니다.'
+                        break
+                    time.sleep(1)
+                else:
+                    result = False
+            case False, True:
+                result, msg = F.scheduler.remove_job(schedule_id), '일정을 제외했습니다.'
+            case False, False:
+                result, msg = False, '등록되지 않은 상태입니다.'
+            case True, False:
+                result = self.add_schedule(start_trash_schedule, schedule_id, interval, desc)
+                msg = '일정을 등록했습니다.' if result else '일정을 등록하지 못 했어요.'
+            case _:
+                result, msg = False, '일정에 등록할 수 없습니다.'
+        return result, msg
+
+    def add_schedule(self, schedule_func: Callable, schedule_id: str, interval: str = '60', desc: str = '') -> bool:
+        try:
+            if not F.scheduler.is_include(schedule_id):
+                sch = FrameworkJob(__package__, schedule_id, interval, self.run_async, desc, args=(schedule_func,))
+                F.scheduler.add_job_instance(sch)
+            return True
+        except Exception:
+            P.logger.error(traceback.format_exc())
+        return False
 
 
 class ExtPageBase(Base, PluginPageBase):
@@ -701,7 +802,7 @@ class ExtPageBase(Base, PluginPageBase):
         self.prerender(self.name, req)
         try:
             return flask.render_template(f'{P.package_name}_{self.parent.name}_{self.name}.html', args=self.get_template_args())
-        except:
+        except Exception:
             P.logger.error(traceback.format_exc())
             return flask.render_template('sample.html', title=f"process_menu() - {P.package_name}/{self.parent.name}/{self.name}")
 
@@ -773,14 +874,22 @@ class TrashPage(ExtPageBase):
         self.db_default = {
             'scan_trash_task_status': 'ready',
             'scan_trash_last_list_option': '',
+            'scan_trash_schedule_enable': 'False',
+            'scan_trash_schedule_interval': '60',
+            'scan_trash_schedule_anchors': '/mnt/gds2/GDRIVE/VIDEO/영화',
+            'scan_trash_schedule_section_exceptions': '',
         }
+
+    def scheduler_function(self) -> None:
+        '''override'''
+        self.run_async(start_trash_schedule)
 
     def get_template_args(self) -> dict:
         '''override'''
         args = super().get_template_args()
         try:
             args['plex_sections'] = plex_major_sections()
-        except:
+        except Exception:
             P.logger.error(traceback.format_exc())
             args['plex_sections'] = {}
         return args
@@ -838,8 +947,26 @@ class TrashPage(ExtPageBase):
         '''override'''
         super().plugin_load()
         P.ModelSetting.set('scan_trash_task_status', 'ready')
+        self.set_schedule(
+            'scan_trash_schedule',
+            P.ModelSetting.get_bool('scan_trash_schedule_enable'),
+            P.ModelSetting.get('scan_trash_schedule_interval'),
+            'Plex 휴지통 비우기'
+        )
 
     def plugin_unload(self) -> None:
         '''override'''
         super().plugin_unload()
         P.ModelSetting.set('scan_trash_task_status', 'ready')
+        self.set_schedule('scan_trash_schedule', False)
+
+    def setting_save_after(self, changes: list) -> None:
+        '''override'''
+        super().setting_save_after(changes)
+        if any(setting in changes for setting in ('scan_trash_schedule_enable', 'scan_trash_schedule_interval')):
+            self.set_schedule(
+                'scan_trash_schedule',
+                P.ModelSetting.get_bool('scan_trash_schedule_enable'),
+                P.ModelSetting.get('scan_trash_schedule_interval'),
+                'Plex 휴지통 비우기'
+            )
