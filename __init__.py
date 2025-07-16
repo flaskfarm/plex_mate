@@ -13,3 +13,8 @@ except:
     try: os.system("pip install --upgrade pyyaml")
     except: pass
 
+try:
+    import tmdbsimple
+except Exception:
+    try: os.system("pip install tmdbsimple")
+    except Exception: pass
