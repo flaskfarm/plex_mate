@@ -135,6 +135,7 @@
   </div>
 </div>
 {{ macros.setting_bottom('제목 색인의 한글 음절을 자음으로 정리') }}
+{{ macros.setting_input_text('tool_simple_title_sort_types', '', value=arg['tool_simple_title_sort_types'], desc=['제목 색인 정리 대상 메타 타입', '콤마(,)로 각 타입을 구분하며 잘못된 값을 입력하면 전체 타입을 대상으로 조회', '1: 영화, 2: 쇼, 4: 에피소드, 8: 아티스트, 9: 앨범, 10: 트랙']) }}
 
 <script type="text/javascript">
 
@@ -217,19 +218,19 @@ $("body").on('click', '#remove_db_by_folder_btn', function(e){
   globalSendCommandPage('remove_db_by_folder', $('#tool_simple_remove_db_by_folder').val());
 });
 
-$("#tool_simple_title_sort_btn").on('click', function(e){
-  e.preventDefault();
-  globalSendCommandPage('tool_simple_title_sort', $('#tool_simple_title_sort_section_id').val(), 'False');
-});
-
 $("body").on('click', '#default_agent_meta_update_btn', function(e){
   e.preventDefault();
   globalSendCommandPage('default_agent_meta_update', $('#default_agent_meta_id').val());
 });
 
+$("#tool_simple_title_sort_btn").on('click', function(e){
+  e.preventDefault();
+  globalSendCommandPage('tool_simple_title_sort', $('#tool_simple_title_sort_section_id').val(), 'False', $('#tool_simple_title_sort_types').val());
+});
+
 $("#tool_simple_title_sort_preview_btn").on('click', function(e){
   e.preventDefault();
-  globalSendCommandPage('tool_simple_title_sort', $('#tool_simple_title_sort_section_id').val(), 'True');
+  globalSendCommandPage('tool_simple_title_sort', $('#tool_simple_title_sort_section_id').val(), 'True', $('#tool_simple_title_sort_types').val());
 });
 
 

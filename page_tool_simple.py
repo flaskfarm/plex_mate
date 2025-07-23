@@ -19,7 +19,7 @@ class PageToolSimple(PluginPageBase):
             f'{self.parent.name}_{self.name}_library_location_target' : '',
             f'{self.parent.name}_{self.name}_remove_meta_id' : '',
             f'{self.parent.name}_{self.name}_remove_db_by_folder' : '',
-            
+            f'{self.parent.name}_{self.name}_title_sort_types' : '1, 2, 8, 9',
         }
     
     def process_command(self, command, arg1, arg2, arg3, req):
@@ -229,24 +229,49 @@ class PageToolSimple(PluginPageBase):
                     ret['ret'] = 'fail'
                     ret['msg'] = f"예외 발생: {e}"
             elif command == 'tool_simple_title_sort':
-                sortings = self.get_title_sortings(int(arg1))
+                try:
+                    section_id = int(arg1)
+                except Exception:
+                    msg = f'섹션 ID가 잘못되었습니다: {arg1}'
+                    P.logger.exception(msg)
+                    ret['ret'] = 'fail'
+                    ret['msg'] = msg
+                    return jsonify(ret)
+                try:
+                    type_strings = arg3.split(',')
+                except Exception:
+                    type_strings = P.ModelSetting.get(f'tool_simple_title_sort_types').split(',')
+                types = []
+                for metadata_type in type_strings:
+                    try:
+                        types.append(int(metadata_type))
+                    except Exception:
+                        P.logger.warning(f"메타 타입이 잘못되었습니다: {metadata_type=}")
+                P.ModelSetting.set(f'tool_simple_title_sort_types', ','.join((str(x) for x in types)))
+                if not types:
+                    P.logger.warning(f"지정된 메타 타입이 없어 모든 메타 타입을 대상으로 조회합니다.")
+                sortings = self.get_title_sortings(section_id, metadata_types=types)
                 if not sortings:
                     ret['msg'] = "정리할 데이터가 없습니다."
+                    return jsonify(ret)
+                try:
+                    is_preview = arg2.lower() == 'true'
+                except Exception:
+                    is_preview = True
+                if is_preview:
+                    modal_items = []
+                    for sorting in sortings:
+                        modal_items.append(f"{sorting[0]}: [{sorting[3][0]}][{sorting[2][0] if sorting[2] else ''}]{sorting[1]}")
+                    ret['modal'] = json.dumps(modal_items, indent=4, ensure_ascii=False)
+                    ret['title'] = '제목 색인 정리'
                 else:
-                    if arg2.lower() == 'false':
-                        batch_size = 100
-                        for i in range(0, len(sortings), batch_size):
-                            batch_queries = []
-                            for sorting in sortings[i:i + batch_size]:
-                                batch_queries.append(f"UPDATE metadata_items SET title_sort = '" + sorting[3].replace("'", "''") + f"' WHERE id = {sorting[0]}")
-                            PlexDBHandle.execute_query(';'.join(batch_queries))
-                        ret['msg'] = "정리를 완료했습니다."
-                    else:
-                        modal = []
-                        for sorting in sortings:
-                            modal.append(f"{sorting[0]}: [{sorting[3][0]}][{sorting[2][0] if sorting[2] else ''}]{sorting[1]}")
-                        ret['modal'] = json.dumps(modal, indent=4, ensure_ascii=False)
-                        ret['title'] = '제목 색인 정리'
+                    batch_size = 100
+                    for i in range(0, len(sortings), batch_size):
+                        batch_queries = []
+                        for sorting in sortings[i:i + batch_size]:
+                            batch_queries.append(f"UPDATE metadata_items SET title_sort = '" + sorting[3].replace("'", "''") + f"' WHERE id = {sorting[0]}")
+                        PlexDBHandle.execute_query(';'.join(batch_queries))
+                    ret['msg'] = "정리를 완료했습니다."
             return jsonify(ret)
         except Exception as e: 
             P.logger.error(f'Exception:{str(e)}')
@@ -782,17 +807,21 @@ class PageToolSimple(PluginPageBase):
         else:
             return {'ret': 'success', 'msg': '변경할 항목이 없습니다.'}
 
-    def get_title_sortings(self, section_id: int) -> list:
-        query = "SELECT id, title, title_sort, metadata_type FROM metadata_items WHERE library_section_id = ?"
-        rows: dict = PlexDBHandle.select_arg(query, (section_id,))
+    def get_title_sortings(self, section_id: int, metadata_types: list = None) -> list[tuple[int, str, str, str]]:
+        query = f"SELECT id, title, title_sort, metadata_type FROM metadata_items WHERE library_section_id = ?"
+        args = (section_id,)
+        if metadata_types:
+            query += f" AND metadata_type IN ({','.join(['?'] * len(metadata_types))})"
+            args += (*metadata_types,)
+        rows: list[dict] | None = PlexDBHandle.select_arg(query, args)
+        if not rows:
+            logger.warning(f"데이터를 가져오지 못 했습니다: {section_id=} {metadata_types=}")
+            return []
         sortings = []
         for row in rows:
-            if row.get('metadata_type') > 10 or not row.get('title'):
+            if not row.get('title'):
                 continue
-            if row.get('title_sort'):
-                first_char = row['title_sort'][0]
-            else:
-                first_char = row['title'][0]
+            first_char = row['title_sort'][0] if row.get('title_sort') else row.get('title')[0]
             if first_char.isalnum() and not 44032 <= ord(first_char) <= 55203:
                 continue
             new_title_sort = "".join([word for word in re.split(r'\W', row['title']) if word])
@@ -800,7 +829,7 @@ class PageToolSimple(PluginPageBase):
                 logger.warning(f"색인용 문자가 없습니다: '{row['title']}'")
                 new_title_sort = row['title']
             new_title_sort = unicodedata.normalize('NFKD', new_title_sort)
-            logger.debug(f"{row['id']}: [{new_title_sort[0]}][{row['title_sort'][0] if row['title_sort'] else ''}]{row['title']}")
+            logger.debug(f"{row['id']}: [{new_title_sort[0]}][{first_char}]{row['title']}")
             if new_title_sort != row['title_sort']:
                 sortings.append((row['id'], row['title'], row['title_sort'], new_title_sort))
         return sortings
