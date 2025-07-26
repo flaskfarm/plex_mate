@@ -137,6 +137,29 @@
 {{ macros.setting_bottom('제목 색인의 한글 음절을 자음으로 정리') }}
 {{ macros.setting_input_text('tool_simple_title_sort_types', '', value=arg['tool_simple_title_sort_types'], desc=['제목 색인 정리 대상 메타 타입', '콤마(,)로 각 타입을 구분하며 잘못된 값을 입력하면 전체 타입을 대상으로 조회', '1: 영화, 2: 쇼, 4: 에피소드, 8: 아티스트, 9: 앨범, 10: 트랙']) }}
 
+{{ macros.m_hr() }}
+{{ macros.setting_top('영화 타입 변경') }}
+<div class="input-group col-sm-9">
+  <select id="tool_simple_movie_type_section_id" name="tool_simple_movie_type_section_id" class="form-control form-control-sm">
+    {% for item in arg['library_list'] %}
+      {% if item['section_type'] == 1 %}
+        {% if loop.counter == 0 %}
+        <option value="{{ item['id'] }}" selected>{{item['name']}}</option>
+        {% else %}
+        <option value="{{ item['id'] }}">{{item['name']}}</option>
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+  </select>
+  <div class="btn-group btn-group-sm flex-wrap mr-2" role="group">
+    <button id="tool_simple_movie_type_to_personal_btn" class="btn btn-sm btn-outline-success">가로형 (기타미디어)</button>
+    <button id="tool_simple_movie_type_to_movie_btn" class="btn btn-sm btn-outline-success">세로형 (영화)</button>
+  </div>
+</div>
+{{ macros.setting_bottom(['기타미디어로 변환하여 Art를 Poster로 사용', '세로형 선택시 다시 영화로 변경.', '기타미디어 상태에서는 메타새로고침 금지']) }}
+
+{{ macros.m_hr() }}
+
 <script type="text/javascript">
 
 $(function(){ 
@@ -233,6 +256,15 @@ $("#tool_simple_title_sort_preview_btn").on('click', function(e){
   globalSendCommandPage('tool_simple_title_sort', $('#tool_simple_title_sort_section_id').val(), 'True', $('#tool_simple_title_sort_types').val());
 });
 
+$("#tool_simple_movie_type_to_personal_btn").on('click', function(e){
+  e.preventDefault();
+  globalSendCommandPage('tool_simple_movie_type_to_personal', $('#tool_simple_movie_type_section_id').val());
+});
+
+$("#tool_simple_movie_type_to_movie_btn").on('click', function(e){
+  e.preventDefault();
+  globalSendCommandPage('tool_simple_movie_type_to_movie', $('#tool_simple_movie_type_section_id').val());
+});
 
 </script>    
 {% endblock %}

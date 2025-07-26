@@ -272,6 +272,44 @@ class PageToolSimple(PluginPageBase):
                             batch_queries.append(f"UPDATE metadata_items SET title_sort = '" + sorting[3].replace("'", "''") + f"' WHERE id = {sorting[0]}")
                         PlexDBHandle.execute_query(';'.join(batch_queries))
                     ret['msg'] = "정리를 완료했습니다."
+            elif command == 'tool_simple_movie_type_to_personal':
+                section_id = arg1
+                query = f"""SELECT agent FROM library_sections WHERE id = {section_id};"""
+                data = PlexDBHandle.select(query)
+                logger.error(data)
+                if data[0]['agent'] == 'tv.plex.agents.none':
+                    ret = {'ret':'warning', 'msg':'이미 기타미디어 타입입니다.'}
+                    return jsonify(ret)
+
+                query = f"""UPDATE metadata_items SET user_banner_url = user_thumb_url WHERE library_section_id = {section_id};
+                UPDATE metadata_items SET user_thumb_url = user_art_url WHERE library_section_id = {section_id};
+                UPDATE library_sections SET user_thumb_url = agent, user_art_url = scanner WHERE id = {section_id};
+                UPDATE library_sections SET agent = "tv.plex.agents.none", scanner = "Plex Video Files" WHERE id = {section_id};
+                """
+                result = PlexDBHandle.execute_query(query)
+                if result != False:
+                    ret = {'ret':'success', 'msg':'정상적으로 처리되었습니다.'}
+                else:
+                    ret = {'ret':'warning', 'msg':'실패'}
+            elif command == 'tool_simple_movie_type_to_movie':
+                section_id = arg1
+                query = f"""SELECT agent FROM library_sections WHERE id = {section_id};"""
+                data = PlexDBHandle.select(query)
+                logger.error(data)
+                if data[0]['agent'] != 'tv.plex.agents.none':
+                    ret = {'ret':'warning', 'msg':'이미 영화 타입입니다.'}
+                    return jsonify(ret)
+
+                query = f"""UPDATE metadata_items SET user_thumb_url = user_banner_url WHERE library_section_id = {section_id};
+                UPDATE metadata_items SET user_banner_url = '' WHERE library_section_id = {section_id};
+                UPDATE library_sections SET agent = user_thumb_url, scanner = user_art_url WHERE id = {section_id};
+                UPDATE library_sections SET user_thumb_url = '', user_art_url = '' WHERE id = {section_id};
+                """
+                result = PlexDBHandle.execute_query(query)
+                if result != False:
+                    ret = {'ret':'success', 'msg':'정상적으로 처리되었습니다.'}
+                else:
+                    ret = {'ret':'warning', 'msg':'실패'}
             return jsonify(ret)
         except Exception as e: 
             P.logger.error(f'Exception:{str(e)}')
