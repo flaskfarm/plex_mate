@@ -390,8 +390,12 @@ class PageToolSimple(PluginPageBase):
             'summary': None,
             'originally_available_at': None,
             'poster': None,
-            'thumb': None,
-            'art': None
+            'thumbs': None,
+            'art': None,
+            'markers': {
+                'intro':  {'start': '', 'end': ''},
+                'credits': {'start': '', 'end': ''},
+            },
         }
 
         if not yaml_data:
@@ -424,9 +428,24 @@ class PageToolSimple(PluginPageBase):
                     result['summary'] = episode.get('summary')
                     result['originally_available_at'] = episode.get('originally_available_at')
                     result['thumbs'] = episode.get('thumbs')
+                    m = (episode.get('markers') or {})
+                    intro  = m.get('intro')  or {}
+                    credits = m.get('credits') or {}
+                    def _clean(v):
+                        try:
+                            if v == '' or v is None:
+                                return ''
+                            return int(v)
+                        except:
+                            return ''
+
+                    result['markers']['intro']['start']  = _clean(intro.get('start'))
+                    result['markers']['intro']['end']    = _clean(intro.get('end'))
+                    result['markers']['credits']['start'] = _clean(credits.get('start'))
+                    result['markers']['credits']['end']   = _clean(credits.get('end'))
 
         return result
-    
+
     def enrich_rows(self, rows: list[dict]) -> list[dict]:
 
         first_episode = next((r for r in rows if r['metadata_type'] == 4 and r.get('file_path')), None)
@@ -496,58 +515,112 @@ class PageToolSimple(PluginPageBase):
 
     def update_by_default_agent_tmdb(self, metadata_item_id, title_lock=False, title_sort_lock=False, summary_lock=False, year_lock=False):
         query = """
-        WITH RECURSIVE descendants(
-            id, metadata_type, parent_id, title, title_sort,
-            summary, year, originally_available_at, user_fields, changed_at,
-            guid, duration, user_thumb_url, user_art_url, tmdb_id, library_section_id,
-            "index", original_title, content_rating, tags_director, tags_writer, tags_star, audience_rating
+        WITH RECURSIVE d(
+        id, metadata_type, parent_id, title, title_sort, summary, year,
+        originally_available_at, user_fields, changed_at,
+        guid, duration, user_thumb_url, user_art_url, tmdb_id, library_section_id,
+        "index", original_title, content_rating, tags_director, tags_writer, tags_star, audience_rating
         ) AS (
-            SELECT 
-                mdi.id, mdi.metadata_type, mdi.parent_id,
-                mdi.title, mdi.title_sort, mdi.summary, mdi.year,
-                datetime(mdi.originally_available_at, 'unixepoch'),
-                mdi.user_fields, mdi.changed_at,
-                mdi.guid, mdi.duration, mdi.user_thumb_url, mdi.user_art_url,
-                REPLACE(t.tag, 'tmdb://', ''),
-                mdi.library_section_id,
-                mdi."index",
-                mdi.original_title, mdi.content_rating, mdi.tags_director, mdi.tags_writer, mdi.tags_star, mdi.audience_rating
-            FROM metadata_items mdi
-            JOIN taggings tg ON tg.metadata_item_id = mdi.id
+        SELECT
+            m.id, m.metadata_type, m.parent_id,
+            m.title, m.title_sort, m.summary, m.year,
+            datetime(m.originally_available_at, 'unixepoch'),
+            m.user_fields, m.changed_at,
+            m.guid, m.duration, m.user_thumb_url, m.user_art_url,
+            (
+            SELECT REPLACE(t.tag, 'tmdb://', '')
+            FROM taggings tg
             JOIN tags t ON t.id = tg.tag_id
-            WHERE t.tag_type = 314
-            AND t.tag LIKE 'tmdb://%'
-            AND mdi.id = ?
+            WHERE tg.metadata_item_id = m.id
+                AND t.tag_type = 314
+                AND t.tag LIKE 'tmdb://%'
+            LIMIT 1
+            ) AS tmdb_id,
+            m.library_section_id,
+            m."index",
+            m.original_title, m.content_rating, m.tags_director, m.tags_writer, m.tags_star, m.audience_rating
+        FROM metadata_items m
+        WHERE m.id = ?
 
-            UNION ALL
+        UNION ALL
 
-            SELECT 
-                m.id, m.metadata_type, m.parent_id,
-                m.title, m.title_sort, m.summary, m.year,
-                datetime(m.originally_available_at, 'unixepoch'),
-                m.user_fields, m.changed_at,
-                m.guid, m.duration, m.user_thumb_url, m.user_art_url,
-                NULL,  -- tmdb_id는 NULL
-                m.library_section_id,
-                m."index",
-                m.original_title, m.content_rating, m.tags_director, m.tags_writer, m.tags_star, m.audience_rating
-            FROM metadata_items m
-            JOIN descendants d ON m.parent_id = d.id
+        SELECT
+            m2.id, m2.metadata_type, m2.parent_id,
+            m2.title, m2.title_sort, m2.summary, m2.year,
+            datetime(m2.originally_available_at, 'unixepoch'),
+            m2.user_fields, m2.changed_at,
+            m2.guid, m2.duration, m2.user_thumb_url, m2.user_art_url,
+            NULL,  -- 하위 노드의 tmdb_id는 굳이 계산할 필요 없음
+            m2.library_section_id,
+            m2."index",
+            m2.original_title, m2.content_rating, m2.tags_director, m2.tags_writer, m2.tags_star, m2.audience_rating
+        FROM metadata_items m2
+        JOIN d ON m2.parent_id = d.id
         )
-
-        SELECT 
-            d.*, 
-            d."index" AS metadata_index,
-            mp.file AS file_path,
-            sl.root_path AS section_root
-        FROM descendants d
+        SELECT
+        d.*,
+        d."index" AS metadata_index,
+        mp.file AS file_path,
+        sl.root_path AS section_root
+        FROM d
         LEFT JOIN media_items mi ON mi.metadata_item_id = d.id
         LEFT JOIN media_parts mp ON mp.media_item_id = mi.id
-        LEFT JOIN section_locations sl 
+        LEFT JOIN section_locations sl
         ON d.library_section_id = sl.library_section_id
         AND mp.file LIKE sl.root_path || '%'
         ORDER BY d.metadata_type ASC, d.id ASC;
         """
+
+        def _get_marker_tag_id_from_setting() -> int | None:
+
+            try:
+                v = P.ModelSetting.get('intro_tag_id')
+                if v not in (None, '', '0'):
+                    iv = int(v)
+                    if iv > 0:
+                        return iv
+            except Exception:
+                pass
+
+            try:
+                rows = PlexDBHandle.select("SELECT id FROM tags WHERE tag_type = 12 ORDER BY id ASC LIMIT 1;")
+                if rows and rows[0].get('id') is not None:
+                    marker_tag_id = int(rows[0]['id'])
+                    return marker_tag_id
+            except Exception as e:
+                logger.warning(f"[MetaUpdate] marker_tag_id fallback 조회 실패: {e}")
+
+            return None
+
+        def _upsert_marker(metadata_id: int, tag_text: str, start_ms: int, end_ms: int, marker_tag_id: int):
+
+            existing = PlexDBHandle.select(
+                "SELECT time_offset, end_time_offset FROM taggings "
+                f"WHERE metadata_item_id = {metadata_id} AND text = '{tag_text}' LIMIT 1"
+            )
+            if existing:
+                old_s, old_e = existing[0].get('time_offset'), existing[0].get('end_time_offset')
+                if (old_s, old_e) != (start_ms, end_ms):
+                    PlexDBHandle.execute_query(
+                        "UPDATE taggings "
+                        f"SET time_offset = {start_ms}, end_time_offset = {end_ms} "
+                        f"WHERE metadata_item_id = {metadata_id} AND text = '{tag_text}'"
+                    )
+                return True
+
+            insert_sql = f"""
+                WITH max_index AS (
+                    SELECT COALESCE(MAX("index"), -1) + 1 AS new_index
+                    FROM taggings
+                    WHERE metadata_item_id = {metadata_id} AND tag_id = {marker_tag_id}
+                )
+                INSERT INTO taggings (metadata_item_id, tag_id, "index", text, time_offset, end_time_offset, created_at)
+                SELECT {metadata_id}, {marker_tag_id}, new_index, '{tag_text}', {start_ms}, {end_ms}, strftime('%s','now')
+                FROM max_index
+            """
+            PlexDBHandle.execute_query(insert_sql)
+            return True
+
         retry_interval = 30  
         max_attempts = 10
 
@@ -562,9 +635,7 @@ class PageToolSimple(PluginPageBase):
                 logger.error(f"[MetaUpdate] metadata_item_id {metadata_item_id} 데이터 조회 실패 (최대 재시도 초과)")
                 return {'ret': 'fail', 'msg': f'{retry_interval * max_attempts}초간 대기했지만 metadata_id={metadata_item_id} 데이터가 조회되지 않았습니다.'}
 
-        if not data[0]['guid'].startswith('plex://'):
-
-            return {'ret': 'success', 'msg': '기본 에이전트가 아닙니다.'}
+        is_basic_agent = str(data[0].get('guid') or '').startswith('plex://')
 
         updated_data = self.enrich_rows(data)
 
@@ -575,12 +646,14 @@ class PageToolSimple(PluginPageBase):
         if show_row and os.path.exists(show_row.get('yaml_path', '')):
             yaml_data = SupportYaml.read_yaml(show_row['yaml_path'])
         
-        if show_row and show_row.get('tmdb_id'):
+        if is_basic_agent and show_row and show_row.get('tmdb_id'):
             is_show = show_row['metadata_type'] == 2
             tmdb_data = self.tmdb_info(show_row['tmdb_id'], is_show)
             if not tmdb_data:
                 return {'ret': 'fail', 'msg': 'TMDb 데이터 가져오기 실패'}
-        
+        else:
+            tmdb_data = None     
+
         updated_count = 0
 
         for row in updated_data:
@@ -592,6 +665,25 @@ class PageToolSimple(PluginPageBase):
 
             db_year = int(row['year']) if row['year'] else None
             yaml_tdata = self.get_yaml_metadata(row, yaml_data) if yaml_data else {}
+
+
+            if row['metadata_type'] == 4 and yaml_tdata:
+                markers = (yaml_tdata.get('markers') or {})
+                intro  = markers.get('intro')  or {}
+                credits = markers.get('credits') or {}
+                i_s, i_e = intro.get('start'),  intro.get('end')
+                c_s, c_e = credits.get('start'), credits.get('end')
+
+                marker_tag_id = _get_marker_tag_id_from_setting()
+                def _is_num(x): return isinstance(x, int) and x >= 0
+
+                if marker_tag_id:
+                    if _is_num(i_s) and _is_num(i_e):
+                        _upsert_marker(row['id'], 'intro',  i_s, i_e, marker_tag_id)
+                    if _is_num(c_s) and _is_num(c_e):
+                        _upsert_marker(row['id'], 'credits', c_s, c_e, marker_tag_id)
+            if not is_basic_agent:
+                continue
 
             new_title = None
             db_title = row['title']
