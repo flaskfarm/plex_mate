@@ -172,6 +172,9 @@ class Task:
                                 metaid = PlexDBHandle.get_metaid_by_directory(item.section_id, refresh_target)
                                 if metaid != None:
                                     PlexWebHandle.refresh_by_id(metaid)
+                                    if item.target.endswith('show.yaml'):
+                                        logger.info(f"[REFRESH] show.yaml 감지 → manual_refresh(meta_id={metaid})")
+                                        PlexWebHandle.manual_refresh(metaid)
                                     item.set_status('FINISH_REFRESH', save=True)
                                     continue
                                 else:
