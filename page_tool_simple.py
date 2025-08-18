@@ -177,7 +177,47 @@ class PageToolSimple(PluginPageBase):
                 else:
                     ret = {'ret':'success', 'msg':'처리할 내용이 없습니다.'}
             elif command == 'equal_file_equal_meta':
-                query = f"""select media_parts.file, replace(media_parts.file, rtrim(media_parts.file, replace(media_parts.file, '/', '')), '') AS filename from media_parts, metadata_items, media_items, (SELECT metadata_items.id as id, replace(media_parts.file, rtrim(media_parts.file, replace(media_parts.file, '/', '')), '') AS filename, count(*) AS cnt FROM metadata_items, media_items, media_parts WHERE metadata_items.id = media_items.metadata_item_id AND media_items.id = media_parts.media_item_id AND metadata_items.library_section_id = 18 GROUP BY filename HAVING cnt > 1 ORDER BY file) AS tmp where metadata_items.id = media_items.metadata_item_id AND media_items.id = media_parts.media_item_id AND metadata_items.library_section_id = {arg1} and media_parts.file != '' and filename = tmp.filename and metadata_items.id = tmp.id order by file"""
+                query = f"""
+                    WITH EqualFilenames AS (
+                        SELECT
+                            mei.metadata_item_id,
+                            replace(mp.file, rtrim(mp.file, replace(mp.file, '/', '')), '') AS filename
+                        FROM
+                            media_items AS mei
+                        JOIN
+                            media_parts AS mp ON mei.id = mp.media_item_id
+                        JOIN
+                            metadata_items AS mi ON mei.metadata_item_id = mi.id
+                        WHERE
+                            mi.library_section_id = {arg1}
+                        GROUP BY
+                            mei.metadata_item_id,
+                            filename
+                        HAVING
+                            COUNT(*) > 1
+                    )
+                    SELECT
+                        mi.id AS metadata_item_id,
+                        mi.title,
+                        mei.id AS media_item_id,
+                        mp.id AS media_part_id,
+                        replace(mp.file, rtrim(mp.file, replace(mp.file, '/', '')), '') AS filename,
+                        mp.file
+                    FROM
+                        metadata_items AS mi
+                    JOIN
+                        media_items AS mei ON mi.id = mei.metadata_item_id
+                    JOIN
+                        media_parts AS mp ON mei.id = mp.media_item_id
+                    JOIN
+                        EqualFilenames AS ef ON mi.id = ef.metadata_item_id 
+                        AND replace(mp.file, rtrim(mp.file, replace(mp.file, '/', '')), '') = ef.filename
+                    WHERE
+                        mi.library_section_id = {arg1}
+                    ORDER BY
+                        mi.id,
+                        filename;
+                """
                 data = PlexDBHandle.select(query)
                 ret['modal'] = json.dumps(data, indent=4, ensure_ascii=False)
                 ret['title'] = '목록'
