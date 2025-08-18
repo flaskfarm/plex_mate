@@ -2,6 +2,7 @@ import shutil
 import threading
 import time
 import unicodedata
+import re
 from support import SupportString, SupportYaml
 from .plex_db import PlexDBHandle
 import tmdbsimple as tmdb
@@ -514,6 +515,30 @@ class PageToolSimple(PluginPageBase):
         return normalized
 
     def update_by_default_agent_tmdb(self, metadata_item_id, title_lock=False, title_sort_lock=False, summary_lock=False, year_lock=False):
+
+        def _get_marker_tag_id_from_setting() -> int | None:
+
+            try:
+                v = P.ModelSetting.get('intro_tag_id')
+                if v not in (None, '', '0'):
+                    iv = int(v)
+                    if iv > 0:
+                        return iv
+            except Exception:
+                pass
+
+            try:
+                rows = PlexDBHandle.select("SELECT id FROM tags WHERE tag_type = 12 ORDER BY id ASC LIMIT 1;")
+                if rows and rows[0].get('id') is not None:
+                    marker_tag_id = int(rows[0]['id'])
+                    return marker_tag_id
+            except Exception as e:
+                logger.warning(f"[MetaUpdate] marker_tag_id fallback 조회 실패: {e}")
+
+            return None
+
+        marker_tag_id = _get_marker_tag_id_from_setting()
+
         query = """
         WITH RECURSIVE d(
         id, metadata_type, parent_id, title, title_sort, summary, year,
@@ -543,14 +568,13 @@ class PageToolSimple(PluginPageBase):
         WHERE m.id = ?
 
         UNION ALL
-
         SELECT
             m2.id, m2.metadata_type, m2.parent_id,
             m2.title, m2.title_sort, m2.summary, m2.year,
             datetime(m2.originally_available_at, 'unixepoch'),
             m2.user_fields, m2.changed_at,
             m2.guid, m2.duration, m2.user_thumb_url, m2.user_art_url,
-            NULL,  -- 하위 노드의 tmdb_id는 굳이 계산할 필요 없음
+            NULL,
             m2.library_section_id,
             m2."index",
             m2.original_title, m2.content_rating, m2.tags_director, m2.tags_writer, m2.tags_star, m2.audience_rating
@@ -561,71 +585,61 @@ class PageToolSimple(PluginPageBase):
         d.*,
         d."index" AS metadata_index,
         mp.file AS file_path,
-        sl.root_path AS section_root
+        sl.root_path AS section_root,
+        ti.time_offset  AS intro_start_db,
+        ti.end_time_offset AS intro_end_db,
+        tc.time_offset  AS credits_start_db,
+        tc.end_time_offset AS credits_end_db
         FROM d
         LEFT JOIN media_items mi ON mi.metadata_item_id = d.id
         LEFT JOIN media_parts mp ON mp.media_item_id = mi.id
         LEFT JOIN section_locations sl
-        ON d.library_section_id = sl.library_section_id
-        AND mp.file LIKE sl.root_path || '%'
+            ON d.library_section_id = sl.library_section_id
+            AND mp.file LIKE sl.root_path || '%'
+        LEFT JOIN taggings ti
+            ON ti.metadata_item_id = d.id
+            AND ti.tag_id = ?
+            AND ti.text = 'intro'
+        LEFT JOIN taggings tc
+            ON tc.metadata_item_id = d.id
+            AND tc.tag_id = ?
+            AND tc.text = 'credits'
         ORDER BY d.metadata_type ASC, d.id ASC;
         """
 
-        def _get_marker_tag_id_from_setting() -> int | None:
+        def _apply_marker(metadata_id: int, tag_text: str, want_start: int | None, want_end: int | None, exist_start: int | None, exist_end: int | None, marker_tag_id: int, update_if_exists: bool):
 
-            try:
-                v = P.ModelSetting.get('intro_tag_id')
-                if v not in (None, '', '0'):
-                    iv = int(v)
-                    if iv > 0:
-                        return iv
-            except Exception:
-                pass
+            def _is_num(v): return isinstance(v, int) and v >= 0
+            if not (_is_num(want_start) and _is_num(want_end)):
+                return False  
 
-            try:
-                rows = PlexDBHandle.select("SELECT id FROM tags WHERE tag_type = 12 ORDER BY id ASC LIMIT 1;")
-                if rows and rows[0].get('id') is not None:
-                    marker_tag_id = int(rows[0]['id'])
-                    return marker_tag_id
-            except Exception as e:
-                logger.warning(f"[MetaUpdate] marker_tag_id fallback 조회 실패: {e}")
-
-            return None
-
-        def _upsert_marker(metadata_id: int, tag_text: str, start_ms: int, end_ms: int, marker_tag_id: int):
-
-            existing = PlexDBHandle.select(
-                "SELECT time_offset, end_time_offset FROM taggings "
-                f"WHERE metadata_item_id = {metadata_id} AND text = '{tag_text}' LIMIT 1"
-            )
-            if existing:
-                old_s, old_e = existing[0].get('time_offset'), existing[0].get('end_time_offset')
-                if (old_s, old_e) != (start_ms, end_ms):
-                    PlexDBHandle.execute_query(
-                        "UPDATE taggings "
-                        f"SET time_offset = {start_ms}, end_time_offset = {end_ms} "
-                        f"WHERE metadata_item_id = {metadata_id} AND text = '{tag_text}'"
-                    )
-                return True
+            exists = (_is_num(exist_start) and _is_num(exist_end))
+            if exists:
+                if update_if_exists and (exist_start != want_start or exist_end != want_end):
+                    return PlexDBHandle.execute_query(
+                        f"UPDATE taggings SET time_offset = {want_start}, end_time_offset = {want_end} "
+                        f"WHERE metadata_item_id = {metadata_id} AND tag_id = {marker_tag_id} AND text = '{tag_text}';"
+                    ) is not False
+                return False 
 
             insert_sql = f"""
                 WITH max_index AS (
-                    SELECT COALESCE(MAX("index"), -1) + 1 AS new_index
-                    FROM taggings
-                    WHERE metadata_item_id = {metadata_id} AND tag_id = {marker_tag_id}
+                SELECT COALESCE(MAX("index"), -1) + 1 AS new_index
+                FROM taggings
+                WHERE metadata_item_id = {metadata_id} AND tag_id = {marker_tag_id}
                 )
                 INSERT INTO taggings (metadata_item_id, tag_id, "index", text, time_offset, end_time_offset, created_at)
-                SELECT {metadata_id}, {marker_tag_id}, new_index, '{tag_text}', {start_ms}, {end_ms}, strftime('%s','now')
-                FROM max_index
+                SELECT {metadata_id}, {marker_tag_id}, new_index, '{tag_text}', {want_start}, {want_end}, strftime('%s','now')
+                FROM max_index;
             """
-            PlexDBHandle.execute_query(insert_sql)
-            return True
+            return PlexDBHandle.execute_query(insert_sql) is not False
+
 
         retry_interval = 30  
         max_attempts = 10
 
         for attempt in range(1, max_attempts + 1):
-            data = PlexDBHandle.select_arg(query, (int(metadata_item_id),))
+            data = PlexDBHandle.select_arg(query, (int(metadata_item_id), marker_tag_id, marker_tag_id))
             if data:
                 break
             if attempt < max_attempts:
@@ -666,22 +680,25 @@ class PageToolSimple(PluginPageBase):
             db_year = int(row['year']) if row['year'] else None
             yaml_tdata = self.get_yaml_metadata(row, yaml_data) if yaml_data else {}
 
+            if row['metadata_type'] == 4 and yaml_tdata and marker_tag_id:
+                m = (yaml_tdata.get('markers') or {})
+                intro, credits = (m.get('intro') or {}), (m.get('credits') or {})
 
-            if row['metadata_type'] == 4 and yaml_tdata:
-                markers = (yaml_tdata.get('markers') or {})
-                intro  = markers.get('intro')  or {}
-                credits = markers.get('credits') or {}
-                i_s, i_e = intro.get('start'),  intro.get('end')
-                c_s, c_e = credits.get('start'), credits.get('end')
+                def _clean(v):
+                    try:
+                        if v == '' or v is None: return None
+                        return int(v)
+                    except: return None
 
-                marker_tag_id = _get_marker_tag_id_from_setting()
-                def _is_num(x): return isinstance(x, int) and x >= 0
+                want_i_s = _clean(intro.get('start'));   want_i_e = _clean(intro.get('end'))
+                want_c_s = _clean(credits.get('start')); want_c_e = _clean(credits.get('end'))
 
-                if marker_tag_id:
-                    if _is_num(i_s) and _is_num(i_e):
-                        _upsert_marker(row['id'], 'intro',  i_s, i_e, marker_tag_id)
-                    if _is_num(c_s) and _is_num(c_e):
-                        _upsert_marker(row['id'], 'credits', c_s, c_e, marker_tag_id)
+                exist_i_s = row.get('intro_start_db');     exist_i_e = row.get('intro_end_db')
+                exist_c_s = row.get('credits_start_db');   exist_c_e = row.get('credits_end_db')
+
+                _apply_marker(row['id'], 'intro', want_i_s, want_i_e, exist_i_s, exist_i_e, marker_tag_id, update_if_exists=True)
+                _apply_marker(row['id'], 'credits', want_c_s, want_c_e, exist_c_s, exist_c_e, marker_tag_id, update_if_exists=False)
+
             if not is_basic_agent:
                 continue
 
