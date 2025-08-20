@@ -736,7 +736,10 @@ class PageToolSimple(PluginPageBase):
                 exist_i_s = row.get('intro_start_db');     exist_i_e = row.get('intro_end_db')
                 exist_c_s = row.get('credits_start_db');   exist_c_e = row.get('credits_end_db')
 
-                _apply_marker(row['id'], 'intro', want_i_s, want_i_e, exist_i_s, exist_i_e, marker_tag_id, update_if_exists=True)
+                if isinstance(want_i_e, int) and want_i_e > 0:
+                    if want_i_s is None:
+                        want_i_s = 0
+                    _apply_marker(row['id'], 'intro', want_i_s, want_i_e, exist_i_s, exist_i_e, marker_tag_id, update_if_exists=True)
                 _apply_marker(row['id'], 'credits', want_c_s, want_c_e, exist_c_s, exist_c_e, marker_tag_id, update_if_exists=False)
 
             if not is_basic_agent:
