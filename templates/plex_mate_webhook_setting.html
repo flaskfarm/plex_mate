@@ -96,7 +96,7 @@
         </div>
         
       </div>
-
+      {{ macros.setting_checkbox('yaml_force_credits', 'yaml 크레딧 강제 적용', value=arg['yaml_force_credits'], desc=['ON : yaml 정보 항상 사용, OFF : 없을 때만 사용']) }}
       {{ macros.setting_input_textarea('plex_server_uuid', '허용 Plex 서버 UUID', value=arg['plex_server_uuid'], row='4', desc=['Preferences.xml 파일의 MachineIdentifier 값', '빈칸 시 모두 허용', '구분자 엔터']) }}
       {{ macros.setting_input_textarea('directory_mapping', '경로 매핑', value=arg['directory_mapping'], row='4', desc=['앞쪽 경로를 뒤쪽 경로로 바꿉니다.', '예시: /mnt/gds2:/data/plex_source','구분자 엔터']) }}
     {{ macros.m_tab_content_end() }}
@@ -259,3 +259,4 @@ $("body").on('click', '#select_intro_json_file_btn', function(e){
 </script>
 
 {% endblock %}
+
