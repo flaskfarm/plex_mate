@@ -40,6 +40,7 @@ class LogicPMWebhook(PluginModuleBase):
         'webhook_use_full': 'False',
         'webhook_use_preview': 'False',
         'webhook_use_intro_marker': 'False',
+        'yaml_force_credits': 'False',
         'webhook_intro_match_similar': 'False',
         'webhook_intro_auto_copy': 'False',
         'agent_meta_update_sections': '',
