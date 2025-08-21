@@ -709,7 +709,7 @@ class PageToolSimple(PluginPageBase):
             tmdb_data = None     
 
         updated_count = 0
-
+        processed_marker_meta_ids = set()
         for row in updated_data:
 
             update_fields, updated_fields, locked_codes, msg_parts = [], [], [], []
@@ -721,26 +721,30 @@ class PageToolSimple(PluginPageBase):
             yaml_tdata = self.get_yaml_metadata(row, yaml_data) if yaml_data else {}
 
             if row['metadata_type'] == 4 and yaml_tdata and marker_tag_id:
-                m = (yaml_tdata.get('markers') or {})
-                intro, credits = (m.get('intro') or {}), (m.get('credits') or {})
-
-                def _clean(v):
-                    try:
-                        if v == '' or v is None: return None
-                        return int(v)
-                    except: return None
-
-                want_i_s = _clean(intro.get('start'));   want_i_e = _clean(intro.get('end'))
-                want_c_s = _clean(credits.get('start')); want_c_e = _clean(credits.get('end'))
-
-                exist_i_s = row.get('intro_start_db');     exist_i_e = row.get('intro_end_db')
-                exist_c_s = row.get('credits_start_db');   exist_c_e = row.get('credits_end_db')
-
-                if isinstance(want_i_e, int) and want_i_e > 0:
-                    if want_i_s is None:
-                        want_i_s = 0
-                    _apply_marker(row['id'], 'intro', want_i_s, want_i_e, exist_i_s, exist_i_e, marker_tag_id, update_if_exists=True)
-                _apply_marker(row['id'], 'credits', want_c_s, want_c_e, exist_c_s, exist_c_e, marker_tag_id, update_if_exists=P.ModelSetting.get_bool('yaml_force_credits'))
+                if row['id'] in processed_marker_meta_ids:
+                    pass
+                else:
+                    processed_marker_meta_ids.add(row['id'])
+                    m = (yaml_tdata.get('markers') or {})
+                    intro, credits = (m.get('intro') or {}), (m.get('credits') or {})
+    
+                    def _clean(v):
+                        try:
+                            if v == '' or v is None: return None
+                            return int(v)
+                        except: return None
+    
+                    want_i_s = _clean(intro.get('start'));   want_i_e = _clean(intro.get('end'))
+                    want_c_s = _clean(credits.get('start')); want_c_e = _clean(credits.get('end'))
+    
+                    exist_i_s = row.get('intro_start_db');     exist_i_e = row.get('intro_end_db')
+                    exist_c_s = row.get('credits_start_db');   exist_c_e = row.get('credits_end_db')
+    
+                    if isinstance(want_i_e, int) and want_i_e > 0:
+                        if want_i_s is None:
+                            want_i_s = 0
+                        _apply_marker(row['id'], 'intro', want_i_s, want_i_e, exist_i_s, exist_i_e, marker_tag_id, update_if_exists=True)
+                    _apply_marker(row['id'], 'credits', want_c_s, want_c_e, exist_c_s, exist_c_e, marker_tag_id, update_if_exists=P.ModelSetting.get_bool('yaml_force_credits'))
 
             if not is_basic_agent:
                 continue
