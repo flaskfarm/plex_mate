@@ -740,7 +740,7 @@ class PageToolSimple(PluginPageBase):
                     if want_i_s is None:
                         want_i_s = 0
                     _apply_marker(row['id'], 'intro', want_i_s, want_i_e, exist_i_s, exist_i_e, marker_tag_id, update_if_exists=True)
-                _apply_marker(row['id'], 'credits', want_c_s, want_c_e, exist_c_s, exist_c_e, marker_tag_id, update_if_exists=False)
+                _apply_marker(row['id'], 'credits', want_c_s, want_c_e, exist_c_s, exist_c_e, marker_tag_id, update_if_exists=P.ModelSetting.get_bool('yaml_force_credits'))
 
             if not is_basic_agent:
                 continue
