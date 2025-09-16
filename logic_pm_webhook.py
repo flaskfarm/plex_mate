@@ -119,10 +119,12 @@ class LogicPMWebhook(PluginModuleBase):
         arg = P.ModelSetting.to_dict()
         arg['sub'] = self.name
         arg['sub2'] = sub
-        ddns = F.SystemModelSetting.get("ddns")
-        use_apikey = F.SystemModelSetting.get_bool("use_apikey")
-        apikey = F.SystemModelSetting.get("apikey")
-        arg['api_webhook'] = urllib.parse.urljoin(ddns, f'/plex_mate/webhook/plex' + f'?apikey={apikey}' if use_apikey else '')
+        api_path = f"{P.package_name}/{self.name}/plex"
+        query = {}
+        if F.SystemModelSetting.get_bool("use_apikey"):
+            query["apikey"] = F.SystemModelSetting.get("apikey")
+        api_fullpath = f"{api_path}?{urllib.parse.urlencode(query)}" if query else api_path
+        arg['api_webhook'] = urllib.parse.urljoin(F.SystemModelSetting.get("ddns"), api_fullpath)
         try:
             return render_template(f'{package_name}_{self.name}_{sub}.html', arg=arg)
         except Exception as e:
