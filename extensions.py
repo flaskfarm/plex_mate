@@ -316,7 +316,7 @@ def plex_activities() -> dict[str, str]:
 
 
 @plex_api
-def plex_browse(path: str, include_files: bool = True) -> dict[str, str]:
+def _plex_browse(path: str, include_files: bool = True) -> dict[str, str]:
     encoded_bytes = base64.urlsafe_b64encode(path.encode('utf-8'))
     encoded_path = encoded_bytes.decode('utf-8')
     return {
@@ -324,6 +324,27 @@ def plex_browse(path: str, include_files: bool = True) -> dict[str, str]:
         'method': 'GET',
         'includeFiles': 1 if include_files else 0,
     }
+
+
+def plex_browse(path: str, include_files: bool = True) -> list[pathlib.Path]:
+    try:
+        result = _plex_browse(path, include_files)
+        container = result.get('MediaContainer')
+        if container:
+            return [
+                pathlib.Path(plex_path.get('path') or '') 
+                for plex_path in (container.get('File') or []) + (container.get('Path') or [])
+            ]
+    except Exception as e:
+        P.logger.exception(e)
+    P.logger.error(f'경로를 확인할 수 없습니다: {path=}')
+    return []
+
+
+def plex_is_exist(path: str) -> bool:
+    target = pathlib.Path(path)
+    children = plex_browse(str(target.parent))
+    return target in children
 
 
 def plex_empty(section_id: int) -> None:
@@ -607,19 +628,8 @@ def start_trash_schedule() -> tuple[bool, str]:
 
     failed_anchors = []
     for anchor in anchors:
-        anchor_path = pathlib.Path(anchor)
-        anchor = str(anchor_path)
-        result = plex_browse(str(anchor_path.parent))
-        container = result.get('MediaContainer')
-        exception = result.get('exception')
-        if exception or not container or container.get('size') < 1:
-            P.logger.error(f'기준 경로를 확인할 수 없습니다: {anchor=} {result=}')
-            failed_anchors.append(anchor)
-            continue
-        for plex_path in container.get('Path'):
-            if str(pathlib.Path(plex_path.get("path") or '')) == anchor:
-                P.logger.debug(f'기준 경로 존재: {anchor}')
-                break
+        if plex_is_exist(anchor):
+            P.logger.debug(f'기준 경로 존재: {anchor}')
         else:
             failed_anchors.append(anchor)
     if failed_anchors:
