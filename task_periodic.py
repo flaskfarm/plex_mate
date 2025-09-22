@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from support import SupportYaml, d
 from tool import ToolUtil
 
@@ -6,7 +8,7 @@ from .plex_bin_scanner import PlexBinaryScanner
 from .plex_db import PlexDBHandle
 from .plex_web import PlexWebHandle
 from .setup import *
-from .extensions import get_scan_targets, vfs_refresh
+from .extensions import get_scan_targets, vfs_refresh, plex_is_exist
 
 logger = P.logger
 
@@ -43,6 +45,20 @@ class Task(object):
                 recursive = False
                 async_ = False
                 skip_scan = False
+
+            if '기준경로' in yaml:
+                anchor_user = yaml.get('기준경로')
+                if isinstance(anchor_user, str):
+                    anchors = (anchor_user,)
+                elif isinstance(anchor_user, list):
+                    anchors = tuple(anchor_user)
+                else:
+                    P.logger.warning(f"기준 경로의 값을 확인해 주세요: {anchor_user}")
+                    return
+                for anchor in anchors:
+                    if not plex_is_exist(anchor):
+                        P.logger.debug(f"기준 경로를 찾을 수 없습니다: 작업ID={idx + 1} 기준경로='{anchor}'")
+                        return
 
             if skip_scan:
                 user_folder = yaml.get('폴더', '/')
