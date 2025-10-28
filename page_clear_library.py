@@ -40,7 +40,10 @@ class PageClearLibraryBase(PluginPageBase):
                 if self.data['status']['is_working'] == 'run':
                     ret = {'ret':'warning', 'msg':'실행중입니다.'}
                 else:
-                    self.task_interface(command, arg1, arg2)
+                    if arg3 is not None:
+                        self.task_interface(command, arg1, arg2, arg3)
+                    else:
+                        self.task_interface(command, arg1, arg2)
                     ret = {'ret':'success', 'msg':'작업을 시작합니다.'}
             elif command == 'stop':
                 if self.data['status']['is_working'] == 'run':

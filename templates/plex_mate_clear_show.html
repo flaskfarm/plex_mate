@@ -19,25 +19,33 @@
       {% endif %}
     </select>
   </div>
+  <div class="input-group col-sm" style="padding-left:0px; padding-top:5px">
+    <div class="btn-group btn-group-sm flex-wrap mr-2" role="group" style="padding-left:5px; padding-top:0px">
+      <button id="movie_stop_btn" class="btn btn-sm btn-outline-danger">중지</button>
+      <button id="movie_start0_btn" class="btn btn-sm btn-outline-warning">쇼별 메타 크기만 확인</button>
+      <button id="movie_start1_btn" class="btn btn-sm btn-outline-info">1단계 시작</button>
+      <button id="movie_start21_btn" class="btn btn-sm btn-outline-info">2-1단계 시작</button>
+      <button id="movie_start22_btn" class="btn btn-sm btn-outline-info">2-2단계 시작</button>
+      <button id="movie_start3_btn" class="btn btn-sm btn-outline-info">3단계 시작</button>
+      <!-- <button id="movie_start4_btn" class="btn btn-sm btn-outline-info">4단계 시작</button> -->
+    </div>
+  </div>
+</div>
+<div class='row' style="padding-top: 5px; padding-bottom:0px; align-items: center;">
   <div class='col-sm-1 set-left'>
     <strong>DryRun</strong>
   </div>
   <div class="input-group col-sm-1">
     <input id="dryrun" name="dryrun" class="form-control form-control-sm" type="checkbox" data-toggle="toggle" checked>
   </div>
-  <div class="input-group col-sm-6" style="padding-left:0px; padding-top:5px">
-    <div class="btn-group btn-group-sm flex-wrap mr-2" role="group" style="padding-left:5px; padding-top:0px">
-      <button id="movie_stop_btn" class="btn btn-sm btn-outline-info">중지</button>
-      <button id="movie_start0_btn" class="btn btn-sm btn-outline-info">쇼별 메타 크기만 확인</button>
-      <button id="movie_start1_btn" class="btn btn-sm btn-outline-info">1단계 시작</button>
-      <button id="movie_start21_btn" class="btn btn-sm btn-outline-info">2-1단계 시작</button>
-      <button id="movie_start22_btn" class="btn btn-sm btn-outline-info">2-2단계 시작</button>
-      <button id="movie_start3_btn" class="btn btn-sm btn-outline-info">3단계 시작</button>
-      <button id="movie_start4_btn" class="btn btn-sm btn-outline-info">4단계 시작</button>
-    </div>
+  <div class='col-sm-1 set-left'>
+    <strong>Remove orphans</strong>
+  </div>
+  <div class="input-group col-sm-1">
+    <input id="remove_orphans" name="remove_orphans" class="form-control form-control-sm" type="checkbox" data-toggle="toggle">
   </div>
 </div>
-
+<div class='row' style="padding-top: 5px; padding-bottom:0px; align-items: center;"></div>
 <div class='row' style="padding-top: 5px; padding-bottom:0px; align-items: center;">
   <div class='col-sm-1 set-left'>
     <strong>상태</strong>
@@ -62,31 +70,31 @@ $(document).ready(function(){
 
 $("body").on('click', '#movie_start0_btn', function(e){
   e.preventDefault();
-  globalSendCommandPage('start0', $('#library_select').val(), $('#dryrun').is(":checked"));
+  globalSendCommandPage('start0', $('#library_select').val(), $('#dryrun').is(":checked"), $('#remove_orphans').is(":checked"));
 });
 
 $("body").on('click', '#movie_start1_btn', function(e){
   e.preventDefault();
-  globalSendCommandPage('start1', $('#library_select').val(), $('#dryrun').is(":checked"));
+  globalSendCommandPage('start1', $('#library_select').val(), $('#dryrun').is(":checked"), $('#remove_orphans').is(":checked"));
 });
 
 $("body").on('click', '#movie_start21_btn', function(e){
   e.preventDefault();
-  globalSendCommandPage('start21', $('#library_select').val(), $('#dryrun').is(":checked"));
+  globalSendCommandPage('start21', $('#library_select').val(), $('#dryrun').is(":checked"), $('#remove_orphans').is(":checked"));
 });
 $("body").on('click', '#movie_start22_btn', function(e){
   e.preventDefault();
-  globalSendCommandPage('start22', $('#library_select').val(), $('#dryrun').is(":checked"));
+  globalSendCommandPage('start22', $('#library_select').val(), $('#dryrun').is(":checked"), $('#remove_orphans').is(":checked"));
 });
 
 $("body").on('click', '#movie_start3_btn', function(e){
   e.preventDefault();
-  globalSendCommandPage('start3', $('#library_select').val(), $('#dryrun').is(":checked"));
+  globalSendCommandPage('start3', $('#library_select').val(), $('#dryrun').is(":checked"), $('#remove_orphans').is(":checked"));
 });
 
 $("body").on('click', '#movie_start4_btn', function(e){
   e.preventDefault();
-  globalSendCommandPage('start4', $('#library_select').val(), $('#dryrun').is(":checked"));
+  globalSendCommandPage('start4', $('#library_select').val(), $('#dryrun').is(":checked"), $('#remove_orphans').is(":checked"));
 });
 
 $("body").on('click', '#movie_stop_btn', function(e){
