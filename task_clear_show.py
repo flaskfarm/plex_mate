@@ -1,7 +1,8 @@
 import sqlite3
 import pathlib
+from xml.etree import ElementTree
 
-from support import SupportFile, d
+from support import SupportFile
 
 from .plex_db import PlexDBHandle, dict_factory
 from .plex_web import PlexWebHandle
@@ -22,12 +23,21 @@ class Task(object):
 
     @staticmethod
     @F.celery.task(bind=True)
-    def start(self, command, section_id, dryrun):
+    def start(self, command: str, section_id: str, dryrun: str, remove_orphans: str) -> str:
         if command == 'start4':
             logger.warning(f'4단계는 현재 지원하지 않습니다.')
             return 'stop'
         config = P.load_config()
-        dryrun = True if dryrun == 'true'  else False
+        try:
+            dryrun = True if dryrun.lower() == 'true'  else False
+        except Exception:
+            dryrun = False
+
+        try:
+            remove_orphans = True if remove_orphans.lower() == 'true'  else False
+        except Exception:
+            remove_orphans = False
+
 
         db_file = P.ModelSetting.get('base_path_db')
         with sqlite3.connect(db_file) as con:
@@ -48,7 +58,7 @@ class Task(object):
                         return 'stop'
                     time.sleep(0.05)
                     status['current'] += 1
-                    data = {'mode':'show', 'status':status, 'command':command, 'section_id':section_id, 'dryrun':dryrun, 'process':{}, 'file_count':0, 'remove_count':0}
+                    data = {'mode':'show', 'status':status, 'command':command, 'section_id':section_id, 'dryrun':dryrun, 'process':{}, 'file_count':0, 'remove_count':0, 'remove_orphans': remove_orphans}
                     data['db'] = show
 
                     Task.show_process(data, con, cur)
@@ -76,7 +86,7 @@ class Task(object):
                     P.logger.error(f'Exception:{str(e)}')
                     P.logger.error(traceback.format_exc())
                     P.logger.error(show['title'])
-            P.logger.warning(f"종료")
+            P.logger.warning(f"종료: {command=} {section_id=} {dryrun=} {remove_orphans=}")
             return 'wait'
 
 
@@ -168,7 +178,7 @@ class Task(object):
         if data['command'] in ['start21', 'start22', 'start3', 'start4']:
             
             for season_index, season in data['seasons'].items():
-                for episode_index, episode in season['episodes'].items():
+                for episode_index, episode in (season.get('episodes') or {}).items():
                     #P.logger.warning(episode['process']['thumb'])
                     media_item_cs = con.execute('SELECT * FROM media_items WHERE metadata_item_id = ? ORDER BY id', (episode['db']['id'],))
                     media_item_cs.row_factory = dict_factory
@@ -404,12 +414,11 @@ class Task(object):
     @staticmethod
     def xml_analysis(combined_xmlpath, data, show_data, con, is_episode=False):
         #P.logger.warning(combined_xmlpath)
-        import xml.etree.ElementTree as ET
 
         #text = ToolBaseFile.read(combined_xmlpath)
         #P.logger.warning(text)
         # 2021-12-11 4단계로 media파일을 디코 이미로 대체할때 시즌0 같이 아예 0.xml 파일이 없을 때도 동작하도록 추가
-
+        contents_path = pathlib.Path(combined_xmlpath.split('/_combined/')[0])
         if os.path.exists(combined_xmlpath) == False:
             #P.logger.info(f"xml 파일 없음 : {combined_xmlpath}")
             #P.logger.error(data['process']['thumb'])
@@ -419,7 +428,6 @@ class Task(object):
             2025.04.05 halfaider
             새로운 Plex 기본 에이전트는 Info.xml을 사용하지 않고 DB에 포스터 url을 저장함
             '''
-            contents_path = pathlib.Path(combined_xmlpath.split('/_combined/')[0])
             data.setdefault('process', {})
 
             for key in (tags := {'thumb' : ['thumb', 'thumbs']} if is_episode else TAG):
@@ -456,15 +464,18 @@ class Task(object):
             return True
         if combined_xmlpath not in show_data['use_filepath']:
             show_data['use_filepath'].append(combined_xmlpath)
-            
-        tree = ET.parse(combined_xmlpath)
+
+        tree = ElementTree.parse(combined_xmlpath)
         root = tree.getroot()
         data['xml_info'] = {}
         if is_episode == False:
             tags = TAG
         else:
             tags = {'thumb' : ['thumb', 'thumbs']}
+        path_xml = pathlib.Path(combined_xmlpath)
 
+        update_xml = False
+        orphans = {}
         for tag, value in tags.items():
             tmp = root.find(value[1])
             if root.find(value[1]) is None:
@@ -481,9 +492,63 @@ class Task(object):
                     entity['filename'] = item.attrib['media']
                 entity['provider'] = item.attrib['provider']
                 data['xml_info'][value[1]].append(entity)
+                """
+                2025.10.28 halfaider
+                FF에 메타데이터 요청시 자료 업데이트로 과거의 이미지 URL이 누락되면 그 이미지 URL은 고아가 됨.
+                플렉스에서 메타데이터 새로고침을 하면 FF의 메타데이터에 명시된 이미지 URL만 파일로 저장이 되고,
+                명시되지 않은 고아 URL은 내용물이 'None'인 4 bytes 파일로 저장됨.
+                그래서 plex_mate로 파일정리를 한 후 메타데이터 새로고침을 하게 되면 고아 파일은 정상적인 이미지 파일이 아니라 썸네일이 표시되지 않음.
+                만약 고아 파일이 xml 파일 정보에 계속 남아 있을 경우 새로고침시 다시 생성됨.
+                """
+                if not show_data.get('remove_orphans', False):
+                    continue
+                if path_xml.name == 'Info.xml':
+                    path_target = path_xml.parent / value[1] / entity['filename']
+                else:
+                    path_target = path_xml.parent / path_xml.stem / value[1] / entity['filename']
+                try:
+                    path_resolved = path_target.resolve()
+                    if (size_resolved := path_resolved.stat().st_size) > 10:
+                        raise Exception("정상 파일")
+                except Exception:
+                    continue
+                # 파일 내용이 'None' 네 글자만 있는 4 bytes 파일
+                P.logger.info(f"고아 파일 발견: {size_resolved} bytes {path_resolved}")
+                if show_data.get('dryrun', True):
+                    continue
+                tmp.remove(item)
+                if path_xml.name == 'Info.xml':
+                    path_xml_original = path_resolved.parent.parent / path_xml.name
+                else:
+                    path_xml_original = path_resolved.parent.parent.parent / path_xml.name
+                orphans.setdefault(str(path_xml_original), set())
+                orphans[str(path_xml_original)].add(path_resolved.name)
+                #path_target.unlink(missing_ok=True)
+                update_xml = True
 
-        if 'process' not in data:
-            data['process'] = {}
+        if update_xml:
+            write_xml(tree, combined_xmlpath)
+
+        for orphan_xml in orphans:
+            try:
+                orphan_tree = ElementTree.parse(orphan_xml)
+            except Exception:
+                continue
+            orphan_root = orphan_tree.getroot()
+            orphan_tag = orphan_root.find(value[1])
+            if orphan_tag is None:
+                continue
+            orphan_update_xml = False
+            for orphan_item in orphan_tag.findall('item'):
+                orpahn_preview = orphan_item.get('preview')
+                orphan_media = orphan_item.get('media')
+                if orpahn_preview in orphans[orphan_xml] or orphan_media in orphans[orphan_xml]:
+                    orphan_tag.remove(orphan_item)
+                    orphan_update_xml = True
+            if orphan_update_xml:
+                write_xml(orphan_tree, orphan_xml)
+
+        data.setdefault('process', {})
         for tag, value in tags.items():
             if value[1] in data['xml_info']:
                 data['process'][tag] = {
@@ -539,5 +604,11 @@ class Task(object):
             if drive_url:
                 return drive_url
         return url
-        
-        
+
+
+def write_xml(tree: ElementTree, file_path: str) -> None:
+    try:
+        tree.write(file_path, encoding='utf-8', xml_declaration=True)
+        logger.debug(f"XML 파일 수정 완료: {file_path}")
+    except Exception:
+        logger.exception(f"XML 파일 수정 실패: {file_path}")
