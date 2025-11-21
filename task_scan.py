@@ -238,8 +238,10 @@ class Task:
         while True:
             try:
                 while True:
-                    if Task.current_scan_count < P.ModelSetting.get_int(f"{name}_max_scan_count"):
+                    current_scan_count = len(ModelScanItem.get_list_by_status('SCANNING'))
+                    if current_scan_count < (max_scan_count := P.ModelSetting.get_int(f"{name}_max_scan_count")):
                         break
+                    logger.debug(f"최대 스캔 수 도달: {current_scan_count} / {max_scan_count}")
                     time.sleep(5)
                 db_item = Task.scan_queue.get()
                 if db_item.flag_cancel:
@@ -280,14 +282,13 @@ class Task:
             if db_item.mode == 'ADD' and Task.__check_media_part_data(db_item):
                 pass
             else:
-                Task.current_scan_count += 1
+                #Task.current_scan_count += 1
                 use_web_request = P.ModelSetting.get_bool('scan_use_web_request')
                 scan_web_sections = Task.get_int_list('scan_web_sections')
                 if use_web_request and db_item.section_id and (not scan_web_sections or int(db_item.section_id) in scan_web_sections):
                     threading.Thread(target=Task.handle_web_scan, args=(db_item,)).start()
                 else:
                     PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.scan_folder, callback_function=Task.subprcoess_callback_function, callback_id=f"pm_scan_{db_item.id}")
-            
         except Exception as e:
             logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())
@@ -334,7 +335,6 @@ class Task:
                 if db_item.target_type == 'FOLDER':
                     db_item.set_status('FINISH_ADD_FOLDER', save=True)
                     PlexDBHandle.update_show_recent()
-                    Task.current_scan_count += -1
                 else:
                     '''
                     스캔 프로세스가 완료 된 후 대상이 media_part로 등록 되었는지 테스트 후 FINISH_ADD 처리함.
@@ -353,7 +353,6 @@ class Task:
                         PlexDBHandle.update_show_recent()
                     else:
                         db_item.set_status('FINISH_SCANNING', save=True)
-                    Task.current_scan_count += -1
                 # 2024-09-07
                 # 이제 bin scanner가 refresh까지 하지 못함. web refresh 하도록 추가
                 if db_item.mode == 'ADD' and P.ModelSetting.get_bool('scan_refresh_after_scanning'):
@@ -361,6 +360,12 @@ class Task:
                     if metaid != None:
                         logger.info(f"스캔: meta refresh {metaid}")
                         PlexWebHandle.refresh_by_id(metaid)
+            elif mode == "ERROR":
+                # 스캔이 정상 종료되지 않은 경우 다음 재실행시 스캔 되도록 FINISH_SCANNING 상태로 바꿈
+                logger.error(f'스캔이 정상 처리되지 않았습니다: {db_item.mode} "{db_item.target}"')
+                db_item.set_status('FINISH_SCANNING', save=True)
+            else:
+                # mode = LOG
+                pass
         except Exception as e:
-            logger.error(f"Exception:{str(e)}")
-            logger.error(traceback.format_exc())
+            logger.exception(str(e))
