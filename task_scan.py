@@ -238,10 +238,10 @@ class Task:
         while True:
             try:
                 while True:
-                    current_scan_count = len(ModelScanItem.get_list_by_status('SCANNING'))
-                    if current_scan_count < (max_scan_count := P.ModelSetting.get_int(f"{name}_max_scan_count")):
+                    if Task.current_scan_count < (max_scan_count := P.ModelSetting.get_int(f"{name}_max_scan_count")):
                         break
-                    logger.debug(f"최대 스캔 수 도달: {current_scan_count} / {max_scan_count}")
+                    # 스캔 카운터의 정상 여부 확인
+                    logger.debug(f"최대 스캔 수 도달: {Task.current_scan_count} / {max_scan_count}")
                     time.sleep(5)
                 db_item = Task.scan_queue.get()
                 if db_item.flag_cancel:
@@ -282,7 +282,8 @@ class Task:
             if db_item.mode == 'ADD' and Task.__check_media_part_data(db_item):
                 pass
             else:
-                #Task.current_scan_count += 1
+                # 기존처럼 웹, 바이너리 구분 없이 스캔 카운터를 증가 (웹 스캔의 증가 여부는 제고 필요)
+                Task.current_scan_count += 1
                 use_web_request = P.ModelSetting.get_bool('scan_use_web_request')
                 scan_web_sections = Task.get_int_list('scan_web_sections')
                 if use_web_request and db_item.section_id and (not scan_web_sections or int(db_item.section_id) in scan_web_sections):
@@ -367,5 +368,8 @@ class Task:
             else:
                 # mode = LOG
                 pass
+            match mode:
+                case 'END' | 'ERROR':
+                    Task.current_scan_count = max(Task.current_scan_count - 1, 0)
         except Exception as e:
             logger.exception(str(e))
