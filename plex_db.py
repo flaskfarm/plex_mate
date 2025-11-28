@@ -1,5 +1,6 @@
 import platform
 import sqlite3
+from pathlib import Path
 
 from support import SupportFile, SupportSubprocess, d
 
@@ -243,10 +244,16 @@ class PlexDBHandle(object):
     @classmethod
     def get_section_info_by_filepath(cls, filepath):
         P.logger.warning(filepath)
+        target = Path(filepath)
         for location in cls.section_location():
-            #P.logger.info(d(location))
-            if location['root_path'] in filepath:
+            root_path = Path(location['root_path'])
+            try:
+                target.relative_to(root_path)
                 return location
+            except ValueError:
+                pass
+            except Exception:
+                logger.exception(f"{filepath=} {root_path=}")
     
     
     @classmethod

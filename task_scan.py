@@ -368,8 +368,9 @@ class Task:
             else:
                 # mode = LOG
                 pass
+        except Exception:
+            logger.exception(call_id)
+        finally:
             match mode:
                 case 'END' | 'ERROR':
                     Task.current_scan_count = max(Task.current_scan_count - 1, 0)
-        except Exception as e:
-            logger.exception(str(e))
