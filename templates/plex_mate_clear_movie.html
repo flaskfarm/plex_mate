@@ -104,6 +104,10 @@ function make_one(data) {
   }
   row += make_log("thumb", data.db.user_thumb_url);
   row += make_log("art", data.db.user_art_url);
+  if (data.db.user_clear_logo_url)
+    row += make_log("clear_logo", data.db.user_clear_logo_url);
+  if (data.db.user_music_url)
+    row += make_log("theme", data.db.user_music_url);
   row += j_row_end();
   return row;
 }

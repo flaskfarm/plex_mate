@@ -9,14 +9,25 @@ from .plex_web import PlexWebHandle
 from .setup import *
 
 TAG = {
-    'poster' : ['thumb', 'posters'],
-    'art' : ['art', 'art'],
-    'banner' : ['banner', 'banners'],
-    'theme' : ['music', 'themes'],
-    'logo' : ['clear_logo', 'clearLogos'],
+    'poster' : ['thumb', 'posters', None],
+    'art' : ['art', 'art', None],
+    'banner' : ['banner', 'banners', None],
+    'theme' : ['music', 'themes', None],
+    'logo' : ['clear_logo', 'clearLogos', None],
 }
 
 logger = P.logger
+
+SQL_QUERIES = (
+    "SELECT id, text, thumb_url FROM taggings WHERE tag_id = ? AND metadata_item_id = ? AND thumb_url = ?",
+    """
+    WITH ranked_taggings AS (
+        SELECT tag_id, id, text, thumb_url, ROW_NUMBER() OVER(PARTITION BY tag_id ORDER BY "index" DESC) as row_num
+        FROM taggings WHERE tag_id = ? AND metadata_item_id = ?
+    )
+    SELECT tag_id, id, text, thumb_url FROM ranked_taggings WHERE row_num = 1
+    """,
+)
 
 
 class Task(object):
@@ -52,6 +63,10 @@ class Task(object):
             row_count = con.execute(query_count, (section_id,)).fetchone()
             status = {'is_working':'run', 'total_size':0, 'remove_size':0, 'count':row_count[0], 'current':0}
 
+            agent = (PlexDBHandle.library_section(section_id).get('agent') or '').strip()
+            if agent == 'tv.plex.agents.series':
+                set_tag_ids(con)
+
             for show in ce:
                 try:
                     if P.ModelSetting.get_bool('clear_show_task_stop_flag'):
@@ -60,6 +75,7 @@ class Task(object):
                     status['current'] += 1
                     data = {'mode':'show', 'status':status, 'command':command, 'section_id':section_id, 'dryrun':dryrun, 'process':{}, 'file_count':0, 'remove_count':0, 'remove_orphans': remove_orphans}
                     data['db'] = show
+                    data['agent'] = agent
 
                     Task.show_process(data, con, cur)
 
@@ -107,6 +123,7 @@ class Task(object):
         data['remove_filepath'] = []
         data['seasons'] = {}
         data['media'] = {'total':0, 'remove':0}
+        data['season_variants'] = {}
 
         Task.xml_analysis(combined_xmlpath, data, data, con)
 
@@ -129,6 +146,7 @@ class Task(object):
                         data['seasons'][season_index] = {'db':season}
                         combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'seasons', f"{season_index}.xml")
                         ret = Task.xml_analysis(combined_xmlpath, data['seasons'][season_index], data, con)
+                    if data['seasons'][season_index].get('episodes') is None:
                         data['seasons'][season_index]['episodes'] = {}
                     data['seasons'][season_index]['episodes'][episode_index] = {'db':episode}
                     combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'seasons', f"{season_index}", "episodes", f"{episode_index}.xml")
@@ -233,6 +251,7 @@ class Task(object):
 
 
                     if episode['process']['thumb']['url'] != '':
+                        logger.debug(f"{episode['db']['id']}: {episode['process']['thumb']['db']} -> {episode['process']['thumb']['url']}")
                         query += f'UPDATE metadata_items SET user_thumb_url = "{episode["process"]["thumb"]["url"]}" WHERE id = {episode["db"]["id"]};\n'
                         try: data['use_filepath'].remove(episode['process']['thumb']['localpath'])
                         except: pass
@@ -243,10 +262,12 @@ class Task(object):
                                 if os.path.exists(mediapath):
                                     data['media']['remove'] += os.path.getsize(mediapath)
                                     if data['dryrun'] == False:
+                                        P.logger.debug(f"미디어 썸네일 삭제 : {mediapath}")
                                         os.remove(mediapath)
                     elif episode['process']['thumb']['db'] == '':
                         if len(episode['media_list']) > 0:
                             tmp = f"media://{episode['media_list'][0].split('localhost/')[1]}"
+                            logger.debug(f"{episode['db']['id']}: {tmp}")
                             query += f'UPDATE metadata_items SET user_thumb_url = "{tmp}" WHERE id = {episode["db"]["id"]};\n'
 
                     
@@ -419,6 +440,9 @@ class Task(object):
         #P.logger.warning(text)
         # 2021-12-11 4단계로 media파일을 디코 이미로 대체할때 시즌0 같이 아예 0.xml 파일이 없을 때도 동작하도록 추가
         contents_path = pathlib.Path(combined_xmlpath.split('/_combined/')[0])
+        tags = {'thumb' : ['thumb', 'thumbs', TAG['poster'][2] or None]} if is_episode else TAG
+        data.setdefault('process', {})
+        # 에이전트 변경으로 Info.xml이 남아 있을 수 있으므로
         if os.path.exists(combined_xmlpath) == False:
             #P.logger.info(f"xml 파일 없음 : {combined_xmlpath}")
             #P.logger.error(data['process']['thumb'])
@@ -427,51 +451,74 @@ class Task(object):
             '''
             2025.04.05 halfaider
             새로운 Plex 기본 에이전트는 Info.xml을 사용하지 않고 DB에 포스터 url을 저장함
-            '''
-            data.setdefault('process', {})
 
-            for key in (tags := {'thumb' : ['thumb', 'thumbs']} if is_episode else TAG):
-                data['process'].setdefault(key, {
-                        'db': '',
-                        'db_type': '',
-                        'url': '',
-                        'filename': '',
-                    })
-                tagging_cursor = con.execute(
-                    f"""SELECT id, text, thumb_url
-                    FROM taggings
-                    WHERE thumb_url = ? AND metadata_item_id = ?""",
-                    (data['db'][f'user_{tags[key][0]}_url'], data['db']['id'])
-                )
-                tagging_cursor.row_factory = dict_factory
-                tagging_row = tagging_cursor.fetchone()
-                if tagging_row and (web_url := tagging_row.get('text', '')).startswith('http'):
-                    # metadata://posters/tv.plex.agents.series_ad850f879b2796738bfb6bf9c41333fdfd092900
-                    column_url = data['db'][f'user_{tags[key][0]}_url'] or ''
-                    db_type = column_url.split('://')[0]
-                    # media://8/0ee1dffac9aff7c4f02c95dd675f82167725235.bundle/Contents/Thumbnails/thumb1.jpg
-                    if not db_type.startswith('metadata'):
+            2026-01-08 halfaider
+            현재 시즌, 에피소드가 원본 시즌의 다른 버전(variant)인지 판단
+            `기본 에이전트 TMDb 정보 갱신` 기능을 사용하면 metadata_items 테이블에서 variant 시즌의 메타데이터에 원본 시즌 메타데이터를 입력
+            만약 원본 시즌에서 가져온 user_thumb_url 등이 metadata://..., media:// 형식이었다면 파일 정리후 variant 시즌은 삭제된 파일을 참조하게 됨
+            '''
+            is_variant = False
+            original_data = None
+            if data['db']['metadata_type'] == 3 and (1900 > data['db']['index'] > 99):
+                is_variant = True
+                show_data['season_variants'][data['db']['id']] = data['db']['index']
+                original_data = show_data['seasons'].get(data['db']['index'] % 100)
+            elif is_episode and data['db']['parent_id'] in show_data['season_variants']:
+                is_variant = True
+                if variant_num := show_data['season_variants'].get(data['db']['parent_id']):
+                    if original_season := show_data['seasons'].get(variant_num % 100):
+                        original_data = original_season['episodes'].get(data['db']['index'])
+            
+            for key, value in tags.items():
+                column_url = data['db'][f'user_{value[0]}_url'] or ''
+                db_type = column_url.split('://')[0]
+                data['process'][key] = {
+                    'db': column_url,
+                    'db_type': db_type,
+                    'filename': column_url.split('/')[-1],
+                    'url': ''
+                }
+                if not is_variant and value[2] is None:
+                    continue
+                if is_variant:
+                    if original_data is None:
+                        logger.debug(f"원본 메타데이터가 없음: {data['db']['id']}")
                         continue
-                    data['process'][key]['db'] = column_url
-                    data['process'][key]['db_type'] = db_type
-                    data['process'][key]['filename'] = column_url.split('/')[-1]
-                    data['process'][key]['url'] = web_url
-                    local_path: pathlib.Path = contents_path / '_combined' / tags[key][1] / data['process'][key]['filename']
-                    if local_path.exists():
-                        data['process'][key]['localpath'] = str(local_path)
-                        if str(local_path) not in show_data['use_filepath']:
-                            show_data['use_filepath'].append(str(local_path))
+                    original_url = (original_data['process'].get(key) or {}).get('url') or original_data['db'][f'user_{value[0]}_url'] or ''
+                    if original_url and column_url != original_url:
+                        data['process'][key]['url'] = original_url
+                else:
+                    if db_type == 'metadata':
+                        # 선택된 썸네일을 사용하도록
+                        tagging_cursor = con.execute(SQL_QUERIES[0], (value[2], data['db']['id'], column_url))
+                    elif db_type == 'media':
+                        # 가장 최신의 썸네일을 사용하도록
+                        tagging_cursor = con.execute(SQL_QUERIES[1], (value[2], data['db']['id']))
+                    else:
+                        # scheme이 http, local 인 경우 처리할 필요가 없음
+                        #logger.debug(f"Skipped: {data['db']['id']}={column_url}")
+                        continue
+                    tagging_cursor.row_factory = dict_factory
+                    tagging_row = tagging_cursor.fetchone()
+                    if tagging_row and (web_url := (tagging_row.get('text') or '')).startswith('http'):
+                        data['process'][key]['url'] = web_url
+                        # 아직 예전 agent로 메타데이터가 구성되어 있을 수 있으므로
+                        local_path: pathlib.Path = contents_path / '_combined' / value[1] / data['process'][key]['filename']
+                        if local_path.exists():
+                            data['process'][key]['localpath'] = str(local_path)
+                            if str(local_path) not in show_data['use_filepath']:
+                                show_data['use_filepath'].append(str(local_path))
             return True
         if combined_xmlpath not in show_data['use_filepath']:
             show_data['use_filepath'].append(combined_xmlpath)
 
-        tree = ElementTree.parse(combined_xmlpath)
+        try:
+            tree = ElementTree.parse(combined_xmlpath)
+        except Exception:
+            P.logger.exception(f"{data['db']['id']}: {combined_xmlpath}")
+            return False
         root = tree.getroot()
         data['xml_info'] = {}
-        if is_episode == False:
-            tags = TAG
-        else:
-            tags = {'thumb' : ['thumb', 'thumbs']}
         path_xml = pathlib.Path(combined_xmlpath)
 
         update_xml = False
@@ -548,7 +595,6 @@ class Task(object):
             if orphan_update_xml:
                 write_xml(orphan_tree, orphan_xml)
 
-        data.setdefault('process', {})
         for tag, value in tags.items():
             if value[1] in data['xml_info']:
                 data['process'][tag] = {
@@ -557,9 +603,6 @@ class Task(object):
                     'url' : '',
                     'filename' : '',
                 }
-
-        for tag, value in tags.items():
-            if value[1] in data['xml_info']:
                 if data['process'][tag]['db']:
                     #P.logger.error(data['process'][tag]['db'])
                     data['process'][tag]['db_type'] = data['process'][tag]['db'].split('://')[0]
@@ -612,3 +655,12 @@ def write_xml(tree: ElementTree, file_path: str) -> None:
         logger.debug(f"XML 파일 수정 완료: {file_path}")
     except Exception:
         logger.exception(f"XML 파일 수정 실패: {file_path}")
+
+
+def set_tag_ids(con: sqlite3.Connection) -> None:
+    for tag_name, tag_info in TAG.items():
+        prefix = f"metadata://{tag_info[1]}/"
+        row = con.execute("SELECT tag_id FROM taggings WHERE thumb_url LIKE ?", (f"{prefix}%",)).fetchone()
+        if row:
+            logger.debug(f"태그 ID 설정: {tag_name} = {row[0]}")
+            TAG[tag_name][2] = row[0]

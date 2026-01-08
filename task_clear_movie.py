@@ -6,14 +6,8 @@ from support import SupportFile, d
 from .plex_db import PlexDBHandle, dict_factory
 from .plex_web import PlexWebHandle
 from .setup import *
+from .task_clear_show import TAG, SQL_QUERIES, set_tag_ids
 
-TAG = {
-    'poster' : ['thumb', 'posters'],
-    'art' : ['art', 'art'],
-    'banner' : ['banner', 'banners'],
-    'theme' : ['music', 'themes'],
-    'logo' : ['clear_logo', 'clearLogos'],
-}
 
 logger = P.logger
 
@@ -41,6 +35,11 @@ class Task(object):
             query_count = query.replace("SELECT *", "SELECT COUNT(*)")
             row_count = con.execute(query_count, (section_id,)).fetchone()
             status = {'is_working':'run', 'total_size':0, 'remove_size':0, 'count':row_count[0], 'current':0}
+
+            agent = (PlexDBHandle.library_section(section_id).get('agent') or '').strip()
+            if agent == 'tv.plex.agents.series':
+                set_tag_ids(con)
+
             for movie in ce:
                 try:
                     if P.ModelSetting.get_bool('clear_movie_task_stop_flag'):
@@ -49,6 +48,7 @@ class Task(object):
                     status['current'] += 1
                     data = {'mode':'movie', 'status':status, 'command':command, 'section_id':section_id, 'dryrun':dryrun, 'process':{}}
                     data['db'] = movie
+                    data['agent'] = agent
 
                     Task.analysis(data, con, cur)
                     data['status']['total_size'] += data['meta']['total']
@@ -181,12 +181,14 @@ class Task(object):
                 if os.path.exists(img):
                     data['media']['remove'] += os.path.getsize(img)
                     if data['dryrun'] == False:
+                        P.logger.debug(f"미디어 썸네일 삭제: {img}")
                         os.remove(img)
             if item['user_art_url'].startswith('media') == False:
                 img = os.path.join(mediapath, 'Contents', 'Art', 'art1.jpg')
                 if os.path.exists(img):
                     data['media']['remove'] += os.path.getsize(img)
                     if data['dryrun'] == False:
+                        P.logger.debug(f"미디어 아트 삭제: {img}")
                         os.remove(img)
             else:
                 if data['command'] == 'start4':
@@ -256,47 +258,49 @@ class Task(object):
         if data['command'] == 'start0':
             return
 
-        '''
-        2025.04.05 halfaider
-        새로운 Plex 기본 에이전트는 Info.xml을 사용하지 않고 DB에 포스터 url을 저장함
-        '''
-        data['info'] = {key: [] for key in TAG}
-        for key in TAG:
-            tagging_cursor = con.execute(
-                f"""SELECT id, text, thumb_url
-                FROM taggings
-                WHERE thumb_url = ? AND metadata_item_id = ?""",
-                (data['db'][f'user_{TAG[key][0]}_url'], data['db']['id'])
-            )
-            tagging_cursor.row_factory = dict_factory
-            tagging_row = tagging_cursor.fetchone()
-            if tagging_row and tagging_row.get('text', '').startswith('http'):
-                data['info'][key].append({
-                    'url': tagging_row['text'],
-                    'filename': tagging_row.get('thumb_url', '').split('/')[-1],
-                    'provider': 'tv.plex.agents.movie',
-                })
-
-        Task.xml_analysis(combined_xmlpath, data)
-    
-        if not any(data['info'].values()):
-            # 기존에는 Info.xml 이 없으면 리턴했음
-            return
-
-        data['process'] = {}
+        # 기본 세팅
+        data.setdefault('process', {})
         for tag, value in TAG.items():
+            column_url = data['db'][f'user_{value[0]}_url'] or ''
             data['process'][tag] = {
-                'db' : data['db'][f'user_{value[0]}_url'] or '',
-                'db_type' : '', 
+                'db' : column_url,
+                'db_type' : column_url.split('://')[0], 
                 'url' : '',
-                'filename' : '',
+                'filename' : column_url.split('/')[-1],
                 'location' : '',
             }
+            data['info'] = {tag: []}
+
+        if not os.path.exists(combined_xmlpath):
+            '''
+            2025.04.05 halfaider
+            새로운 Plex 기본 에이전트는 Info.xml을 사용하지 않고 DB에 포스터 url을 저장함
+            '''
+            for key in TAG:
+                if TAG[key][2] is None:
+                    continue
+                process_info = data['process'][key]
+                if process_info['db_type'] == 'metadata':
+                    tagging_cursor = con.execute(SQL_QUERIES[0], (value[2], data['db']['id'], column_url))
+                elif process_info['db_type'] == 'media':
+                    tagging_cursor = con.execute(SQL_QUERIES[1], (value[2], data['db']['id']))
+                else:
+                    continue
+                tagging_cursor.row_factory = dict_factory
+                tagging_row = tagging_cursor.fetchone()
+                if tagging_row and (web_url := (tagging_row.get('text') or '')).startswith('http'):
+                    data['info'][key].append({
+                        'url': web_url,
+                        'filename': tagging_row.get('thumb_url', '').split('/')[-1],
+                        'provider': 'tv.plex.agents.movie',
+                    })
+                    data['process'][key]['url'] = web_url
+            return
+
+        Task.xml_analysis(combined_xmlpath, data)
 
         for tag, value in TAG.items():
             if data['process'][tag]['db']:
-                data['process'][tag]['db_type'] = data['process'][tag]['db'].split('//')[0]
-                data['process'][tag]['filename'] = data['process'][tag]['db'].split('/')[-1]
                 for item in data['info'][tag]:
                     if data['process'][tag]['filename'] == item['filename']:
                         data['process'][tag]['url'] = item['url']
