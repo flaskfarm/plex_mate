@@ -444,10 +444,6 @@ class Task(object):
         data.setdefault('process', {})
         # 에이전트 변경으로 Info.xml이 남아 있을 수 있으므로
         if os.path.exists(combined_xmlpath) == False:
-            #P.logger.info(f"xml 파일 없음 : {combined_xmlpath}")
-            #P.logger.error(data['process']['thumb'])
-            #P.logger.debug(data)
-            #P.logger.debug(is_episode)
             '''
             2025.04.05 halfaider
             새로운 Plex 기본 에이전트는 Info.xml을 사용하지 않고 DB에 포스터 url을 저장함
@@ -491,11 +487,7 @@ class Task(object):
                     if db_type == 'metadata':
                         # 선택된 썸네일을 사용하도록
                         tagging_cursor = con.execute(SQL_QUERIES[0], (value[2], data['db']['id'], column_url))
-                    elif db_type == 'media':
-                        # 가장 최신의 썸네일을 사용하도록
-                        tagging_cursor = con.execute(SQL_QUERIES[1], (value[2], data['db']['id']))
                     else:
-                        # scheme이 http, local 인 경우 처리할 필요가 없음
                         #logger.debug(f"Skipped: {data['db']['id']}={column_url}")
                         continue
                     tagging_cursor.row_factory = dict_factory
