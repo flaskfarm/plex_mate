@@ -282,8 +282,6 @@ class Task(object):
                 process_info = data['process'][key]
                 if process_info['db_type'] == 'metadata':
                     tagging_cursor = con.execute(SQL_QUERIES[0], (value[2], data['db']['id'], column_url))
-                elif process_info['db_type'] == 'media':
-                    tagging_cursor = con.execute(SQL_QUERIES[1], (value[2], data['db']['id']))
                 else:
                     continue
                 tagging_cursor.row_factory = dict_factory
