@@ -139,7 +139,7 @@ class Task(object):
                     episode_index = episode['index']
                     if episode['index'] == -1:
                         tmp = episode['guid']
-                        match = re.compile(r'\/(?P<season>\d{4})\/(?P<epi>\d{4}-\d{2}-\d{2})').search(episode['guid'])
+                        match = re.compile(r'\/(?P<season>\d{4,6})\/(?P<epi>\d{4}-\d{2}-\d{2})').search(episode['guid'])
                         if match:
                             episode_index = match.group('epi')
                     if season_index not in data['seasons']:
