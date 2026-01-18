@@ -162,6 +162,8 @@ class PlexWebHandle(object):
 
     @classmethod
     def manual_refresh(cls, meta_id: int, plugin_instance=None) -> dict:
+        if not P.ModelSetting.get_bool('webhook_agent_meta_update'):
+            return {'ret': 'warning', 'msg': f'기본 에이전트 TMDb 정보 갱신 설정이 Off 입니다.'}
         try:
             import sqlite3
             from .page_tool_simple import PageToolSimple
