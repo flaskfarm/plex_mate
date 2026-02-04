@@ -1,5 +1,6 @@
 import platform
 import sqlite3
+from pathlib import Path
 
 from support import SupportFile, d
 
@@ -37,7 +38,7 @@ class Task(object):
             status = {'is_working':'run', 'total_size':0, 'remove_size':0, 'count':row_count[0], 'current':0}
 
             agent = (PlexDBHandle.library_section(section_id).get('agent') or '').strip()
-            if agent == 'tv.plex.agents.series':
+            if agent.startswith('tv.plex.agents'):
                 set_tag_ids(con)
 
             for movie in ce:
@@ -260,6 +261,7 @@ class Task(object):
 
         # 기본 세팅
         data.setdefault('process', {})
+        data.setdefault('info', {})
         for tag, value in TAG.items():
             column_url = data['db'][f'user_{value[0]}_url'] or ''
             data['process'][tag] = {
@@ -269,19 +271,28 @@ class Task(object):
                 'filename' : column_url.split('/')[-1],
                 'location' : '',
             }
-            data['info'] = {tag: []}
+            data['info'][tag] = []
 
         if not os.path.exists(combined_xmlpath):
             '''
             2025.04.05 halfaider
             새로운 Plex 기본 에이전트는 Info.xml을 사용하지 않고 DB에 포스터 url을 저장함
+
+            Info.xml은 사용하지 않지만 로컬에 파일은 저장함
+                thumb_url:
+                    metadata://posters/tv.plex.agents.movie_c2dfc6e13bc4ac2860be28880e7684a5e99e01d5
+                local file:
+                    ../_combined/posters/tv.plex.agents.movie_c2dfc6e13bc4ac2860be28880e7684a5e99e01d5
+
+            2 단계 analysis()에서 'metapath'의 파일 중 DB에서 안 쓰는 user_thumb_url, user_art_url 파일은 삭제
             '''
-            for key in TAG:
-                if TAG[key][2] is None:
+            contents_path = Path(combined_xmlpath.split('/_combined/')[0])
+            for key, value in TAG.items():
+                if value[2] is None:
                     continue
                 process_info = data['process'][key]
                 if process_info['db_type'] == 'metadata':
-                    tagging_cursor = con.execute(SQL_QUERIES[0], (value[2], data['db']['id'], column_url))
+                    tagging_cursor = con.execute(SQL_QUERIES[0], (value[2], data['db']['id'], process_info['db']))
                 else:
                     continue
                 tagging_cursor.row_factory = dict_factory
@@ -290,9 +301,13 @@ class Task(object):
                     data['info'][key].append({
                         'url': web_url,
                         'filename': tagging_row.get('thumb_url', '').split('/')[-1],
-                        'provider': 'tv.plex.agents.movie',
+                        'provider': data['agent'],
                     })
                     data['process'][key]['url'] = web_url
+                local_folder: Path = contents_path / '_combined' / value[1]
+                #if local_folder.exists():
+                #    logger.debug(f"존재: {local_folder}")
+                #    logger.debug(local_folder.glob('*'))
             return
 
         Task.xml_analysis(combined_xmlpath, data)

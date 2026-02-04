@@ -34,7 +34,7 @@ class Task(object):
 
     @staticmethod
     @F.celery.task(bind=True)
-    def start(self, command: str, section_id: str, dryrun: str, remove_orphans: str) -> str:
+    def start(self, command: str, section_id: str, dryrun: str, remove_orphans: str = 'false') -> str:
         if command == 'start4':
             logger.warning(f'4단계는 현재 지원하지 않습니다.')
             return 'stop'
@@ -64,7 +64,7 @@ class Task(object):
             status = {'is_working':'run', 'total_size':0, 'remove_size':0, 'count':row_count[0], 'current':0}
 
             agent = (PlexDBHandle.library_section(section_id).get('agent') or '').strip()
-            if agent == 'tv.plex.agents.series':
+            if agent.startswith('tv.plex.agents'):
                 set_tag_ids(con)
 
             for show in ce:
