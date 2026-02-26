@@ -670,11 +670,11 @@ class LogicPMWebhook(PluginModuleBase):
             title_library_sections = self.get_int_list('title_library_sections')
             state = data.get('event', '').strip()
             intro_copy_sections = self.get_int_list('intro_copy_sections')
-            if use_cache_full and (not cache_library_sections_full or library_section_id in cache_library_sections_full) and state in ['media.play', 'media.stop']:
+            if use_cache_full and (not cache_library_sections_full or library_section_id in cache_library_sections_full) and state in ['media.play', 'media.resume', 'media.stop']:
                 CacheDBHandler.cleanup_older_than()
                 view_offset = data.get('Metadata', {}).get('viewOffset', 0)
                 if session_id or rating_key :
-                    if state == 'media.play':
+                    if state in ['media.play', 'media.resume']:
                         result = CacheDBHandler.is_cached(rating_key, 'full')
                         if not result:
                             logger.info(f"Media playing detected for rating_key {rating_key}, caching full video")
