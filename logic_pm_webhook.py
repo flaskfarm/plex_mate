@@ -308,6 +308,11 @@ class LogicPMWebhook(PluginModuleBase):
             return default
             
     def cache_video(self, session_id, rating_key, viewOffset, cache_type="full"):
+        proc = self.cache_process_map.get(rating_key)
+        if proc and proc.poll() is None:
+            logger.info(f"[Cache] already running: rating_key={rating_key}")
+            CacheDBHandler.add(session_id, rating_key, cache_type) 
+            return
         try:
             FFMPEG = self.get_ffmpeg_path()
             CacheDBHandler.add(session_id, rating_key, cache_type)
@@ -679,7 +684,7 @@ class LogicPMWebhook(PluginModuleBase):
                         if not result:
                             logger.info(f"Media playing detected for rating_key {rating_key}, caching full video")
                             self.cache_video(session_id, rating_key, view_offset, 'full')
-                        elif result[0] != session_id:
+                        elif result != session_id:
                             CacheDBHandler.add(session_id, rating_key, 'full')
 
                     elif state == 'media.stop':
@@ -819,16 +824,16 @@ class CacheDBHandler:
     def add(session_id, rating_key, cache_type):
         with app.app_context():
             try:
-                new_entry = ModelWebhookCacheTrack(
-                    session_id=session_id,
-                    rating_key=rating_key,
-                    cache_type=cache_type,
-                    status='caching',
-                    timestamp=datetime.now()
-                )
-                db.session.merge(new_entry)
+                rating_key = str(rating_key)
+                target = ModelWebhookCacheTrack.query.filter_by(rating_key=rating_key, cache_type=cache_type).first()
+                if target:
+                    target.session_id = session_id
+                    target.status = 'caching'
+                    target.timestamp = datetime.now()
+                else:
+                    db.session.add(ModelWebhookCacheTrack(session_id=session_id, rating_key=rating_key, cache_type=cache_type, status='caching', timestamp=datetime.now()))
+
                 db.session.commit()
-                logger.debug(f"[CacheTrack] 기록 추가됨: session_id={session_id}, rating_key={rating_key}, type={cache_type}")
             except Exception as e:
                 logger.error(f"[CacheTrack] 기록 추가 실패: {e}")
 
@@ -836,6 +841,7 @@ class CacheDBHandler:
     def update_status(rating_key, cache_type, status):
         with app.app_context():
             try:
+                rating_key = str(rating_key)
                 target = ModelWebhookCacheTrack.query.filter_by(rating_key=rating_key, cache_type=cache_type).first()
                 if target:
                     target.status = status
@@ -849,6 +855,7 @@ class CacheDBHandler:
     def delete(session_id, rating_key, cache_type):
         with app.app_context():
             try:
+                rating_key = str(rating_key)
                 target = ModelWebhookCacheTrack.query.filter_by(
                     session_id=session_id,
                     rating_key=rating_key,
@@ -865,6 +872,7 @@ class CacheDBHandler:
     def is_cached(rating_key, cache_type):
         with app.app_context():
             try:
+                rating_key = str(rating_key)
                 result = ModelWebhookCacheTrack.query.filter_by(rating_key=rating_key, cache_type=cache_type).first()
                 return result.session_id if result else None
             except Exception as e:
