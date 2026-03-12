@@ -130,6 +130,7 @@ class Task(object):
                 # localmedia 로 생성된 파일은 url이 셋된다.
                 #if album['process']['poster']['url'] != '':
                 # 2022-05-11 태그로 생성된 앨범은 디스코드에 올리고 셋
+                """
                 if album['process']['poster']['url'] != '' and album['process']['poster']['url'].startswith('http') == False:
                     if 'localpath' in album['process']['poster'] and album['process']['poster']['localpath'] != '':
                         localpath = album['process']['poster']['localpath']
@@ -142,7 +143,7 @@ class Task(object):
                                 if discord_url is not None:
                                     album['process']['poster']['url'] = discord_url
                                     logger.warning(discord_url)
-
+                """
                 if album['process']['poster']['url'].startswith('http'):
                     sql += ' user_thumb_url = "{}", '.format(album['process']['poster']['url'])
                     try: data['use_filepath'].remove(album['process']['poster']['localpath'])
