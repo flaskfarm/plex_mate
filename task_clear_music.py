@@ -46,11 +46,9 @@ class Task(object):
                     self.update_state(state='PROGRESS', meta=data)
                 else:
                     self.receive_from_task(data, celery=False)
-            except Exception as e:
-                logger.error(f'Exception:{str(e)}')
-                logger.error(traceback.format_exc())
-                logger.error(artist['title'])
-        logger.warning(f"종료")
+            except Exception:
+                logger.exception(artist.get('title'))
+        logger.info(f"종료: {command=} {section_id=} {dryrun=}")
         return 'wait'
 
 
@@ -95,8 +93,9 @@ class Task(object):
             
             ret = Task.xml_analysis(combined_xmlpath, album_data)
             if ret == False:
-                logger.warning(combined_xmlpath)
-                logger.warning(f"{album_data['db']['title']} 앨범 분석 실패")
+                #logger.debug(combined_xmlpath)
+                #logger.debug(f"{album_data['db']['title']} 앨범 분석 실패")
+                pass
             else:
                 data['albums'].append(album_data)
 
@@ -109,15 +108,15 @@ class Task(object):
                 if data['process']['poster']['url'] != '':
                     sql += ' user_thumb_url = "{}", '.format(data['process']['poster']['url'])
                     try: data['use_filepath'].remove(data['process']['poster']['localpath'])
-                    except: pass
+                    except Exception: pass
                     try: data['use_filepath'].remove(data['process']['poster']['realpath'])
-                    except: pass
+                    except Exception: pass
                 if data['process']['art']['url'] != '':
                     sql += ' user_art_url = "{}", '.format(data['process']['art']['url'])
                     try: data['use_filepath'].remove(data['process']['art']['localpath'])
-                    except: pass
+                    except Exception: pass
                     try: data['use_filepath'].remove(data['process']['art']['realpath'])
-                    except: pass
+                    except Exception: pass
                     
                 if sql != 'UPDATE metadata_items SET ':
                     sql = sql.strip().rstrip(',')
@@ -147,16 +146,16 @@ class Task(object):
                 if album['process']['poster']['url'].startswith('http'):
                     sql += ' user_thumb_url = "{}", '.format(album['process']['poster']['url'])
                     try: data['use_filepath'].remove(album['process']['poster']['localpath'])
-                    except: pass
+                    except Exception: pass
                     try: data['use_filepath'].remove(album['process']['poster']['realpath'])
-                    except: pass
+                    except Exception: pass
 
                 if album['process']['art']['url'] != '':
                     sql += ' user_art_url = "{}", '.format(album['process']['art']['url'])
                     try: data['use_filepath'].remove(album['process']['art']['localpath'])
-                    except: pass
+                    except Exception: pass
                     try: data['use_filepath'].remove(album['process']['art']['realpath'])
-                    except: pass
+                    except Exception: pass
                 if sql != 'UPDATE metadata_items SET ':
                     sql = sql.strip().rstrip(',')
                     sql += '  WHERE id = {} ;\n'.format(album['db']['id'])

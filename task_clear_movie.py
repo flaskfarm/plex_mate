@@ -61,11 +61,9 @@ class Task(object):
                         self.update_state(state='PROGRESS', meta=data)
                     else:
                         self.receive_from_task(data, celery=False)
-                except Exception as e:
-                    logger.error(f'Exception:{str(e)}')
-                    logger.error(traceback.format_exc())
-                    logger.error(movie['title'])
-            logger.warning(f"종료")
+                except Exception:
+                    logger.exception(movie.get('title'))
+            logger.info(f"종료: {command=} {section_id=} {dryrun=}")
             return 'wait'
 
 
@@ -98,7 +96,7 @@ class Task(object):
             if data['dryrun'] == False:
                 data['meta']['remove'] += SupportFile.size(start_path=c_upload_path)
                 SupportFile.rmtree(c_upload_path)
-                logger.debug(f"삭제: {c_upload_path} ({data['db']['title']})")
+                #logger.debug(f"삭제: {c_upload_path} ({data['db']['title']})")
         c_metapath = os.path.join(data['meta']['metapath'], 'Contents')  
         if os.path.exists(c_metapath):
             for f in os.listdir(c_metapath):
@@ -109,7 +107,7 @@ class Task(object):
                         if os.path.exists(tag_path):
                             if data['dryrun'] == False:
                                 data['meta']['remove'] += SupportFile.size(start_path=tag_path)
-                                logger.debug(f"삭제: {tag_path} ({data['db']['title']})")
+                                #logger.debug(f"삭제: {tag_path} ({data['db']['title']})")
                                 SupportFile.rmtree(tag_path)
                             
                     tmp = os.path.join(_path, 'extras')
@@ -139,7 +137,7 @@ class Task(object):
                 filepath = os.path.join(base, f)
                 if os.path.islink(filepath):
                     if os.path.exists(os.path.realpath(filepath)) == False:
-                        P.logger.info("링크제거")
+                        #P.logger.info("링크제거")
                         os.remove(filepath)
                         continue
                 
@@ -149,12 +147,14 @@ class Task(object):
                     if len(using) == 0:
                         if os.path.exists(filepath):
                             data['meta']['remove'] += os.path.getsize(filepath)
-                            P.logger.debug(f"안쓰는 파일 삭제 : {filepath}")
+                            #P.logger.debug(f"안쓰는 파일 삭제 : {filepath}")
                             os.remove(filepath)
                         else:
-                            P.logger.error('.................. 파일 없음')
+                            #P.logger.error('.................. 파일 없음')
+                            pass
                     else:
-                        P.logger.debug(f"파일 사용: {filepath}")
+                        #P.logger.debug(f"파일 사용: {filepath}")
+                        pass
         
 
         Task.remove_empty_folder(data['meta']['metapath'])
@@ -182,14 +182,14 @@ class Task(object):
                 if os.path.exists(img):
                     data['media']['remove'] += os.path.getsize(img)
                     if data['dryrun'] == False:
-                        P.logger.debug(f"미디어 썸네일 삭제: {img}")
+                        #P.logger.debug(f"미디어 썸네일 삭제: {img}")
                         os.remove(img)
             if item['user_art_url'].startswith('media') == False:
                 img = os.path.join(mediapath, 'Contents', 'Art', 'art1.jpg')
                 if os.path.exists(img):
                     data['media']['remove'] += os.path.getsize(img)
                     if data['dryrun'] == False:
-                        P.logger.debug(f"미디어 아트 삭제: {img}")
+                        #P.logger.debug(f"미디어 아트 삭제: {img}")
                         os.remove(img)
             else:
                 if data['command'] == 'start4':
@@ -200,7 +200,7 @@ class Task(object):
                             from gds_tool import SSGDrive
                             discord_url = SSGDrive.upload_from_path(img)
                             if discord_url is not None:
-                                P.logger.warning(discord_url)
+                                #P.logger.warning(discord_url)
                                 sql = 'UPDATE metadata_items SET '
                                 sql += ' user_art_url = "{}" '.format(discord_url)
                                 sql += '  WHERE id = {} ;\n'.format(data['db']['id'])
@@ -384,7 +384,7 @@ class Task(object):
                 filepath = os.path.join(base, f)
                 if os.path.islink(filepath):
                     if os.path.exists(os.path.realpath(filepath)) == False:
-                        P.logger.info("링크제거")
+                        #P.logger.info("링크제거")
                         os.remove(filepath)
                         continue
                 
@@ -394,12 +394,14 @@ class Task(object):
                     if len(using) == 0:
                         if os.path.exists(filepath):
                             data['remove'] += os.path.getsize(filepath)
-                            P.logger.debug(f"안쓰는 파일 삭제 : {filepath}")
+                            #P.logger.debug(f"안쓰는 파일 삭제 : {filepath}")
                             os.remove(filepath)
                         else:
-                            P.logger.error('.................. 파일 없음')
+                            #P.logger.error('.................. 파일 없음')
+                            pass
                     else:
-                        P.logger.debug(f"파일 사용: {filepath}")
+                        #P.logger.debug(f"파일 사용: {filepath}")
+                        pass
         return data
 
     def remove_empty_folder(bundle_path):
@@ -408,7 +410,7 @@ class Task(object):
             for base, folders, files in os.walk(bundle_path):
                 if not folders and not files:
                     os.removedirs(base)
-                    P.logger.debug(f"빈 폴더 삭제: {base} ")
+                    #P.logger.debug(f"빈 폴더 삭제: {base} ")
                     count += 1
             if count == 0:
                 break
@@ -439,7 +441,7 @@ class Task(object):
                     from gds_tool import SSGDrive
                     gdrive_url = SSGDrive.upload_from_path(img)
                     if gdrive_url is not None:
-                        P.logger.warning(gdrive_url)
+                        #P.logger.warning(gdrive_url)
                         sql = 'UPDATE metadata_items SET '
                         sql += ' user_thumb_url = "{}" '.format(gdrive_url)
                         sql += '  WHERE id = {} ;\n'.format(data['db']['id'])
@@ -462,7 +464,7 @@ class Task(object):
                     from gds_tool import SSGDrive
                     gdrive_url = SSGDrive.upload_from_path(img)
                     if gdrive_url is not None:
-                        P.logger.warning(gdrive_url)
+                        #P.logger.warning(gdrive_url)
                         sql = 'UPDATE metadata_items SET '
                         sql += ' user_art_url = "{}" '.format(gdrive_url)
                         sql += '  WHERE id = {} ;\n'.format(data['db']['id'])

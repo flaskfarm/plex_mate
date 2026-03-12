@@ -56,6 +56,7 @@ class PageClearBundle(PluginPageBase):
 
 
     def task_interface2(self, *args):
+        logger.info(f"시작: {args}")
         self.data['list'] = []
         self.data['status']['is_working'] = 'run'
         self.refresh_data()
