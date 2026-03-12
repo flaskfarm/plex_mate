@@ -83,9 +83,10 @@ class Task(object):
                         self.update_state(state='PROGRESS', meta=data)
                     else:
                         self.receive_from_task(data, celery=False)
-                except Exception as e: 
-                    logger.error(f'Exception:{str(e)}')
-                    logger.error(traceback.format_exc())
+                except Exception:
+                    logger.exception('')
+            logger.info(f"종료: {location=} {meta_type=} {folder=} {dryrun=} {mode=}")
+        
         return 'wait'
 
     
@@ -98,7 +99,7 @@ class Task(object):
                 filepath = os.path.join(base, f)
                 if os.path.islink(filepath):
                     if os.path.exists(os.path.realpath(filepath)) == False:
-                        P.logger.info("링크제거")
+                        #P.logger.info("링크제거")
                         os.remove(filepath)
                         continue
                 
@@ -108,12 +109,14 @@ class Task(object):
                     if len(using) == 0:
                         if os.path.exists(filepath):
                             data['remove'] += os.path.getsize(filepath)
-                            P.logger.debug(f"안쓰는 파일 삭제 : {filepath}")
+                            #P.logger.debug(f"안쓰는 파일 삭제 : {filepath}")
                             os.remove(filepath)
                         else:
-                            P.logger.error('.................. 파일 없음')
+                            #P.logger.error('.................. 파일 없음')
+                            pass
                     else:
-                        P.logger.debug(f"파일 사용: {filepath}")
+                        #P.logger.debug(f"파일 사용: {filepath}")
+                        pass
         return data
 
 
@@ -126,7 +129,7 @@ class Task(object):
                 filepath = os.path.join(base, f)
                 if os.path.islink(filepath):
                     if os.path.exists(os.path.realpath(filepath)) == False:
-                        P.logger.info("링크제거")
+                        #P.logger.info("링크제거")
                         os.remove(filepath)
                         continue
                     
@@ -138,12 +141,14 @@ class Task(object):
                     if len(using) == 0:
                         if os.path.exists(filepath):
                             data['remove'] += os.path.getsize(filepath)
-                            P.logger.debug(f"안쓰는 파일 삭제 : {filepath}")
+                            #P.logger.debug(f"안쓰는 파일 삭제 : {filepath}")
                             os.remove(filepath)
                         else:
-                            P.logger.error('.................. 파일 없음')
+                            #P.logger.error('.................. 파일 없음')
+                            pass
                     else:
-                        P.logger.debug(f"파일 사용: {filepath}")
+                        #P.logger.debug(f"파일 사용: {filepath}")
+                        pass
         return data
 
 
@@ -153,7 +158,7 @@ class Task(object):
             for base, folders, files in os.walk(bundle_path):
                 if not folders and not files:
                     os.removedirs(base)
-                    P.logger.debug(f"빈 폴더 삭제: {base} ")
+                    #P.logger.debug(f"빈 폴더 삭제: {base} ")
                     count += 1
             if count == 0:
                 break

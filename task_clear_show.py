@@ -98,10 +98,8 @@ class Task(object):
                         self.update_state(state='PROGRESS', meta=data)
                     else:
                         self.receive_from_task(data, celery=False)
-                except Exception as e:
-                    P.logger.error(f'Exception:{str(e)}')
-                    P.logger.error(traceback.format_exc())
-                    P.logger.error(show['title'])
+                except Exception:
+                    P.logger.exception(show.get('title'))
             P.logger.info(f"종료: {command=} {section_id=} {dryrun=} {remove_orphans=}")
             return 'wait'
 
@@ -366,7 +364,7 @@ class Task(object):
                 
                 if os.path.islink(filepath):
                     if os.path.exists(os.path.realpath(filepath)) == False:
-                        P.logger.debug(f"링크제거 : {filepath}")
+                        #P.logger.debug(f"링크제거 : {filepath}")
                         os.remove(filepath)
                         #file_size = os.path.getsize(filepath)
                         #data['meta']['remove'] += file_size
@@ -476,7 +474,7 @@ class Task(object):
                     continue
                 if is_variant:
                     if original_data is None:
-                        logger.warning(f"원본 메타데이터가 없음: {data['db']['id']}")
+                        #logger.warning(f"원본 메타데이터가 없음: {data['db']['id']}")
                         continue
                     original_url = (original_data['process'].get(key) or {}).get('url') or original_data['db'][f'user_{value[0]}_url'] or ''
                     if original_url and column_url != original_url:
@@ -552,7 +550,7 @@ class Task(object):
                 except Exception:
                     continue
                 # 파일 내용이 'None' 네 글자만 있는 4 bytes 파일
-                P.logger.debug(f"고아 파일 발견: {size_resolved} bytes {path_resolved}")
+                #P.logger.debug(f"고아 파일 발견: {size_resolved} bytes {path_resolved}")
                 if show_data.get('dryrun', True):
                     continue
                 tmp.remove(item)
@@ -659,7 +657,7 @@ class Task(object):
 def write_xml(tree: ElementTree, file_path: str) -> None:
     try:
         tree.write(file_path, encoding='utf-8', xml_declaration=True)
-        logger.debug(f"XML 파일 수정 완료: {file_path}")
+        #logger.debug(f"XML 파일 수정 완료: {file_path}")
     except Exception:
         logger.exception(f"XML 파일 수정 실패: {file_path}")
 
