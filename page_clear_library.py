@@ -72,7 +72,7 @@ class PageClearLibraryBase(PluginPageBase):
 
 
     def task_interface2(self, *args):
-        logger.warning(args)
+        logger.info(f"시작: {args}")
         library_section = PlexDBHandle.library_section(args[1])
         self.data['list'] = []
         self.data['status']['is_working'] = 'run'

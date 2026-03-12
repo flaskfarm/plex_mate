@@ -102,7 +102,7 @@ class Task(object):
                     P.logger.error(f'Exception:{str(e)}')
                     P.logger.error(traceback.format_exc())
                     P.logger.error(show['title'])
-            P.logger.warning(f"종료: {command=} {section_id=} {dryrun=} {remove_orphans=}")
+            P.logger.info(f"종료: {command=} {section_id=} {dryrun=} {remove_orphans=}")
             return 'wait'
 
 
@@ -152,8 +152,7 @@ class Task(object):
                     combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'seasons', f"{season_index}", "episodes", f"{episode_index}.xml")
                     ret = Task.xml_analysis(combined_xmlpath, data['seasons'][season_index]['episodes'][episode_index], data, con, is_episode=True)
                 except Exception as e:
-                    P.logger.error(f'Exception:{str(e)}')
-                    P.logger.error(traceback.format_exc())
+                    P.logger.exception(repr(e))
         query = ""
         if data['command'] in ['start22', 'start3', 'start4']:
             # 쇼 http로 
@@ -236,8 +235,7 @@ class Task(object):
                                         episode['process']['thumb']['url'] = discord_url
                                         P.logger.warning(discord_url)
                                 except Exception as e:
-                                    P.logger.error(f'Exception:{str(e)}')
-                                    #P.logger.error(traceback.format_exc())
+                                    P.logger.exception(repr(e))
                         else:
                             #P.logger.warning(episode)
                             P.logger.warning(f"썸네일 없음 1 분석 실행: {episode['db']['id']}")
@@ -251,7 +249,7 @@ class Task(object):
 
 
                     if episode['process']['thumb']['url'] != '':
-                        logger.debug(f"{episode['db']['id']}: {episode['process']['thumb']['db']} -> {episode['process']['thumb']['url']}")
+                        #logger.debug(f"{episode['db']['id']}: {episode['process']['thumb']['db']} -> {episode['process']['thumb']['url']}")
                         query += f'UPDATE metadata_items SET user_thumb_url = "{episode["process"]["thumb"]["url"]}" WHERE id = {episode["db"]["id"]};\n'
                         try: data['use_filepath'].remove(episode['process']['thumb']['localpath'])
                         except: pass
@@ -262,12 +260,12 @@ class Task(object):
                                 if os.path.exists(mediapath):
                                     data['media']['remove'] += os.path.getsize(mediapath)
                                     if data['dryrun'] == False:
-                                        P.logger.debug(f"미디어 썸네일 삭제 : {mediapath}")
+                                        #P.logger.debug(f"미디어 썸네일 삭제 : {mediapath}")
                                         os.remove(mediapath)
                     elif episode['process']['thumb']['db'] == '':
                         if len(episode['media_list']) > 0:
                             tmp = f"media://{episode['media_list'][0].split('localhost/')[1]}"
-                            logger.debug(f"{episode['db']['id']}: {tmp}")
+                            #logger.debug(f"{episode['db']['id']}: {tmp}")
                             query += f'UPDATE metadata_items SET user_thumb_url = "{tmp}" WHERE id = {episode["db"]["id"]};\n'
 
                     
@@ -303,7 +301,7 @@ class Task(object):
                                 from gds_tool import SSGDrive
                                 imgur_url = SSGDrive.upload_from_url(episode['user_thumb_url'])
                                 if imgur_url is not None:
-                                    P.logger.warning(imgur_url)
+                                    #P.logger.debug(imgur_url)
                                     sql = 'UPDATE metadata_items SET '
                                     sql += ' user_thumb_url = "{}" '.format(imgur_url)
                                     sql += '  WHERE id = {} ;\n'.format(episode['id'])
@@ -311,8 +309,7 @@ class Task(object):
                                     if ret.find('database is locked') == -1:
                                         pass
                             except Exception as e:
-                                    P.logger.error(f'Exception:{str(e)}')
-                                    P.logger.error(traceback.format_exc())
+                                P.logger.exception(repr(e))
 
                     elif episode['user_thumb_url'].startswith('http'):
                     #if episode['user_thumb_url'].find('drive.google.com') != -1:
@@ -351,7 +348,7 @@ class Task(object):
                                         data['meta']['remove'] += os.path.getsize(localpath)
                                         os.remove(localpath)
                             except Exception as e:
-                                    P.logger.error(f'Exception:{str(e)}')
+                                P.logger.exception(repr(e))
                     else:
                         P.logger.warning(f"파일 없음. 메타 새로고침 필요. {data['db']['title']}")
 
@@ -369,7 +366,7 @@ class Task(object):
                 
                 if os.path.islink(filepath):
                     if os.path.exists(os.path.realpath(filepath)) == False:
-                        P.logger.info(f"링크제거 : {filepath}")
+                        P.logger.debug(f"링크제거 : {filepath}")
                         os.remove(filepath)
                         #file_size = os.path.getsize(filepath)
                         #data['meta']['remove'] += file_size
@@ -386,7 +383,7 @@ class Task(object):
                 if data['command'] in ['start2-2', 'start3'] or data['command'] == 'start4' and not_http_count < 1:
                     # metadata의 리소스 url이 모두 http
                     if data['dryrun'] == False:
-                        P.logger.info(f"일괄 삭제: {filepath}")
+                        #P.logger.debug(f"일괄 삭제: {filepath}")
                         file_size = os.path.getsize(filepath)
                         data['meta']['remove'] += file_size
                         os.remove(filepath)
@@ -402,20 +399,22 @@ class Task(object):
                             file_size = os.path.getsize(filepath)
                             data['meta']['remove'] += file_size
                             if data['dryrun'] == False:
-                                P.logger.debug(f"안쓰는 파일 삭제 : {filepath}")
+                                #P.logger.debug(f"안쓰는 파일 삭제 : {filepath}")
                                 file_size = os.path.getsize(filepath)
                                 os.remove(filepath)
                         else:
-                            P.logger.error('.................. 파일 없음')
+                            #P.logger.error('.................. 파일 없음')
+                            pass
                     else:
-                        P.logger.debug(f"파일 사용: {filepath}")
+                        #P.logger.debug(f"파일 사용: {filepath}")
+                        pass
 
         while True:
             count = 0
             for base, folders, files in os.walk(data['meta']['metapath']):
                 if not folders and not files:
                     os.removedirs(base)
-                    P.logger.debug(f"빈 폴더 삭제: {base} ")
+                    #P.logger.debug(f"빈 폴더 삭제: {base} ")
                     count += 1
             if count == 0:
                 break
@@ -427,8 +426,7 @@ class Task(object):
             return                  
 
       except Exception as e:
-        P.logger.error(f'Exception:{str(e)}')
-        P.logger.error(traceback.format_exc())
+        P.logger.exception(repr(e))
                 
     
 
@@ -478,7 +476,7 @@ class Task(object):
                     continue
                 if is_variant:
                     if original_data is None:
-                        logger.debug(f"원본 메타데이터가 없음: {data['db']['id']}")
+                        logger.warning(f"원본 메타데이터가 없음: {data['db']['id']}")
                         continue
                     original_url = (original_data['process'].get(key) or {}).get('url') or original_data['db'][f'user_{value[0]}_url'] or ''
                     if original_url and column_url != original_url:
@@ -538,32 +536,46 @@ class Task(object):
                 명시되지 않은 고아 URL은 내용물이 'None'인 4 bytes 파일로 저장됨.
                 그래서 plex_mate로 파일정리를 한 후 메타데이터 새로고침을 하게 되면 고아 파일은 정상적인 이미지 파일이 아니라 썸네일이 표시되지 않음.
                 만약 고아 파일이 xml 파일 정보에 계속 남아 있을 경우 새로고침시 다시 생성됨.
+
+                2026.03.12 halfaider
+                고아 파일의 원인은 SJVA 에이전트에서 validate_keys()를 실행하지 않아 발생하는 것으로 보임.
+                validate_keys()를 하면 현재 이미지 목록을 기준으로 포함되지 않는 로컬 파일은 삭제 됨.
                 """
                 if not show_data.get('remove_orphans', False):
                     continue
-                if path_xml.name == 'Info.xml':
-                    path_target = path_xml.parent / value[1] / entity['filename']
-                else:
-                    path_target = path_xml.parent / path_xml.stem / value[1] / entity['filename']
+                path_target = path_xml.parent / value[1] / entity['filename']
                 try:
+                    # agent 혹은 _stored
                     path_resolved = path_target.resolve()
                     if (size_resolved := path_resolved.stat().st_size) > 10:
                         raise Exception("정상 파일")
                 except Exception:
                     continue
                 # 파일 내용이 'None' 네 글자만 있는 4 bytes 파일
-                P.logger.info(f"고아 파일 발견: {size_resolved} bytes {path_resolved}")
+                P.logger.debug(f"고아 파일 발견: {size_resolved} bytes {path_resolved}")
                 if show_data.get('dryrun', True):
                     continue
                 tmp.remove(item)
-                if path_xml.name == 'Info.xml':
-                    path_xml_original = path_resolved.parent.parent / path_xml.name
-                else:
-                    path_xml_original = path_resolved.parent.parent.parent / path_xml.name
-                orphans.setdefault(str(path_xml_original), set())
-                orphans[str(path_xml_original)].add(path_resolved.name)
-                #path_target.unlink(missing_ok=True)
                 update_xml = True
+                
+                """
+                2026-03-12 halfaider
+                agent의 Info.xml 경로 설정
+                _stored 폴더 내 파일이었다면 파일명에 agent가 포함
+                """
+                path_parts = path_resolved.name.rsplit('_', 1)
+                if len(path_parts) > 1:
+                    agent = path_parts[0]
+                    url_hash = path_parts[1]
+                else:
+                    agent: str | None = next((p for p in path_resolved.parts if "com.plex" in p), None)
+                    url_hash = path_parts[0]
+                if agent:
+                    path_xml_original = path_xml.parent.parent / agent / path_xml.name
+                else:
+                    path_xml_original = path_xml.parent.parent / 'com.plexapp.agents.sjva_agent' / path_xml.name
+                orphans.setdefault(str(path_xml_original), set())
+                orphans[str(path_xml_original)].add(url_hash)
 
         if update_xml:
             write_xml(tree, combined_xmlpath)
@@ -572,20 +584,23 @@ class Task(object):
             try:
                 orphan_tree = ElementTree.parse(orphan_xml)
             except Exception:
+                logger.error(f"XML 파싱 오류: {orphan_xml}")
                 continue
             orphan_root = orphan_tree.getroot()
-            orphan_tag = orphan_root.find(value[1])
-            if orphan_tag is None:
-                continue
-            orphan_update_xml = False
-            for orphan_item in orphan_tag.findall('item'):
-                orpahn_preview = orphan_item.get('preview')
-                orphan_media = orphan_item.get('media')
-                if orpahn_preview in orphans[orphan_xml] or orphan_media in orphans[orphan_xml]:
-                    orphan_tag.remove(orphan_item)
-                    orphan_update_xml = True
-            if orphan_update_xml:
-                write_xml(orphan_tree, orphan_xml)
+            for tag, value in tags.items():
+                orphan_tag = orphan_root.find(value[1])
+                if orphan_tag is None:
+                    continue
+                orphan_update_xml = False
+                for orphan_item in orphan_tag.findall('item'):
+                    orpahn_preview = orphan_item.get('preview')
+                    orphan_media = orphan_item.get('media')
+                    if orpahn_preview in orphans[orphan_xml] or orphan_media in orphans[orphan_xml]:
+                        orphan_tag.remove(orphan_item)
+                        orphan_update_xml = True
+                if orphan_update_xml:
+                    write_xml(orphan_tree, orphan_xml)
+                return
 
         for tag, value in tags.items():
             if value[1] in data['xml_info']:
