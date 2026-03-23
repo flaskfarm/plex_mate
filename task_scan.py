@@ -356,11 +356,32 @@ class Task:
                         db_item.set_status('FINISH_SCANNING', save=True)
                 # 2024-09-07
                 # 이제 bin scanner가 refresh까지 하지 못함. web refresh 하도록 추가
-                if db_item.mode == 'ADD' and P.ModelSetting.get_bool('scan_refresh_after_scanning'):
-                    metaid = PlexDBHandle.get_metaid_by_directory(db_item.section_id, db_item.scan_folder)
-                    if metaid != None:
-                        logger.info(f"스캔: meta refresh {metaid}")
-                        PlexWebHandle.refresh_by_id(metaid)
+                query = """
+                    SELECT
+                        ls.agent,
+                        CASE
+                            WHEN m.metadata_type = 4 THEN (SELECT parent.parent_id FROM metadata_items AS parent WHERE parent.id = m.parent_id)
+                            WHEN m.metadata_type = 3 THEN m.parent_id
+                            ELSE m.id
+                        END AS meta_id
+                    FROM media_parts AS mp
+                    JOIN media_items AS mi ON mp.media_item_id = mi.id
+                    JOIN metadata_items AS m ON mi.metadata_item_id = m.id
+                    JOIN library_sections AS ls ON m.library_section_id = ls.id
+                    WHERE m.library_section_id = ?
+                    AND mp.file LIKE ?
+                    LIMIT 1
+                """
+                if db_item.mode == 'ADD':
+                    rows = PlexDBHandle.select_arg(query, (db_item.section_id, f"%{db_item.scan_folder}%"))
+                    if rows:
+                        logger.debug(f"{db_item.id}: {rows[0]}")
+                        agent = rows[0].get('agent') or ''
+                        metaid = rows[0].get('meta_id') or 0
+                        # 플렉스 기본 에이전트는 항상 업데이트 요청, 그 외는 scan_refresh_after_scanning 설정을 따름
+                        if metaid and (agent.startswith("tv.plex.agents") or P.ModelSetting.get_bool('scan_refresh_after_scanning')):
+                            logger.info(f"스캔: meta refresh {metaid}")
+                            PlexWebHandle.refresh_by_id(metaid)
             elif mode == "ERROR":
                 # 스캔이 정상 종료되지 않은 경우 다음 재실행시 스캔 되도록 FINISH_SCANNING 상태로 바꿈
                 logger.error(f'스캔이 정상 처리되지 않았습니다: {db_item.mode} "{db_item.target}"')
