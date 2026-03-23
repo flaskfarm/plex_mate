@@ -528,16 +528,10 @@ class Task(object):
                 entity['provider'] = item.attrib['provider']
                 data['xml_info'][value[1]].append(entity)
                 """
-                2025.10.28 halfaider
-                FF에 메타데이터 요청시 자료 업데이트로 과거의 이미지 URL이 누락되면 그 이미지 URL은 고아가 됨.
-                플렉스에서 메타데이터 새로고침을 하면 FF의 메타데이터에 명시된 이미지 URL만 파일로 저장이 되고,
-                명시되지 않은 고아 URL은 내용물이 'None'인 4 bytes 파일로 저장됨.
-                그래서 plex_mate로 파일정리를 한 후 메타데이터 새로고침을 하게 되면 고아 파일은 정상적인 이미지 파일이 아니라 썸네일이 표시되지 않음.
-                만약 고아 파일이 xml 파일 정보에 계속 남아 있을 경우 새로고침시 다시 생성됨.
-
-                2026.03.12 halfaider
-                고아 파일의 원인은 SJVA 에이전트에서 validate_keys()를 실행하지 않아 발생하는 것으로 보임.
-                validate_keys()를 하면 현재 이미지 목록을 기준으로 포함되지 않는 로컬 파일은 삭제 됨.
+                2026.03.23 halfaider
+                메타데이터를 새로고침하면 Info.xml을 로딩해서 여기에 새로운 메타데이터를 업데이트함.
+                만약 Info.xml에 저장되어 있던 이미지 URL을 새로운 데이터로 갱신해 주지 못하면 None으로 저장됨.
+                이 None파일이 _stored 폴더에 저장돼서 사용중이었다면 포스터가 계속 표시되지 않는 문제가 발생.
                 """
                 if not show_data.get('remove_orphans', False):
                     continue
