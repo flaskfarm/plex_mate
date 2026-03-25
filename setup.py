@@ -160,3 +160,5 @@ def load_config():
 P.load_config = load_config
 
 logger = P.logger
+
+P.cache = F.get_cache('plex_mate')

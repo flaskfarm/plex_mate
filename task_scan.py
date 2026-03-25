@@ -1,3 +1,5 @@
+import re
+
 from support import SupportSubprocess
 
 from .extensions import check_scanning, vfs_forget, vfs_refresh
@@ -6,6 +8,7 @@ from .plex_bin_scanner import PlexBinaryScanner
 from .plex_db import PlexDBHandle
 from .plex_web import PlexWebHandle
 from .setup import *
+from .task_base import plex_exclusive
 
 name = 'scan'
 logger = P.logger
@@ -357,31 +360,59 @@ class Task:
                 # 2024-09-07
                 # 이제 bin scanner가 refresh까지 하지 못함. web refresh 하도록 추가
                 query = """
+                    WITH TargetItem AS (
+                        SELECT
+                            CASE
+                                WHEN m.metadata_type = 4 THEN (SELECT parent.parent_id FROM metadata_items AS parent WHERE parent.id = m.parent_id)
+                                WHEN m.metadata_type = 3 THEN m.parent_id
+                                ELSE m.id
+                            END AS meta_id
+                        FROM media_parts AS mp
+                        JOIN media_items AS mi ON mp.media_item_id = mi.id
+                        JOIN metadata_items AS m ON mi.metadata_item_id = m.id
+                        WHERE m.library_section_id = ? AND mp.file LIKE ?
+                        LIMIT 1
+                    )
                     SELECT
-                        ls.agent,
-                        CASE
-                            WHEN m.metadata_type = 4 THEN (SELECT parent.parent_id FROM metadata_items AS parent WHERE parent.id = m.parent_id)
-                            WHEN m.metadata_type = 3 THEN m.parent_id
-                            ELSE m.id
-                        END AS meta_id
-                    FROM media_parts AS mp
-                    JOIN media_items AS mi ON mp.media_item_id = mi.id
-                    JOIN metadata_items AS m ON mi.metadata_item_id = m.id
-                    JOIN library_sections AS ls ON m.library_section_id = ls.id
-                    WHERE m.library_section_id = ?
-                    AND mp.file LIKE ?
-                    LIMIT 1
+                        m2.id,
+                        m2.title,
+                        m2.year,
+                        m2.library_section_id,
+                        ls.agent, 
+                        m2.metadata_type,
+                        m2.guid
+                    FROM TargetItem AS ti
+                    JOIN metadata_items AS m2 ON ti.meta_id = m2.id 
+                    JOIN library_sections AS ls ON m2.library_section_id = ls.id;
                 """
                 if db_item.mode == 'ADD':
                     rows = PlexDBHandle.select_arg(query, (db_item.section_id, f"%{db_item.scan_folder}%"))
                     if rows:
                         logger.debug(f"{db_item.id}: {rows[0]}")
-                        agent = rows[0].get('agent') or ''
-                        metaid = rows[0].get('meta_id') or 0
-                        # 플렉스 기본 에이전트는 항상 업데이트 요청, 그 외는 scan_refresh_after_scanning 설정을 따름
-                        if metaid and (agent.startswith("tv.plex.agents") or P.ModelSetting.get_bool('scan_refresh_after_scanning')):
-                            logger.info(f"스캔: meta refresh {metaid}")
-                            PlexWebHandle.refresh_by_id(metaid)
+                        meta_agent = rows[0].get('agent') or ''
+                        meta_id = rows[0].get('id') or 0
+                        """
+                        2026-03-24 halfaider
+                        플렉스 기본 에이전트는 항상 업데이트 요청, 그 외는 scan_refresh_after_scanning 설정을 따름
+                        """
+                        if meta_id and (meta_agent.startswith("tv.plex.agents") or P.ModelSetting.get_bool('scan_refresh_after_scanning')):
+                            logger.info(f"스캔: meta refresh {meta_id}")
+                            PlexWebHandle.refresh_by_id(meta_id)
+                        """
+                        2026-03-24 halfaider
+                        플렉스 기본 에이전트가 아닌 경우 플렉스 전용 정보(slug, clearlogo) 업데이트
+                        slug는 업데이트 API가 없어서 DB 조작 필요
+                        """
+                        meta_guid = rows[0].get('guid') or ''
+                        meta_guid_path = meta_guid.split("?")[0].split("://")[-1]
+                        meta_guid_parts = meta_guid_path.split('/')
+                        meta_code, _, _ = (meta_guid_parts + [None, None])[:3]
+                        if meta_code.startswith(("FT", "MT")):
+                            try:
+                                allowed_sections = [int(s) for s in re.split(r'\W', P.ModelSetting.get('scan_plex_exclusive_sections')) if s.isdigit()]
+                                plex_exclusive.delay(metadata_id=meta_id, allowed_sections=allowed_sections)
+                            except Exception:
+                                P.logger.exception(f"플렉스 전용 정보 업데이트에 실패했습니다.")
             elif mode == "ERROR":
                 # 스캔이 정상 종료되지 않은 경우 다음 재실행시 스캔 되도록 FINISH_SCANNING 상태로 바꿈
                 logger.error(f'스캔이 정상 처리되지 않았습니다: {db_item.mode} "{db_item.target}"')
