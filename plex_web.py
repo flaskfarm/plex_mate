@@ -223,3 +223,29 @@ class PlexWebHandle(object):
         except Exception as e:
             P.logger.error(traceback.format_exc())
             return {'ret': 'error', 'msg': f'TMDB 갱신 중 오류: {e}'}
+
+    @classmethod
+    def get_matches(cls, meta_id: int, title: str, year: int = 1900, agent: str = "tv.plex.agents.movie", lang: str = "ko-KR") -> list | None:
+        url = f"{P.ModelSetting.get('base_url')}/library/metadata/{meta_id}/matches?manual=1&title={title}&year={year}&agent={agent}&language={lang}"
+        try:
+            response = requests.get(url, headers={'X-Plex-Token': P.ModelSetting.get('base_token'), 'Accept': 'application/json'})
+            if response.status_code == 200:
+                data = response.json()
+                return (data.get('MediaContainer') or {}).get('SearchResult') or []
+            else:
+                P.logger.error(f"매칭 검색 결과를 가져올 수 없습니다: status={response.status_code}")
+        except Exception:
+            P.logger.exception(f"{meta_id=} {title=} {year=}")
+
+    @classmethod
+    def get_metadata(cls, guid) -> dict | None:
+        try:
+            url = f"https://metadata.provider.plex.tv/library/metadata/{guid.rsplit('/')[-1]}?X-Plex-Token={P.ModelSetting.get('base_token')}"
+            response = requests.get(url, headers={'Accept': 'application/json'})
+            if response.status_code == 200:
+                data = response.json()
+                return ((data.get('MediaContainer') or {}).get('Metadata') or [{}])[0]
+            else:
+                P.logger.error(f"플렉스 메타데이터를 가져올 수 없습니다: status={response.status_code}")
+        except Exception:
+            P.logger.exception(f"{guid=}")

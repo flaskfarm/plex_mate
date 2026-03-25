@@ -160,6 +160,40 @@
 
 {{ macros.m_hr() }}
 
+{{ macros.setting_top('플렉스 전용 정보 갱신') }}
+<div class="input-group col-sm-9">
+  <select id="tool_simple_plex_exclusive_section_id" name="tool_simple_plex_exclusive_section_id" class="form-control form-control-sm">
+    {% for item in arg['library_list'] %}
+      {% if item['section_type'] == 1 or item['section_type'] == 2 %}
+        {% if loop.counter == 0 %}
+        <option value="{{ item['id'] }}" selected>{{item['name']}}</option>
+        {% else %}
+        <option value="{{ item['id'] }}">{{item['name']}}</option>
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+  </select>
+  <div class="btn-group btn-group-sm flex-wrap mr-2" role="group">
+    <button id="tool_simple_plex_exclusive_section_btn" class="btn btn-sm btn-outline-primary">업데이트</button>
+    <button id="tool_simple_plex_exclusive_section_reset_btn" class="btn btn-sm btn-outline-warning">리셋</button>
+    
+  </div>
+  
+  <input id="tool_simple_plex_exclusive_metadata_id" name="tool_simple_plex_exclusive_metadata_id" class="form-control form-control-sm col-sm-2" type="number" min="0" step="1">
+  <div class="btn-group btn-group-sm flex-wrap mr-2" role="group">
+      <button id="tool_simple_plex_exclusive_metadata_btn" class="btn btn-sm btn-outline-primary">업데이트</button>
+      <button id="tool_simple_plex_exclusive_metadata_reset_btn" class="btn btn-sm btn-outline-warning">리셋</button>
+  </div>
+  <div class="btn-group btn-group-sm flex-wrap mr-2" role="group">
+    <button id="tool_simple_plex_exclusive_stop_btn" class="btn btn-sm btn-outline-danger">중지</button>
+  </div>
+  
+</div>
+{{ macros.setting_bottom(['라이브러리의 slug, clear logo 정보를 업데이트/리셋 합니다.', '라이브러리 혹은 메타데이터 ID를 입력하세요.', 'TMDB가 아닌 메타데이터는 잘못 매칭될 수 있습니다.']) }}
+
+<br/>
+<br/>
+
 <script type="text/javascript">
 
 $(function(){ 
@@ -264,6 +298,33 @@ $("#tool_simple_movie_type_to_personal_btn").on('click', function(e){
 $("#tool_simple_movie_type_to_movie_btn").on('click', function(e){
   e.preventDefault();
   globalSendCommandPage('tool_simple_movie_type_to_movie', $('#tool_simple_movie_type_section_id').val());
+});
+
+$("#tool_simple_plex_exclusive_section_btn").on('click', function(e){
+  e.preventDefault();
+
+  globalSendCommandPage('tool_simple_plex_exclusive', $('#tool_simple_plex_exclusive_section_id').val(), null, null);
+});
+
+$("#tool_simple_plex_exclusive_section_reset_btn").on('click', function(e){
+  e.preventDefault();
+
+  globalSendCommandPage('tool_simple_plex_exclusive', $('#tool_simple_plex_exclusive_section_id').val(), null, 'reset');
+});
+
+$("#tool_simple_plex_exclusive_metadata_btn").on('click', function(e){
+  e.preventDefault();
+  globalSendCommandPage('tool_simple_plex_exclusive', null, $('#tool_simple_plex_exclusive_metadata_id').val(), null);
+});
+
+$("#tool_simple_plex_exclusive_metadata_reset_btn").on('click', function(e){
+  e.preventDefault();
+  globalSendCommandPage('tool_simple_plex_exclusive', null, $('#tool_simple_plex_exclusive_metadata_id').val(), 'reset');
+});
+
+$("#tool_simple_plex_exclusive_stop_btn").on('click', function(e){
+  e.preventDefault();
+  globalSendCommandPage('tool_simple_plex_exclusive', null, null, 'stop');
 });
 
 </script>    

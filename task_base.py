@@ -1,3 +1,4 @@
+import time
 import pathlib
 import urllib.parse
 
@@ -255,3 +256,150 @@ class Task(object):
         if update_quries:
             P.PlexDBHandle.execute_query('BEGIN TRANSACTION;\n' + ';\n'.join(update_quries) + ';\n' + 'COMMIT;')
         logger.info(f'End retrieving category: {section_id=}')
+
+
+def _plex_exclusive_should_stop(task_id: str, start_time: float) -> bool:
+    stop_id = f"tool:simple:plex_exclusive:stop"
+    if P.cache.get(task_id) == 'false':
+        return True
+    if (stop_time := P.cache.get(stop_id)) and float(stop_time) > start_time:
+        return True
+    return False
+
+
+def stop_plex_exclusive() -> None:
+    stop_id = f"tool:simple:plex_exclusive:stop"
+    P.cache.set(stop_id, str(time.time()))
+    logger.info("모든 plex_exclusive() 작업을 중단합니다.")
+
+
+@celery.task
+def plex_exclusive(section_id: int = 0, metadata_id: int = 0, reset: bool = False, manual: bool = False, allowed_sections: tuple = ()) -> None:
+    if not section_id and not metadata_id:
+        logger.error('라이브러리 혹은 메타데이터 ID를 입력해 주세요.')
+        return
+    task_id = f"tool:simple:plex_exclusive:{section_id}:{metadata_id}"
+    if P.cache.get(task_id) == 'true':
+        logger.warning(f"이전 작업 실행중: {task_id}")
+        return
+    P.cache.set(task_id, 'true')
+    start_time = time.time()
+    try:
+        logger.info(f"시작: {task_id}")
+        select_query = """SELECT id, guid, metadata_type, title, year, library_section_id, slug, user_clear_logo_url
+            FROM metadata_items
+            WHERE metadata_type IN (1, 2)"""
+        if reset:
+            select_query += " AND (user_clear_logo_url IS NOT NULL OR slug IS NOT NULL)"
+            select_query += " AND (user_clear_logo_url != '' OR slug != '')"
+        if metadata_id:
+            select_query += f" AND id = ?"
+            select_id = metadata_id
+        elif section_id:
+            select_query += f" AND library_section_id = ?"
+            select_id = section_id
+        else:
+            return
+        # 자동일 경우 대상 섹션을 검증
+        if not manual and not metadata_id and section_id not in allowed_sections:
+            logger.info(f"대상 섹션이 아닙니다: {section_id}")
+            return
+        rows = P.PlexDBHandle.select_arg(select_query, (select_id,))
+        updates = []
+        for row in rows:
+            # 작업 중단 체크
+            if _plex_exclusive_should_stop(task_id, start_time):
+                break
+            meta_section_id = row.get('library_section_id')
+            # section_id를 지정하지 않으면 조회후 알 수 있으므로
+            if not manual and meta_section_id not in allowed_sections:
+                logger.info(f"대상 섹션이 아닙니다: {meta_section_id}")
+                continue
+            meta_id = row.get('id')
+            if reset:
+                if slug := row.get('slug'):
+                    updates.append(('slug', '', meta_id))
+                if clear_logo := row.get('user_clear_logo_url'):
+                    updates.append(('user_clear_logo_url', '', meta_id))
+                continue
+            meta_type = row.get('metadata_type')
+            meta_agent = 'tv.plex.agents.movie' if meta_type == 1 else 'tv.plex.agents.series'
+            meta_title = row.get('title')
+            meta_year = row.get('year')
+            meta_slug = row.get('slug')
+            meta_clear_logo = row.get('user_clear_logo_url')
+            try:
+                meta_guid_path = (row.get('guid') or '').split("?")[0].split("://")[-1]
+                meta_guid_parts = meta_guid_path.split("/")
+                meta_code, _, _ = (meta_guid_parts + [None, None])[:3]
+                #P.logger.info(f"{meta_id=} {meta_code=} {meta_title=} {meta_year=} {meta_agent=}")
+                # 기본 에이전트로 검색
+                search_title = f"tmdb-{meta_code[2:]}" if meta_code.startswith(("FT", "MT")) else meta_title
+                matches = P.PlexWebHandle.get_matches(meta_id, search_title, meta_year, agent=meta_agent)
+                if not matches:
+                    continue
+                sr = matches[0]
+                sr_type = sr.get('type')
+                if (meta_type == 1 and sr_type != 'movie') or (meta_type == 2 and sr_type != 'show'):
+                    continue
+                plex_guid = sr.get('guid')
+                plex_metadata = P.PlexWebHandle.get_metadata(plex_guid)
+                if not plex_metadata:
+                    continue
+                slug = plex_metadata.get('slug')
+                if slug and slug != meta_slug:
+                    P.logger.debug(f"{meta_title} ({meta_year}): {slug=} {plex_metadata.get('title')} ({plex_metadata.get('year')})")
+                    updates.append(('slug', slug, meta_id))
+                clear_logo = None
+                if tmdb_guids := [g.get('id') for g in plex_metadata.get('Guid') or () if (g.get('id') or '').startswith("tmdb")]:
+                    try:
+                        tmdb_id = int(tmdb_guids[0].split("://")[-1])
+                        from support_site.site_tmdb import tmdbsimple, SiteTmdb
+                        tmdb_class = tmdbsimple.Movies if meta_type == 1 else tmdbsimple.TV
+                        images = []
+                        SiteTmdb._process_image(tmdb_class(tmdb_id), images)
+                        for art in sorted(images, key=lambda k: k.get('score') or 0, reverse=True):
+                            if art.get('aspect') == 'logo':
+                                clear_logo = art.get('value') or art.get('thumb')
+                                break
+                    except Exception as e:
+                        logger.error(f"TMDB 로고를 가져오지 못 했습니다: {str(e)}")
+                if not clear_logo:
+                    # 플렉스 로고는 영문일 확률이 높음
+                    images = plex_metadata.get('Image') or ()
+                    for image in images:
+                        if image.get('type') == 'clearLogo':
+                            clear_logo = image.get('url')
+                if clear_logo and clear_logo != meta_clear_logo:
+                    P.logger.debug(f"{meta_title} ({meta_year}): {clear_logo=}")
+                    updates.append(('user_clear_logo_url', clear_logo, meta_id))
+            except Exception as e:
+                P.logger.error(f"{meta_id=} error='{str(e)}'")
+        
+        if updates:
+            try:
+                # DB lock 30초 대기
+                sql_lines = ["PRAGMA busy_timeout = 30000;", "BEGIN TRANSACTION;"]
+                for column, value, metadata_id in updates:
+                    # 작업 중단 체크
+                    if _plex_exclusive_should_stop(task_id, start_time):
+                        break
+                    if value is None:
+                        value = ''
+                    else:
+                        value = str(value).replace("'", "''")
+                    sql_lines.append(f"UPDATE metadata_items SET {column} = '{value}' WHERE id = {metadata_id};")
+                sql_lines.append("COMMIT;")
+                # 작업 중단 체크
+                if _plex_exclusive_should_stop(task_id, start_time):
+                    logger.info(f"작업 중단으로 DB 업데이트 취소: {task_id}")
+                    return
+                logger.info(f"DB 업데이트 쿼리 실행: {task_id}")
+                P.PlexDBHandle.execute_query("\n".join(sql_lines))
+            except Exception:
+                logger.exception(f"DB 업데이트 오류: {task_id}")
+    except Exception:
+        logger.exception(f"오류: {task_id}")
+    finally:
+        P.cache.set(task_id, 'false')
+        logger.info(f"종료: {task_id}")

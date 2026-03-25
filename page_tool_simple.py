@@ -3,11 +3,15 @@ import threading
 import time
 import unicodedata
 import re
+from datetime import datetime, timezone, timedelta
+
+import tmdbsimple as tmdb
+
+from .setup import *
 from support import SupportString, SupportYaml
 from .plex_db import PlexDBHandle
-import tmdbsimple as tmdb
-from .setup import *
-from datetime import datetime, timezone, timedelta
+from .task_base import plex_exclusive, stop_plex_exclusive
+
 logger = P.logger
 
 
@@ -351,6 +355,19 @@ class PageToolSimple(PluginPageBase):
                     ret = {'ret':'success', 'msg':'정상적으로 처리되었습니다.'}
                 else:
                     ret = {'ret':'warning', 'msg':'실패'}
+            elif command == 'tool_simple_plex_exclusive':
+                mode = req.form.get('arg3', 'update', type=str)
+                if mode == 'stop':
+                    stop_plex_exclusive()
+                    return {'ret':'warning', 'msg':'모든 작업을 중단합니다.'}
+                elif mode == 'reset':
+                    reset = True
+                else:
+                    reset = False
+                section_id = req.form.get('arg1', 0, type=int)
+                metadata_id = req.form.get('arg2', 0, type=int)
+                plex_exclusive.delay(section_id=section_id, metadata_id=metadata_id, reset=reset, manual=True)
+                ret = {'ret':'success', 'msg':'작업을 시작했습니다.'}
             return jsonify(ret)
         except Exception as e: 
             P.logger.error(f'Exception:{str(e)}')
