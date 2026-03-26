@@ -5,6 +5,8 @@ import urllib.parse
 from support import SupportFile, SupportOSCommand, SupportSubprocess
 
 from .setup import *
+from .plex_db import PlexDBHandle
+from .plex_web import PlexWebHandle
 
 logger = P.logger
 
@@ -188,7 +190,7 @@ class Task(object):
             if section_id > 0:
                 sections = {section_id}
             else:
-                sections = {section['id'] for section in P.PlexDBHandle.library_sections() if section['section_type'] in [1, 2]}
+                sections = {section['id'] for section in PlexDBHandle.library_sections() if section['section_type'] in [1, 2]}
         except Exception:
             logger.exception('라이브러리 섹션을 가져올 수 없어서 작업을 중단합니다.')
             return
@@ -210,7 +212,7 @@ class Task(object):
                     if 'metadata' not in paths:
                         continue
                     metadata_id = paths[paths.index('metadata') + 1]
-                    row = P.PlexDBHandle.select_arg('SELECT * FROM metadata_items WHERE id = ?', (metadata_id,))[0]
+                    row = PlexDBHandle.select_arg('SELECT * FROM metadata_items WHERE id = ?', (metadata_id,))[0]
                 except Exception:
                     logger.exception(f'범주의 대표 메타데이터를 가져올 수 없습니다: {section=} {category=}')
                     continue
@@ -229,9 +231,9 @@ class Task(object):
                         # 플렉스 기본 에이전트는 taggings에서 검색
                         if row['guid'].startswith('plex://'):
                             if art_tag_id is None:
-                                art_tag_id = P.PlexDBHandle.select('SELECT id FROM tags WHERE tag_type = 313')[0]['id']
+                                art_tag_id = PlexDBHandle.select('SELECT id FROM tags WHERE tag_type = 313')[0]['id']
                             # taggings에서 metadata:// 프로토콜의 art url을 조회
-                            thumbs = P.PlexDBHandle.select_arg("SELECT thumb_url FROM taggings WHERE tag_id = ? AND metadata_item_id = ?", (art_tag_id, metadata_id))
+                            thumbs = PlexDBHandle.select_arg("SELECT thumb_url FROM taggings WHERE tag_id = ? AND metadata_item_id = ?", (art_tag_id, metadata_id))
                             # 번들 폴더에 art 파일이 없으면 메타데이터 새로고침해서 파일을 생성해야 범주 이미지가 생성됨. 새로고침은 사용자 판단에 따라...
                             new_user_art_url = thumbs[0]['thumb_url'] if thumbs else ''
                         # 기본 에이전트가 아닌 경우 번들 폴더에서 검색
@@ -254,7 +256,7 @@ class Task(object):
                     except Exception:
                         logger.exception(f'{category["key"]} {metadata_id=}')
         if update_quries:
-            P.PlexDBHandle.execute_query('BEGIN TRANSACTION;\n' + ';\n'.join(update_quries) + ';\n' + 'COMMIT;')
+            PlexDBHandle.execute_query('BEGIN TRANSACTION;\n' + ';\n'.join(update_quries) + ';\n' + 'COMMIT;')
         logger.info(f'End retrieving category: {section_id=}')
 
 
@@ -289,9 +291,8 @@ def plex_exclusive(section_id: int = 0, metadata_id: int = 0, reset: bool = Fals
         select_query = """SELECT id, guid, metadata_type, title, year, library_section_id, slug, user_clear_logo_url
             FROM metadata_items
             WHERE metadata_type IN (1, 2)"""
-        if reset:
-            select_query += " AND (user_clear_logo_url IS NOT NULL OR slug IS NOT NULL)"
-            select_query += " AND (user_clear_logo_url != '' OR slug != '')"
+        oprt = "!=" if reset else "="
+        select_query += f" AND (COALESCE(user_clear_logo_url, '') {oprt} '' OR COALESCE(slug, '') {oprt} '')"
         if metadata_id:
             select_query += f" AND id = ?"
             select_id = metadata_id
@@ -304,7 +305,7 @@ def plex_exclusive(section_id: int = 0, metadata_id: int = 0, reset: bool = Fals
         if not manual and not metadata_id and section_id not in allowed_sections:
             logger.info(f"대상 섹션이 아닙니다: {section_id}")
             return
-        rows = P.PlexDBHandle.select_arg(select_query, (select_id,))
+        rows = PlexDBHandle.select_arg(select_query, (select_id,))
         updates = []
         for row in rows:
             # 작업 중단 체크
@@ -335,7 +336,7 @@ def plex_exclusive(section_id: int = 0, metadata_id: int = 0, reset: bool = Fals
                 #P.logger.info(f"{meta_id=} {meta_code=} {meta_title=} {meta_year=} {meta_agent=}")
                 # 기본 에이전트로 검색
                 search_title = f"tmdb-{meta_code[2:]}" if meta_code.startswith(("FT", "MT")) else meta_title
-                matches = P.PlexWebHandle.get_matches(meta_id, search_title, meta_year, agent=meta_agent)
+                matches = PlexWebHandle.get_matches(meta_id, search_title, meta_year, agent=meta_agent)
                 if not matches:
                     continue
                 sr = matches[0]
@@ -343,7 +344,7 @@ def plex_exclusive(section_id: int = 0, metadata_id: int = 0, reset: bool = Fals
                 if (meta_type == 1 and sr_type != 'movie') or (meta_type == 2 and sr_type != 'show'):
                     continue
                 plex_guid = sr.get('guid')
-                plex_metadata = P.PlexWebHandle.get_metadata(plex_guid)
+                plex_metadata = PlexWebHandle.get_metadata(plex_guid)
                 if not plex_metadata:
                     continue
                 slug = plex_metadata.get('slug')
@@ -395,7 +396,7 @@ def plex_exclusive(section_id: int = 0, metadata_id: int = 0, reset: bool = Fals
                     logger.info(f"작업 중단으로 DB 업데이트 취소: {task_id}")
                     return
                 logger.info(f"DB 업데이트 쿼리 실행: {task_id}")
-                P.PlexDBHandle.execute_query("\n".join(sql_lines))
+                PlexDBHandle.execute_query("\n".join(sql_lines))
             except Exception:
                 logger.exception(f"DB 업데이트 오류: {task_id}")
     except Exception:
