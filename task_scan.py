@@ -402,17 +402,21 @@ class Task:
                         2026-03-24 halfaider
                         플렉스 기본 에이전트가 아닌 경우 플렉스 전용 정보(slug, clearlogo) 업데이트
                         slug는 업데이트 API가 없어서 DB 조작 필요
+
+                        2026-03-26 halfaider
+                        sjva 에이전트에서도 On 되어 있으면 스캔시 두번 작업하게 됨
+                        에이전트에서만 요청하는 방식으로 수정
                         """
-                        meta_guid = rows[0].get('guid') or ''
-                        meta_guid_path = meta_guid.split("?")[0].split("://")[-1]
-                        meta_guid_parts = meta_guid_path.split('/')
-                        meta_code, _, _ = (meta_guid_parts + [None, None])[:3]
-                        if meta_code.startswith(("FT", "MT")):
-                            try:
-                                allowed_sections = [int(s) for s in re.split(r'\W', P.ModelSetting.get('scan_plex_exclusive_sections')) if s.isdigit()]
-                                plex_exclusive.delay(metadata_id=meta_id, allowed_sections=allowed_sections)
-                            except Exception:
-                                P.logger.exception(f"플렉스 전용 정보 업데이트에 실패했습니다.")
+                        #meta_guid = rows[0].get('guid') or ''
+                        #meta_guid_path = meta_guid.split("?")[0].split("://")[-1]
+                        #meta_guid_parts = meta_guid_path.split('/')
+                        #meta_code, _, _ = (meta_guid_parts + [None, None])[:3]
+                        #if meta_code.startswith(("FT", "MT")):
+                        #    try:
+                        #        allowed_sections = [int(s) for s in re.split(r'\W', P.ModelSetting.get('scan_plex_exclusive_sections')) if s.isdigit()]
+                        #        plex_exclusive.delay(metadata_id=meta_id, allowed_sections=allowed_sections)
+                        #    except Exception:
+                        #        P.logger.exception(f"플렉스 전용 정보 업데이트에 실패했습니다.")
             elif mode == "ERROR":
                 # 스캔이 정상 종료되지 않은 경우 다음 재실행시 스캔 되도록 FINISH_SCANNING 상태로 바꿈
                 logger.error(f'스캔이 정상 처리되지 않았습니다: {db_item.mode} "{db_item.target}"')
