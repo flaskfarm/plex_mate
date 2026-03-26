@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 
+{{ macros.m_button_group([['globalSettingSaveBtn', '설정 저장']])}}
 {{ macros.m_hr() }}
 {{ macros.setting_buttons([['update_show_add_btn', '쇼 추가된 시간을 마지막 에피소드 추가된 날짜로 변경']], left='쇼 추가된날짜', desc=None ) }}
 
@@ -190,6 +191,9 @@
   
 </div>
 {{ macros.setting_bottom(['라이브러리의 slug, clear logo 정보를 업데이트/리셋 합니다.', '라이브러리 혹은 메타데이터 ID를 입력하세요.', 'TMDB가 아닌 메타데이터는 잘못 매칭될 수 있습니다.']) }}
+<form id='setting'>
+{{ macros.setting_input_text('tool_simple_plex_exclusive_sections', 'API 요청시 적용 라이브러리', value=arg['tool_simple_plex_exclusive_sections'], desc=['API 요청시 적용할 라이브러리 섹션 ID를 콤마 혹은 공백으로 구분해서 나열', 'manual이 true가 아닌 경우 여기에 명시된 라이브러리만 적용', 'API: /plex_mate/api/tool/plex_exclusive?metadata_id=1234&section_id=&manual=no&reset=false',]) }}
+</form
 
 <br/>
 <br/>

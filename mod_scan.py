@@ -33,7 +33,6 @@ class ModuleScan(PluginModuleBase):
             f"{self.name}_max_scan_time": "60",
             f"{self.name}_timeover_reset_range": "0~0",
             f"{self.name}_refresh_after_scanning": "True",
-            f"{self.name}_plex_exclusive_sections": "",
         }
         self.web_list_model = ModelScanItem
         self.set_page_list([BrowserPage, TrashPage])
