@@ -25,6 +25,7 @@ class PageToolSimple(PluginPageBase):
             f'{self.parent.name}_{self.name}_remove_meta_id' : '',
             f'{self.parent.name}_{self.name}_remove_db_by_folder' : '',
             f'{self.parent.name}_{self.name}_title_sort_types' : '1, 2, 8, 9',
+            f'{self.parent.name}_{self.name}_plex_exclusive_sections' : '',
         }
     
     def process_command(self, command, arg1, arg2, arg3, req):
@@ -366,7 +367,7 @@ class PageToolSimple(PluginPageBase):
                     reset = False
                 section_id = req.form.get('arg1', 0, type=int)
                 metadata_id = req.form.get('arg2', 0, type=int)
-                plex_exclusive.delay(section_id=section_id, metadata_id=metadata_id, reset=reset, manual=True)
+                plex_exclusive.delay(section_id=section_id, metadata_id=metadata_id, reset=reset, manual=True, clear_logo=True)
                 ret = {'ret':'success', 'msg':'작업을 시작했습니다.'}
             return jsonify(ret)
         except Exception as e: 

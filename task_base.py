@@ -276,7 +276,14 @@ def stop_plex_exclusive() -> None:
 
 
 @celery.task
-def plex_exclusive(section_id: int = 0, metadata_id: int = 0, reset: bool = False, manual: bool = False, allowed_sections: tuple = ()) -> None:
+def plex_exclusive(
+    section_id: int = 0, 
+    metadata_id: int = 0, 
+    reset: bool = False, 
+    manual: bool = False, 
+    allowed_sections: tuple = (), 
+    clear_logo: bool = False
+) -> None:
     if not section_id and not metadata_id:
         logger.error('라이브러리 혹은 메타데이터 ID를 입력해 주세요.')
         return
@@ -312,15 +319,15 @@ def plex_exclusive(section_id: int = 0, metadata_id: int = 0, reset: bool = Fals
             if _plex_exclusive_should_stop(task_id, start_time):
                 break
             meta_section_id = row.get('library_section_id')
-            # section_id를 지정하지 않으면 조회후 알 수 있으므로
+            # section_id를 지정하지 않으면 조회 후 알 수 있으므로
             if not manual and meta_section_id not in allowed_sections:
                 logger.info(f"대상 섹션이 아닙니다: {meta_section_id}")
                 continue
             meta_id = row.get('id')
             if reset:
-                if slug := row.get('slug'):
+                if row.get('slug'):
                     updates.append(('slug', '', meta_id))
-                if clear_logo := row.get('user_clear_logo_url'):
+                if row.get('user_clear_logo_url'):
                     updates.append(('user_clear_logo_url', '', meta_id))
                 continue
             meta_type = row.get('metadata_type')
@@ -351,29 +358,31 @@ def plex_exclusive(section_id: int = 0, metadata_id: int = 0, reset: bool = Fals
                 if slug and slug != meta_slug:
                     P.logger.debug(f"{meta_title} ({meta_year}): {slug=} {plex_metadata.get('title')} ({plex_metadata.get('year')})")
                     updates.append(('slug', slug, meta_id))
-                clear_logo = None
-                if tmdb_guids := [g.get('id') for g in plex_metadata.get('Guid') or () if (g.get('id') or '').startswith("tmdb")]:
-                    try:
-                        tmdb_id = int(tmdb_guids[0].split("://")[-1])
-                        from support_site.site_tmdb import tmdbsimple, SiteTmdb
-                        tmdb_class = tmdbsimple.Movies if meta_type == 1 else tmdbsimple.TV
-                        images = []
-                        SiteTmdb._process_image(tmdb_class(tmdb_id), images)
-                        for art in sorted(images, key=lambda k: k.get('score') or 0, reverse=True):
-                            if art.get('aspect') == 'logo':
-                                clear_logo = art.get('value') or art.get('thumb')
-                                break
-                    except Exception as e:
-                        logger.error(f"TMDB 로고를 가져오지 못 했습니다: {str(e)}")
-                if not clear_logo:
-                    # 플렉스 로고는 영문일 확률이 높음
-                    images = plex_metadata.get('Image') or ()
-                    for image in images:
-                        if image.get('type') == 'clearLogo':
-                            clear_logo = image.get('url')
-                if clear_logo and clear_logo != meta_clear_logo:
-                    P.logger.debug(f"{meta_title} ({meta_year}): {clear_logo=}")
-                    updates.append(('user_clear_logo_url', clear_logo, meta_id))
+                # clear_logo는 에이전트 자체에서 업데이트 가능
+                if clear_logo:
+                    user_clear_logo_url = None
+                    if tmdb_guids := [g.get('id') for g in plex_metadata.get('Guid') or () if (g.get('id') or '').startswith("tmdb")]:
+                        try:
+                            tmdb_id = int(tmdb_guids[0].split("://")[-1])
+                            from support_site.site_tmdb import tmdbsimple, SiteTmdb
+                            tmdb_class = tmdbsimple.Movies if meta_type == 1 else tmdbsimple.TV
+                            images = []
+                            SiteTmdb._process_image(tmdb_class(tmdb_id), images)
+                            for art in sorted(images, key=lambda k: k.get('score') or 0, reverse=True):
+                                if art.get('aspect') == 'logo':
+                                    user_clear_logo_url = art.get('value') or art.get('thumb')
+                                    break
+                        except Exception as e:
+                            logger.error(f"TMDB 로고를 가져오지 못 했습니다: {str(e)}")
+                    if not user_clear_logo_url:
+                        # 플렉스 로고는 영문일 확률이 높음
+                        images = plex_metadata.get('Image') or ()
+                        for image in images:
+                            if image.get('type') == 'clearLogo':
+                                user_clear_logo_url = image.get('url')
+                    if user_clear_logo_url and user_clear_logo_url != meta_clear_logo:
+                        P.logger.debug(f"{meta_title} ({meta_year}): {user_clear_logo_url=}")
+                        updates.append(('user_clear_logo_url', user_clear_logo_url, meta_id))
             except Exception as e:
                 P.logger.error(f"{meta_id=} error='{str(e)}'")
         

@@ -41,10 +41,11 @@ class ModuleTool(PluginModuleBase):
                 metadata_id = req.args.get('metadata_id', 0, type=int)
                 reset = req.args.get('reset', False, type=str_to_bool)
                 manual = req.args.get('manual', False, type=str_to_bool)
+                clear_logo = req.args.get('clear_logo', False, type=str_to_bool)
                 allowed_sections = []
                 if not manual:
-                    allowed_sections = [int(s) for s in re.split(r'\W', P.ModelSetting.get('scan_plex_exclusive_sections')) if s.isdigit()]
-                plex_exclusive.delay(section_id=section_id, metadata_id=metadata_id, reset=reset, manual=manual, allowed_sections=allowed_sections)
+                    allowed_sections = [int(s) for s in re.split(r'\W', P.ModelSetting.get('tool_simple_plex_exclusive_sections')) if s.isdigit()]
+                plex_exclusive.delay(section_id=section_id, metadata_id=metadata_id, reset=reset, manual=manual, allowed_sections=allowed_sections, clear_logo=clear_logo)
                 return "작업을 시작했습니다.", 200
             except Exception:
                 logger.exception(f"path='{sub}'")
