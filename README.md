@@ -12,6 +12,26 @@
   * 스캔
 
 ## Changelog
+- 1.2.34 (2026.03.28)
+    - DB 툴: Plex slug 및 clear logo 업데이트 추가
+        - API endpoint: `/plex_mate/api/tool/plex_exclusive`
+        - 파라미터:
+            - metadata_id: 특정 메타데이터를 업데이트
+            - section_id: 라이브러리 섹션 전체를 업데이트 (metadata_id가 있으면 무시)
+            - reset: 기존의 slug 및 clear logo 제거 [true|false] (기본값: false)
+            - manual: true 설정시 `API 요청시 적용 라이브러리` 설정을 무시 [true|false] (기본값: false)
+            - clear_logo: clear logo 업데이트 포함 여부 [true|false] 기본값: false
+        - API는 SJVA 에이전트에서 slug 업데이트시 사용
+    - 스캔: 스캔 완료후 메타데이터 새로고침
+        - 플렉스 에이전트: 항상 새로고침
+        - SJVA 에이전트: 설정에 따라 새로고침
+    - 파일정리: 구드공 CDN 업로드 방지
+    - 파일정리: Metadata 번들 3단계 버튼 버그 수정
+    - 파일정리: XML 파일에서 고아 파일 항목을 제거하지 못하는 버그 수정
+    - 파일정리: 플렉스 에이전트 영화 라이브러리의 버그 수정
+    - 파일정리: 고아 파일 설정을 입력하지 않아도 기본값 적용되도록 수정
+    - 웹훅: 모바일 중복 캐싱 문제 수정
+
 - 1.2.33 (2026.01.11)
     - 파일 정리: 플렉스 에이전트 라이브러리 관련 수정
         - 파생 시즌의 정보를 원본 시즌으로부터 취합
