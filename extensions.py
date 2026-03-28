@@ -76,7 +76,7 @@ def get_scan_targets(target: str, section_id: int | str = None) -> dict[str, int
         return targets
 
 
-def rc_command(function: callable) -> callable:
+def rc_command(function: Callable) -> Callable:
     @functools.wraps(function)
     def wrapper(*args: tuple, **kwds: dict) -> dict:
         data = function(*args, **kwds)
@@ -178,7 +178,7 @@ def vfs__forget(server: dict, remote_path: str, is_file: bool = False) -> dict:
     return data
 
 
-def with_servers(function: callable) -> callable:
+def with_servers(function: Callable) -> Callable:
     @functools.wraps(function)
     def wrapper(target: str, *args: tuple, **kwds: dict) -> dict:
         if not kwds.get('server'):
@@ -258,7 +258,7 @@ def request(method: str, url: str, data: Optional[dict] = None, timeout: Union[i
         return response
 
 
-def plex_api(func: callable) -> callable:
+def plex_api(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(*args: tuple, **kwds: dict) -> dict[str, Any]:
         params: dict = func(*args, **kwds)
@@ -602,7 +602,7 @@ def start_trash_task(task: dict) -> tuple[bool, str]:
                 plex_empty(task.get('section_id'))
         else:
             msg = f'작업 대상이 없습니다: {task}'
-            P.loggger.error(msg)
+            P.logger.error(msg)
             return False, msg
         msg = f'작업이 끝났습니다: task={task}'
         P.logger.info(msg)
@@ -654,8 +654,8 @@ def start_trash_schedule() -> tuple[bool, str]:
 
 class ThreadHasReturn(Thread):
 
-    def __init__(self, group=None, target: callable = None, name: str = None, args: tuple | list = (),
-                 kwargs: dict = {}, daemon: bool = None, callback: callable = None) -> None:
+    def __init__(self, group=None, target: Callable = None, name: str = None, args: tuple | list = (),
+                 kwargs: dict = None, daemon: bool = None, callback: Callable = None) -> None:
         Thread.__init__(self, group, target, name, args, kwargs, daemon=daemon)
         self._return = None
         self.callback = callback
@@ -699,7 +699,7 @@ class Base:
     def prerender(self, sub: str, req: flask.Request) -> None:
         self.set_recent_menu(req)
 
-    def run_async(self, func: callable, args: tuple = (), kwargs: dict = {}, **opts) -> None:
+    def run_async(self, func: Callable, args: tuple = (), kwargs: dict = {}, **opts) -> None:
         if celery_is_available():
             P.logger.debug(f'Run by celery: {func.__name__}()')
             result = func.apply_async(args=args, kwargs=kwargs, **opts)
@@ -723,13 +723,13 @@ class Base:
             return flask.jsonify(data)
 
     def parse_command(self, request: flask.Request) -> dict[str, Any]:
-        query = urllib.parse.parse_qs(request.form.get('arg1'), keep_blank_values=True)
+        query = urllib.parse.parse_qs(request.form.get('arg1') or '', keep_blank_values=True)
         return {
             'command': request.form.get('command'),
             'query': query,
         }
 
-    def command_default(self, request: flask.Request) -> tuple[bool, str]:
+    def command_default(self, request: flask.Request) -> dict:
         data = self.returns('danger', title='Flaskfarmaider')
         data['msg'] = '아직 구현되지 않았습니다.'
         return data
@@ -737,7 +737,7 @@ class Base:
     def returns(self, success: str, msg: str = None, title: str = None, modal: str = None, json: dict = None, reload: bool = False, data: dict = None) -> dict:
         return {'ret': success, 'msg': msg, 'title': title, 'modal': modal, 'json': json, 'reload': reload, 'data': data}
 
-    def _migration(self, version_key: str, table: str, migrate_func: callable) -> None:
+    def _migration(self, version_key: str, table: str, migrate_func: Callable) -> None:
         version = P.ModelSetting.get(version_key) or self._DB_VERSIONS[0]
         P.logger.debug(f'{table} 현재 DB 버전: {version}')
         with F.app.app_context():
@@ -904,7 +904,7 @@ class TrashPage(ExtPageBase):
             args['plex_sections'] = {}
         return args
 
-    def check_status(func: callable) -> callable:
+    def check_status(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrap(*args, **kwds) -> dict:
             status = P.ModelSetting.get('scan_trash_task_status')
