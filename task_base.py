@@ -343,10 +343,18 @@ def plex_exclusive(
                 #P.logger.info(f"{meta_id=} {meta_code=} {meta_title=} {meta_year=} {meta_agent=}")
                 # 기본 에이전트로 검색
                 search_title = f"tmdb-{meta_code[2:]}" if meta_code.startswith(("FT", "MT")) else meta_title
-                matches = PlexWebHandle.get_matches(meta_id, search_title, meta_year, agent=meta_agent)
+                matches = PlexWebHandle.get_matches(search_title, year=meta_year, meta_id=meta_id, provider=meta_agent)
                 if not matches:
                     continue
-                sr = matches[0]
+                sr = None
+                if len(matches) > 1:
+                    # discover의 검색과 비교
+                    discover_matches = PlexWebHandle.get_matches(meta_title, provider='discover', meta_type=meta_type)
+                    if discover_matches:
+                        discover_guids = {(d.get('Metadata') or {}).get('guid') for d in discover_matches}
+                        sr = next((m for m in matches if m.get('guid') in discover_guids), None)
+                if not sr:
+                    sr = matches[0]
                 sr_type = sr.get('type')
                 if (meta_type == 1 and sr_type != 'movie') or (meta_type == 2 and sr_type != 'show'):
                     continue
@@ -384,7 +392,7 @@ def plex_exclusive(
                         P.logger.debug(f"{meta_title} ({meta_year}): {user_clear_logo_url=}")
                         updates.append(('user_clear_logo_url', user_clear_logo_url, meta_id))
             except Exception as e:
-                P.logger.error(f"{meta_id=} error='{str(e)}'")
+                P.logger.exception(f"{meta_id=} error='{str(e)}'")
         
         if updates:
             try:

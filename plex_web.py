@@ -225,17 +225,30 @@ class PlexWebHandle(object):
             return {'ret': 'error', 'msg': f'TMDB 갱신 중 오류: {e}'}
 
     @classmethod
-    def get_matches(cls, meta_id: int, title: str, year: int = 1900, agent: str = "tv.plex.agents.movie", lang: str = "ko-KR") -> list | None:
-        url = f"{P.ModelSetting.get('base_url')}/library/metadata/{meta_id}/matches?manual=1&title={title}&year={year}&agent={agent}&language={lang}"
+    def get_matches(cls, title: str, year: int = 1900, provider: str = "tv.plex.agents.movie", meta_id: int = 0, meta_type: int = 1, lang: str = "ko-KR") -> list | None:
+        quoted_title = urllib.parse.quote(title)
+        if provider == 'discover':
+            search_type = 'movies' if meta_type == 1 else 'tv'
+            url = f"https://discover.provider.plex.tv/library/search?searchTypes={search_type}&searchProviders=discover&includeMetadata=1&filterPeople=1&limit=10&query={quoted_title}"
+            headers = {'accept': 'application/json'}
+        else:
+            url = f"{P.ModelSetting.get('base_url')}/library/metadata/{meta_id}/matches?manual=1&title={quoted_title}&year={year}&agent={provider}&language={lang}"
+            headers = {'x-plex-token': P.ModelSetting.get('base_token'), 'accept': 'application/json'}
         try:
-            response = requests.get(url, headers={'X-Plex-Token': P.ModelSetting.get('base_token'), 'Accept': 'application/json'})
+            response = requests.get(url, headers=headers)
             if response.status_code == 200:
                 data = response.json()
-                return (data.get('MediaContainer') or {}).get('SearchResult') or []
+                media_container = data.get('MediaContainer') or {}
+                if provider == 'discover':
+                    results = media_container.get('SearchResults')
+                    if results:
+                        return results[0].get('SearchResult') or []
+                else:
+                    return media_container.get('SearchResult') or []
             else:
                 P.logger.error(f"매칭 검색 결과를 가져올 수 없습니다: status={response.status_code}")
         except Exception:
-            P.logger.exception(f"{meta_id=} {title=} {year=}")
+            P.logger.exception(f"{title=} {year=} {provider=} {meta_id=}")
 
     @classmethod
     def get_metadata(cls, guid) -> dict | None:
