@@ -21,6 +21,7 @@
             - reset: 기존의 slug 및 clear logo 제거 [true|false] (기본값: false)
             - manual: true 설정시 `API 요청시 적용 라이브러리` 설정을 무시 [true|false] (기본값: false)
             - clear_logo: clear logo 업데이트 포함 여부 [true|false] 기본값: false
+            - only_tmdb: TMDB 메타만 적용 [true|false] 기본값: false
         - API는 SJVA 에이전트에서 slug 업데이트시 사용
     - 스캔: 스캔 완료후 메타데이터 새로고침
         - 플렉스 에이전트: 항상 새로고침
