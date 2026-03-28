@@ -282,7 +282,8 @@ def plex_exclusive(
     reset: bool = False, 
     manual: bool = False, 
     allowed_sections: tuple = (), 
-    clear_logo: bool = False
+    clear_logo: bool = False,
+    only_tmdb: bool = False
 ) -> None:
     if not section_id and not metadata_id:
         logger.error('라이브러리 혹은 메타데이터 ID를 입력해 주세요.')
@@ -341,8 +342,11 @@ def plex_exclusive(
                 meta_guid_parts = meta_guid_path.split("/")
                 meta_code, _, _ = (meta_guid_parts + [None, None])[:3]
                 #P.logger.info(f"{meta_id=} {meta_code=} {meta_title=} {meta_year=} {meta_agent=}")
+                is_tmdb = meta_code.startswith(("FT", "MT"))
+                if only_tmdb and not is_tmdb:
+                    continue
                 # 기본 에이전트로 검색
-                search_title = f"tmdb-{meta_code[2:]}" if meta_code.startswith(("FT", "MT")) else meta_title
+                search_title = f"tmdb-{meta_code[2:]}" if is_tmdb else meta_title
                 matches = PlexWebHandle.get_matches(search_title, year=meta_year, meta_id=meta_id, provider=meta_agent)
                 if not matches:
                     continue
