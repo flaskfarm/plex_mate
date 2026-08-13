@@ -39,6 +39,9 @@ class ModelScanItem(ModelBase):
 
     filecheck_count = db.Column(db.Integer)
     mediapart_id = db.Column(db.String)
+    # 샤이니 대상 실행 상태(F-4: 대상별 독립) — RUNNING/FINISH/FAILED/ERROR/SKIP/NOT_FIND_LIBRARY
+    shyni_status = db.Column(db.String)
+    shyni_job_id = db.Column(db.String)
     #metadata_title = db.Column(db.String)
     #metadata_type = db.Column(db.String)
     #metadata_item_id = db.Column(db.String)
