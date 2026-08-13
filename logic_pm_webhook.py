@@ -55,6 +55,10 @@ class LogicPMWebhook(PluginModuleBase):
         'intro_json_file_path': '',
         'intro_sync_auto_start': 'False',
         'intro_sync_interval': '60',
+        'intro_shyni_use': 'False',
+        'intro_shyni_url': '',
+        'intro_shyni_token': '',
+        'intro_shyni_sections': '',
         'basic_db_delete_day': '30',
         'basic_db_auto_delete': 'False',
         }
@@ -65,6 +69,7 @@ class LogicPMWebhook(PluginModuleBase):
         global webhook_instance
         webhook_instance = self
         self.name = 'webhook'
+        self.migration()
         self.cleanup_old_ignored_entries()
         self.sqlite_bin = P.ModelSetting.get('base_bin_sqlite')
         self.plex_db = P.ModelSetting.get('base_path_db')
@@ -115,6 +120,27 @@ class LogicPMWebhook(PluginModuleBase):
             return jsonify({'status': 'invalid'})
 
 
+    def migration(self):
+        # webhook_intro_history에 target 컬럼 보장 (plex/shyni 구분).
+        # 버전 문자열 대신 실제 컬럼 존재로 판단 — 경로 오해석/이중 호출에도 멱등.
+        # binds URL 문자열 파싱 금지: 상대경로 sqlite URL이면 엉뚱한(빈) DB를 열게 된다.
+        try:
+            from sqlalchemy import inspect, text
+            with F.app.app_context():
+                engine = db.engines[package_name] if hasattr(db, 'engines') else db.get_engine(F.app, bind=package_name)
+                insp = inspect(engine)
+                if 'webhook_intro_history' in insp.get_table_names():
+                    cols = [c['name'] for c in insp.get_columns('webhook_intro_history')]
+                    if 'target' not in cols:
+                        with engine.begin() as conn:
+                            conn.execute(text('ALTER TABLE webhook_intro_history ADD target VARCHAR'))
+                        logger.info('[Webhook] migration: webhook_intro_history.target 컬럼 추가')
+                if P.ModelSetting.get('webhook_db_version') != '2':
+                    P.ModelSetting.set('webhook_db_version', '2')
+        except Exception as e:
+            logger.error(f'[Webhook] migration 오류: {e}')
+            logger.error(traceback.format_exc())
+
     def process_menu(self, sub, req):
         arg = P.ModelSetting.to_dict()
         arg['sub'] = self.name
@@ -144,6 +170,7 @@ class LogicPMWebhook(PluginModuleBase):
                 page = int(req.args.get('page', 1))
                 section_id = req.args.get('section_id', '').strip()
                 status = req.args.get('status', '').strip()
+                target = req.args.get('target', '').strip()
                 per_page = 20
                 offset = (page - 1) * per_page
 
@@ -153,6 +180,11 @@ class LogicPMWebhook(PluginModuleBase):
                     query = query.filter(ModelWebhookIntroHistory.section_id == int(section_id))
                 if status:
                     query = query.filter(ModelWebhookIntroHistory.status == status)
+                if target == 'plex':
+                    # 기존 행은 target NULL — plex로 간주
+                    query = query.filter((ModelWebhookIntroHistory.target == None) | (ModelWebhookIntroHistory.target == 'plex'))
+                elif target:
+                    query = query.filter(ModelWebhookIntroHistory.target == target)
 
                 query = query.order_by(
                     ModelWebhookIntroHistory.id.desc() if order == 'desc' else ModelWebhookIntroHistory.id.asc()
@@ -195,7 +227,7 @@ class LogicPMWebhook(PluginModuleBase):
                     celery_intro_sync.delay(manual=True, dry_run=dry_run)
                     msg = '인트로 마커 동기화 작업을 백그라운드에서 시작했습니다.'
                 else:
-                    TaskIntroSync({'manual': True, 'dry_run': dry_run}).process()
+                    TaskIntroSync(manual=True, dry_run=dry_run).process()
                     msg = '인트로 마커 일괄 동기화 작업을 완료했습니다.'
 
                 new_history = ModelWebhookIntroHistory(section_id=None, file_path='', status='MANUAL')
@@ -792,9 +824,10 @@ class ModelWebhookIntroHistory(ModelBase):
     created_time = Column(DateTime, default=datetime.now)
     section_id = Column(Integer)
     file_path = Column(String)
-    status = Column(String)  
-    file_hash = Column(String)  
-    file_size = Column(Integer) 
+    status = Column(String)
+    file_hash = Column(String)
+    file_size = Column(Integer)
+    target = Column(String)  # plex(기본, 기존 행 NULL=plex) | shyni
 
     def as_dict(self):
         return {
@@ -804,7 +837,8 @@ class ModelWebhookIntroHistory(ModelBase):
             'file_path': self.file_path,
             'status': self.status,
             'file_hash': self.file_hash,
-            'file_size': self.file_size
+            'file_size': self.file_size,
+            'target': self.target or 'plex'
         }
 
 ModelWebhookIntroHistory.P = P
