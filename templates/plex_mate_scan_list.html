@@ -111,7 +111,19 @@ function make_list(data) {
     else if (data[i].status == 'FINISH_ALREADY_IN_QUEUE') tmp += text_color("큐에 이미 있음", 'blue');
     else if (data[i].status == 'FINISH_NOT_FIND_LIBRARY') tmp += text_color("라이브러리 폴더 ✖️", 'red');
     else if (data[i].status == 'FINISH_TIMEOVER') tmp += "대기시간 오버";
+    else if (data[i].status == 'FINISH_SHYNI') tmp += text_color("샤이니 완료", 'blue');
+    else if (data[i].status == 'FINISH_SHYNI_FAILED') tmp += text_color("샤이니 실패", 'red');
     else tmp += data[i].status;
+    if (data[i].shyni_status != null && data[i].shyni_status != '') {
+      tmp += '<br>샤이니 : ';
+      if (data[i].shyni_status == 'FINISH') tmp += text_color("완료", 'blue');
+      else if (data[i].shyni_status == 'RUNNING' || data[i].shyni_status == 'REQUESTED') tmp += "진행 중";
+      else if (data[i].shyni_status == 'FAILED' || data[i].shyni_status == 'ERROR') tmp += text_color("실패", 'red');
+      else if (data[i].shyni_status == 'NOT_FIND_LIBRARY') tmp += text_color("라이브러리 폴더 ✖️", 'red');
+      else if (data[i].shyni_status == 'NOT_FIND_IN_LIBRARY') tmp += text_color("항목 없음", 'red');
+      else if (data[i].shyni_status == 'SKIP') tmp += "설정 미완료";
+      else tmp += data[i].shyni_status;
+    }
 
 
     //str += j_col(1, data[i].mode);
