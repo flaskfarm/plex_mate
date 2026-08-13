@@ -38,6 +38,13 @@
       {{ macros.setting_input_text_and_buttons('scan_timeover_reset_range', '타임오버 항목 재설정', [['scan_timeover_reset_range_btn', '지금 실행']], value=arg['scan_timeover_reset_range'], desc=['이 ID 범위의 항목 중 FINISH_TIMEOVER 처리된 항목을 다시 READY로 변경', '형식: 시작ID~끝ID', '예시 : 100~110 (100, 101, 102 ... 107, 108, 109, 110)']) }}
       {{ macros.setting_checkbox('scan_refresh_after_scanning', '스캔 완료후 메타데이터 새로고침', value=arg['scan_refresh_after_scanning'], desc=['스캐너가 자동으로 메타데이터를 업데이트할 수 없는 경우 사용(Plex와 FF의 NIC가 다를 경우)', 'On: 웹으로 메타데이터 업데이트 요청', 'Off: 요청 안 함(중복 업데이트 방지)']) }}
 
+      {{ macros.setting_checkbox('scan_plex_use', 'PLEX 스캔 사용', value=arg['scan_plex_use'], desc=['OFF: Plex 스캔/파일체크를 건너뛰고 샤이니에만 보냅니다(샤이니 단독 모드).', '완료 판정과 GDS callback은 샤이니 job 결과로 처리됩니다.']) }}
+
+      {{ macros.setting_checkbox('scan_shyni_use', '샤이니 연동 사용', value=arg['scan_shyni_use'], desc=['ON: 스캔/삭제/REFRESH 이벤트를 샤이니 서버에도 분기합니다.', 'Plex 처리와 독립 동작 — 주소/토큰은 웹훅 설정의 샤이니 항목을 공유합니다.', '파일이 마운트에 안 보이면 샤이니 서버가 자체 refresh 후 대기하므로 즉시 전송됩니다.', 'GDS 원문에 ffprobe 자료가 있으면 함께 전달해 샤이니 분석을 생략시킵니다.']) }}
+      <div id="scan_shyni_div" style="display: none;">
+        {{ macros.setting_input_textarea('scan_shyni_path_rule', '샤이니 경로 매핑', col='12', row='3', value=arg['scan_shyni_path_rule'], desc=['plex_mate 경로|샤이니 경로 — 줄 단위', '예: /mnt/gds2/GDRIVE|/media/GDRIVE', '빈칸이면 경로 그대로 전달']) }}
+      </div>
+
       
 
       {{ macros.m_hr() }}
@@ -62,6 +69,8 @@ $(document).ready(function(){
   use_collapse("scan_use_vfs_refresh");
   toggleSectionVisibility('scan_use_web_request', 'scan_use_web_request_div');
   $('#scan_use_web_request').change(() => toggleSectionVisibility('scan_use_web_request', 'scan_use_web_request_div'));
+  toggleSectionVisibility('scan_shyni_use', 'scan_shyni_div');
+  $('#scan_shyni_use').change(() => toggleSectionVisibility('scan_shyni_use', 'scan_shyni_div'));
   $('#load_web_sections_btn').click(function(e){
     e.preventDefault();
     requestLibrarySections('scan_web_sections', 'scan_web_sections_result');
