@@ -8,6 +8,7 @@ from .plex_bin_scanner import PlexBinaryScanner
 from .plex_db import PlexDBHandle
 from .plex_web import PlexWebHandle
 from .setup import *
+from .shyni_backend import ShyniBackend
 from .task_base import plex_exclusive
 
 name = 'scan'
@@ -62,6 +63,13 @@ class Task:
                     if item.mode == 'ADD':
                         item.filecheck_count += 1
                         now = datetime.now()
+                        # 샤이니 대상 분기(F절) — FF 마운트의 파일 존재/Plex 준비와 무관하게
+                        # 즉시 요청. 파일이 안 보이면 샤이니 서버가 자체적으로 부모 폴더를
+                        # non-recursive refresh 하며 대기한다(mode=add + wait).
+                        ShyniBackend.request_scan(item)
+                        if not P.ModelSetting.get_bool('scan_plex_use'):
+                            ShyniBackend.finalize_plex_off(item)
+                            continue
                         if item.section_id == None:
                             section_info = PlexDBHandle.get_section_info_by_filepath(item.target)
                             if section_info != None:
@@ -157,6 +165,11 @@ class Task:
                     elif item.mode == 'REFRESH':
                         item.filecheck_count += 1
                         now = datetime.now()
+                        # 샤이니 대상 refresh — Plex 처리와 독립, 존재 게이트 없이 요청
+                        ShyniBackend.request_refresh(item)
+                        if not P.ModelSetting.get_bool('scan_plex_use'):
+                            ShyniBackend.finalize_plex_off(item)
+                            continue
                         if item.section_id == None:
                             section_info = PlexDBHandle.get_section_info_by_filepath(item.target)
                             if section_info != None:
@@ -188,6 +201,11 @@ class Task:
                     elif item.mode in ['REMOVE_FILE', 'REMOVE_FOLDER']:
                         item.filecheck_count += 1
                         now = datetime.now()
+                        # 샤이니 대상 분기 — 삭제도 서버별 독립 작업(F-4)
+                        ShyniBackend.request_scan(item)
+                        if not P.ModelSetting.get_bool('scan_plex_use'):
+                            ShyniBackend.finalize_plex_off(item)
+                            continue
                         if item.section_id == None:
                             section_info = PlexDBHandle.get_section_info_by_filepath(item.target)
                             if section_info != None:
@@ -230,6 +248,8 @@ class Task:
             if max_scan_time > 0:
                 scannings = ModelScanItem.get_list_by_status('SCANNING')
                 check_scanning(scannings, max_scan_time)
+            # 샤이니 대상 job 상태 확정(F-4) — 주기당 1회 폴링
+            ShyniBackend.poll_running()
             #P.logger.warning("파일체크 대기")
             for i in range(P.ModelSetting.get_int(f"{name}_filecheck_thread_interval")):
                 time.sleep(1)
