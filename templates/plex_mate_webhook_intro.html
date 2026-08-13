@@ -19,6 +19,12 @@
         <option value="LOCAL">LOCAL</option>
       </select>
 
+      <select id="intro_filter_target" class="form-control form-control-sm" style="width: auto;">
+        <option value="">전체 대상</option>
+        <option value="plex" selected>Plex</option>
+        <option value="shyni">샤이니</option>
+      </select>
+
       <button id="intro_history_refresh_btn" class="btn btn-sm btn-secondary">새로고침</button>
     </div>
   </div>
@@ -60,6 +66,7 @@ function loadIntroHistory(page = 1) {
 
   const order = $('#intro_order').val();
   const status = $('#intro_filter_status').val();
+  const target = $('#intro_filter_target').val();
 
   const rawSectionId = $('#intro_filter_section').val();
   const sectionId = rawSectionId ? parseInt(rawSectionId) : '';
@@ -71,6 +78,7 @@ function loadIntroHistory(page = 1) {
       order: order,
       section_id: sectionId,
       status: status,
+      target: target,
       page: page
     },
     dataType: 'json',
@@ -81,6 +89,10 @@ function loadIntroHistory(page = 1) {
         for (let item of res.data) {
           html += '<div class="card mb-2 p-2">';
           html += `<div><strong>시간:</strong> ${item.created_time}</div>`;
+          const targetLabel = item.target === 'shyni'
+            ? '<span class="badge bg-info text-dark">샤이니</span>'
+            : '<span class="badge bg-warning text-dark">Plex</span>';
+          html += `<div><strong>대상:</strong> ${targetLabel}</div>`;
           html += `<div><strong>섹션 ID:</strong> ${item.section_id}</div>`;
           let colorClass = item.status === 'LOCAL' ? 'text-danger' : 'text-primary';
           html += `<div><strong>상태:</strong> <span class="${colorClass} fw-bold">${item.status}</span></div>`;
@@ -187,7 +199,7 @@ $('#scrollTopBtn').on('click', function () {
   $('html, body').animate({ scrollTop: 0 }, 400);
 });
 
-$('#intro_order, #intro_filter_section, #intro_filter_status').change(function() {
+$('#intro_order, #intro_filter_section, #intro_filter_status, #intro_filter_target').change(function() {
   loadIntroHistory(1);  
 });
 
