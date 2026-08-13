@@ -33,9 +33,32 @@ class ModuleScan(PluginModuleBase):
             f"{self.name}_max_scan_time": "60",
             f"{self.name}_timeover_reset_range": "0~0",
             f"{self.name}_refresh_after_scanning": "True",
+            f"{self.name}_plex_use": "True",
+            f"{self.name}_shyni_use": "False",
+            f"{self.name}_shyni_path_rule": "",
         }
         self.web_list_model = ModelScanItem
         self.set_page_list([BrowserPage, TrashPage])
+
+    def migration(self):
+        # scan_item에 샤이니 대상 상태 컬럼 보장 — 실제 컬럼 존재로 판단(멱등).
+        # binds URL 문자열 파싱 금지(웹훅 migration에서 상대경로 오해석 전례).
+        try:
+            from sqlalchemy import inspect, text
+            with F.app.app_context():
+                engine = F.db.engines[P.package_name] if hasattr(F.db, 'engines') else F.db.get_engine(F.app, bind=P.package_name)
+                insp = inspect(engine)
+                if 'scan_item' in insp.get_table_names():
+                    cols = [c['name'] for c in insp.get_columns('scan_item')]
+                    with engine.begin() as conn:
+                        if 'shyni_status' not in cols:
+                            conn.execute(text('ALTER TABLE scan_item ADD shyni_status VARCHAR'))
+                        if 'shyni_job_id' not in cols:
+                            conn.execute(text('ALTER TABLE scan_item ADD shyni_job_id VARCHAR'))
+                    if 'shyni_status' not in cols:
+                        P.logger.info('[Scan] migration: scan_item.shyni_status/shyni_job_id 컬럼 추가')
+        except Exception as e:
+            P.logger.error(f'[Scan] migration 오류: {e}')
 
 
     def process_command(self, command, arg1, arg2, arg3, req):
