@@ -84,7 +84,7 @@
         <div id="cache_preview_sections_result" class="mt-2 ps-2"></div>
       </div>
 
-      {{ macros.setting_checkbox('webhook_use_intro_marker', '인트로 마커 사용', value=arg['webhook_use_intro_marker']) }}
+      {{ macros.setting_checkbox('webhook_use_intro_marker', 'PLEX 인트로 마커 사용', value=arg['webhook_use_intro_marker'], desc=['OFF : 인트로 일괄 실행 시 PLEX 대상은 건너뜁니다. (샤이니 연동은 독립 동작)']) }}
       <div id="webhook_use_intro_marker_div" style="display: none;">
         {{ macros.setting_input_text_and_buttons('intro_library_sections', '인트로 대상 섹션 ID', [['load_intro_sections_btn', '라이브러리 조회']], value=arg['intro_library_sections'], desc=['쉼표로 구분, 빈칸 시 전체']) }}
         <div id="intro_sections_result" class="mt-2 ps-2"></div>
@@ -94,8 +94,16 @@
         {{ macros.setting_input_text_and_buttons('intro_copy_sections', '마커 복사용 SECTION ID', [['load_intro_copy_sections_btn', '라이브러리 조회']], value=arg.get('intro_copy_sections', ''), desc=['쉼표로 구분, 빈칸 시 전체']) }}
         <div id="intro_copy_sections_result" class="mt-2 ps-2"></div>
         </div>
-        
+
       </div>
+
+      {{ macros.setting_checkbox('intro_shyni_use', '샤이니 연동 사용', value=arg['intro_shyni_use'], desc=['ON : 인트로 동기화 시 샤이니 서버에도 마커를 반영합니다.']) }}
+      <div id="intro_shyni_div" style="display: none;">
+        {{ macros.setting_input_text('intro_shyni_url', '샤이니 주소', value=arg['intro_shyni_url'], desc=['예: http://192.168.0.5:8000']) }}
+        {{ macros.setting_input_text('intro_shyni_token', '샤이니 API 토큰', value=arg['intro_shyni_token'], desc=['샤이니 api_keys에 등록된 토큰 (X-Plex-Token으로 전송)']) }}
+        {{ macros.setting_input_text('intro_shyni_sections', '샤이니 대상 섹션 ID', value=arg['intro_shyni_sections'], desc=['샤이니 라이브러리(물리 Section) ID, 쉼표로 구분, 빈칸 시 전체', 'Plex 섹션 ID와 다른 값입니다']) }}
+      </div>
+
       {{ macros.setting_checkbox('yaml_force_credits', 'yaml 크레딧 강제 적용', value=arg['yaml_force_credits'], desc=['ON : yaml 정보 항상 사용, OFF : 없을 때만 사용']) }}
       {{ macros.setting_input_textarea('plex_server_uuid', '허용 Plex 서버 UUID', value=arg['plex_server_uuid'], row='4', desc=['Preferences.xml 파일의 MachineIdentifier 값', '빈칸 시 모두 허용', '구분자 엔터']) }}
       {{ macros.setting_input_textarea('directory_mapping', '경로 매핑', value=arg['directory_mapping'], row='4', desc=['앞쪽 경로를 뒤쪽 경로로 바꿉니다.', '예시: /mnt/gds2:/data/plex_source','구분자 엔터']) }}
@@ -158,8 +166,10 @@ $(document).ready(function(){
   toggleSectionVisibility('webhook_use_full', 'webhook_use_full_div');
   toggleSectionVisibility('webhook_use_preview', 'webhook_use_preview_div');
   toggleSectionVisibility('webhook_use_intro_marker', 'webhook_use_intro_marker_div');
+  toggleSectionVisibility('intro_shyni_use', 'intro_shyni_div');
   toggleIntroCopySection();
 
+  $('#intro_shyni_use').change(() => toggleSectionVisibility('intro_shyni_use', 'intro_shyni_div'));
   $('#webhook_agent_meta_update').change(() => toggleSectionVisibility('webhook_agent_meta_update', 'webhook_agent_meta_update_div'));
   $('#webhook_title_sort').change(() => toggleSectionVisibility('webhook_title_sort', 'webhook_title_sort_div'));
   $('#webhook_use_full').change(() => toggleSectionVisibility('webhook_use_full', 'webhook_use_full_div'));
