@@ -115,14 +115,26 @@ function make_list(data) {
     else if (data[i].status == 'FINISH_SHYNI_FAILED') tmp += text_color("샤이니 실패", 'red');
     else tmp += data[i].status;
     if (data[i].shyni_status != null && data[i].shyni_status != '') {
-      tmp += '<br>샤이니 : ';
-      if (data[i].shyni_status == 'FINISH') tmp += text_color("완료", 'blue');
-      else if (data[i].shyni_status == 'RUNNING' || data[i].shyni_status == 'REQUESTED') tmp += "진행 중";
-      else if (data[i].shyni_status == 'FAILED' || data[i].shyni_status == 'ERROR') tmp += text_color("실패", 'red');
-      else if (data[i].shyni_status == 'NOT_FIND_LIBRARY') tmp += text_color("라이브러리 폴더 ✖️", 'red');
-      else if (data[i].shyni_status == 'NOT_FIND_IN_LIBRARY') tmp += text_color("항목 없음", 'red');
-      else if (data[i].shyni_status == 'SKIP') tmp += "설정 미완료";
-      else tmp += data[i].shyni_status;
+      if (data[i].shyni_status == 'NOT_FIND_LIBRARY') {
+        tmp += '<br><span style="white-space:nowrap; font-size:13px">'
+            + '샤이니 : '
+            + text_color("라이브러리 폴더 ✖️", 'red')
+            + '</span>';
+      } else {
+        tmp += '<br>샤이니 : ';
+        if (data[i].shyni_status == 'FINISH')
+          tmp += text_color("완료", 'blue');
+        else if (data[i].shyni_status == 'RUNNING' || data[i].shyni_status == 'REQUESTED')
+          tmp += "진행 중";
+        else if (data[i].shyni_status == 'FAILED' || data[i].shyni_status == 'ERROR')
+          tmp += text_color("실패", 'red');
+        else if (data[i].shyni_status == 'NOT_FIND_IN_LIBRARY')
+          tmp += text_color("항목 없음", 'red');
+        else if (data[i].shyni_status == 'SKIP')
+          tmp += "설정 미완료";
+        else
+          tmp += data[i].shyni_status;
+      }
     }
 
 
