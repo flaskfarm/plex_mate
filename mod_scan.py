@@ -72,7 +72,16 @@ class ModuleScan(PluginModuleBase):
             check_timeover(overs, arg1)
             ret['msg'] = '실행했습니다.'
         elif command == 'retry_scan':
-            ModelScanItem.get_by_id(arg1).set_status('READY', save=True)
+            item = ModelScanItem.get_by_id(arg1)
+            if item.mode == 'REFRESH':
+                # 이전 404/실패 결과가 재요청을 가로막지 않도록 초기화한다.
+                # 이미 실행 중인 샤이니 job은 중복 발사하지 않는다.
+                item.section_id = None
+                item.section_type = None
+                if item.shyni_status != 'RUNNING':
+                    item.shyni_status = None
+                    item.shyni_job_id = None
+            item.set_status('READY', save=True)
             ret['msg'] = 'READY로 변경합니다.'
         return jsonify(ret)
 
