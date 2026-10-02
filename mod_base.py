@@ -16,7 +16,7 @@ logger = P.logger
 class ModuleBase(PluginModuleBase):
     
     def __init__(self, P):
-        super(ModuleBase, self).__init__(P, name='base', first_menu='setting')
+        super(ModuleBase, self).__init__(P, name='base', first_menu='setting', scheduler_desc='Plex DB 자동 백업')
         self.db_default = {
             f'{self.name}_db_version' : '1',
             f'{self.name}_path_program' : '',
@@ -36,6 +36,9 @@ class ModuleBase(PluginModuleBase):
             f'{self.name}_bin_scanner_gid' : '0',
             f'{self.name}_machine' : '',
             f'{self.name}_agent_auto_update' : 'False',
+            f'{self.name}_auto_start' : 'False',
+            f'{self.name}_interval' : '0 4 * * *',
+            f'{self.name}_db_backup_max_count' : '7',
         }
 
 
@@ -63,6 +66,8 @@ class ModuleBase(PluginModuleBase):
         arg = P.ModelSetting.to_dict()
         arg['path_app'] = F.config['path_app'].replace('\\', '/')
         arg[f'{self.name}_path_config'] = ToolUtil.make_path(P.ModelSetting.get(f'{self.name}_path_config'))
+        arg['is_include'] = F.scheduler.is_include(self.get_scheduler_name())
+        arg['is_running'] = F.scheduler.is_running(self.get_scheduler_name())
         try:
             return render_template(f'{P.package_name}_{self.name}_{sub}.html', arg=arg)
         except Exception as e:
@@ -207,10 +212,14 @@ class ModuleBase(PluginModuleBase):
             return ret
         elif command == 'backup':
             if ret['ret'] == 'success':
-                noti_data = {'type':'info', 'msg' : f"경로 : {ret['target']}<br>복사하였습니다."}
+                msg = f"경로 : {ret['target']}<br>복사하였습니다."
+                if ret.get('removed'):
+                    msg += f"<br>오래된 백업 {len(ret['removed'])}개 삭제 완료."
+                noti_data = {'type':'info', 'msg' : msg}
             else:
                 noti_data = {'type':'danger', 'msg' : f"백업에 실패하였습니다.<br>{ret['log']}"}
             F.socketio.emit("notify", noti_data, namespace='/framework')
+            return ret
         elif command == 'clear':
             noti_data = {'type':'info', 'msg' : f"경로 : {ret['target']}<br>크기 : {ret['sizeh']}"}
             F.socketio.emit("notify", noti_data, namespace='/framework')
@@ -226,6 +235,30 @@ class ModuleBase(PluginModuleBase):
                 F.socketio.emit("modal", modal_data, namespace='/framework')  
         else:
             F.socketio.emit("notify", {'type': 'info', 'msg': f'작업을 완료했습니다: {command}'}, namespace='/framework')
+
+    def scheduler_function(self):
+        logger.info(f"[{self.P.package_name}] Plex DB 자동 백업 시작")
+        try:
+            db_path = P.ModelSetting.get(f'{self.name}_path_db')
+            if not db_path or not os.path.exists(db_path):
+                logger.error(f"[{self.P.package_name}] DB 경로가 올바르지 않거나 파일이 없습니다: {db_path}")
+                return
+            ret = self.task_interface2('backup', (db_path,))
+            logger.info(f"[{self.P.package_name}] Plex DB 자동 백업 완료: {ret}")
+        except Exception as e:
+            logger.error(f"[{self.P.package_name}] scheduler_function 예외: {str(e)}")
+            logger.error(traceback.format_exc())
+
+    def setting_save_after(self, change_list):
+        try:
+            if f'{self.name}_interval' in change_list:
+                if F.scheduler.is_include(self.get_scheduler_name()):
+                    F.scheduler.remove_job(self.get_scheduler_name())
+                    self.P.logic.scheduler_start(self.name)
+        except Exception as e:
+            logger.error(f"[{self.P.package_name}] setting_save_after 예외: {str(e)}")
+            logger.error(traceback.format_exc())
+
 
 
 

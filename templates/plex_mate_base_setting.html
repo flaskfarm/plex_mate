@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-{{ macros.m_button_group([['setting_save_btn', '설정 저장'], ['agent_update_btn', 'Agent Update']])}}
+{{ macros.m_button_group([['setting_save_btn', '설정 저장'], ['globalImmediatelyExecuteBtn', 'DB 백업 즉시 실행'], ['agent_update_btn', 'Agent Update']])}}
 {{ macros.m_row_start('5') }}
 {{ macros.m_row_end() }}
 
@@ -38,6 +38,11 @@
   <div id="base_backup_location_mode_div" class="collapse">
   {{ macros.setting_input_text_and_buttons('base_backup_location_manual', '백업 경로', [['select_base_backup_location_manual_btn', '경로 선택']], value=arg['base_backup_location_manual'], desc=['DB  파일 백업 폴더']) }}
   </div>
+  {{ macros.m_hr() }}
+  {{ macros.global_setting_scheduler_button(arg['is_include'], arg['is_running']) }}
+  {{ macros.setting_input_text('base_interval', '스케쥴링 실행 정보', value=arg['base_interval'], col='3', desc=['Interval(단위: 분)이나 Cron 설정 (예: 매일 새벽 4시 -> 0 4 * * *)']) }}
+  {{ macros.setting_checkbox('base_auto_start', '시작시 자동실행', value=arg['base_auto_start'], desc='On : 플러그인 시작 시 자동으로 스케쥴러에 등록됩니다.') }}
+  {{ macros.setting_input_int('base_db_backup_max_count', '백업 보관 개수', value=arg['base_db_backup_max_count'], min='0', desc=['보관할 최대 백업 파일 개수 (기본값: 7)', '0이면 개수 제한 없이 영구 보관', '최대 개수 초과 시 가장 오래된 백업 파일부터 자동 삭제']) }}
 {{ macros.m_tab_content_end() }}  
 
 {{ macros.m_tab_content_start('agent', false) }}
