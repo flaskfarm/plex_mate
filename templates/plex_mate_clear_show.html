@@ -22,6 +22,7 @@
   <div class="input-group col-sm" style="padding-left:0px; padding-top:5px">
     <div class="btn-group btn-group-sm flex-wrap mr-2" role="group" style="padding-left:5px; padding-top:0px">
       <button id="movie_stop_btn" class="btn btn-sm btn-outline-danger">중지</button>
+      <button id="show_start_all_btn" class="btn btn-sm btn-outline-success">1~3단계 순차 실행</button>
       <button id="movie_start0_btn" class="btn btn-sm btn-outline-warning">쇼별 메타 크기만 확인</button>
       <button id="movie_start1_btn" class="btn btn-sm btn-outline-info">1단계 시작</button>
       <button id="movie_start21_btn" class="btn btn-sm btn-outline-info">2-1단계 시작</button>
@@ -63,42 +64,105 @@
 <div id="list_div"></div>
 
 <script type="text/javascript">
+var STORAGE_KEY = 'pm_last_work_show';
+var initial_last_work = null;
+try {
+  var saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) initial_last_work = JSON.parse(saved);
+} catch(e) {}
+
+var seq_state = {
+  active: false,
+  step_idx: 0,
+  steps: ['start1', 'start21', 'start22', 'start3'],
+  step_names: {'start1': '1단계', 'start21': '2-1단계', 'start22': '2-2단계', 'start3': '3단계'},
+  section_name: '',
+  manual_step_name: '',
+  has_started_run: false,
+  last_work: initial_last_work
+};
+
+function save_last_work(work) {
+  seq_state.last_work = work;
+  try {
+    if (work) localStorage.setItem(STORAGE_KEY, JSON.stringify(work));
+  } catch(e) {}
+}
 
 $(document).ready(function(){
   socket_init();
+  if (seq_state.last_work) {
+    var badge_html = ` <span style="font-size:13px; font-weight:normal; margin-left:12px; color:#28a745; background:rgba(40,167,69,0.15); padding:3px 8px; border-radius:4px; border:1px solid rgba(40,167,69,0.3);"><i class="fa fa-check-circle"></i> 직전 완료: <strong>[${seq_state.last_work.section_name}] ${seq_state.last_work.step_name}</strong> (${seq_state.last_work.time}) / 삭제: ${color(humanFileSize(seq_state.last_work.remove_size))}</span>`;
+    $('#status_div').html('<h4>대기중' + badge_html + '</h4>');
+  }
+});
+
+function safe_notify(msg, type) {
+  try {
+    if (typeof $.notify === 'function') {
+      $.notify({message: msg}, {type: type || 'info'});
+    } else if (typeof notify === 'function') {
+      notify(msg, type);
+    }
+  } catch(e) {
+    console.log('[Notify]', msg);
+  }
+}
+
+function run_seq_step(step_idx) {
+  // 백엔드 순차 실행으로 대체됨
+}
+
+$("body").on('click', '#show_start_all_btn', function(e){
+  e.preventDefault();
+  var sec_name = $('#library_select option:selected').text() || '선택 라이브러리';
+  safe_notify(`<strong>[${sec_name}] 1~3단계 전체 순차 실행(서버 백엔드)</strong>을 시작합니다.<br>웹페이지를 닫아도 백그라운드에서 끝까지 자동 진행됩니다.`, 'success');
+  globalSendCommandPage('start_all', $('#library_select').val(), $('#dryrun').is(":checked"), $('#remove_orphans').is(":checked"));
 });
 
 $("body").on('click', '#movie_start0_btn', function(e){
   e.preventDefault();
+  seq_state.manual_step_name = '쇼별 메타 크기 확인';
   globalSendCommandPage('start0', $('#library_select').val(), $('#dryrun').is(":checked"), $('#remove_orphans').is(":checked"));
 });
 
 $("body").on('click', '#movie_start1_btn', function(e){
   e.preventDefault();
+  seq_state.section_name = $('#library_select option:selected').text();
+  seq_state.manual_step_name = '1단계';
   globalSendCommandPage('start1', $('#library_select').val(), $('#dryrun').is(":checked"), $('#remove_orphans').is(":checked"));
 });
 
 $("body").on('click', '#movie_start21_btn', function(e){
   e.preventDefault();
+  seq_state.section_name = $('#library_select option:selected').text();
+  seq_state.manual_step_name = '2-1단계';
   globalSendCommandPage('start21', $('#library_select').val(), $('#dryrun').is(":checked"), $('#remove_orphans').is(":checked"));
 });
+
 $("body").on('click', '#movie_start22_btn', function(e){
   e.preventDefault();
+  seq_state.section_name = $('#library_select option:selected').text();
+  seq_state.manual_step_name = '2-2단계';
   globalSendCommandPage('start22', $('#library_select').val(), $('#dryrun').is(":checked"), $('#remove_orphans').is(":checked"));
 });
 
 $("body").on('click', '#movie_start3_btn', function(e){
   e.preventDefault();
+  seq_state.section_name = $('#library_select option:selected').text();
+  seq_state.manual_step_name = '3단계';
   globalSendCommandPage('start3', $('#library_select').val(), $('#dryrun').is(":checked"), $('#remove_orphans').is(":checked"));
 });
 
 $("body").on('click', '#movie_start4_btn', function(e){
   e.preventDefault();
+  seq_state.manual_step_name = '4단계';
   globalSendCommandPage('start4', $('#library_select').val(), $('#dryrun').is(":checked"), $('#remove_orphans').is(":checked"));
 });
 
 $("body").on('click', '#movie_stop_btn', function(e){
   e.preventDefault();
+  safe_notify('사용자에 의해 작업이 중지 요청되었습니다.', 'warning');
   globalSendCommandPage('stop');
 });
 
@@ -106,7 +170,6 @@ $("body").on('click', '#movie_stop_btn', function(e){
 
 
 function make_one(data) {
-  console.log(data);
   row = j_row_start_hover();
   row += make_log("제목", data.db.title);
   row += make_log("HASH / GUID", data.db.hash + ' - ' + data.db.guid);
@@ -136,32 +199,42 @@ function make_one(data) {
     }
     row += make_log("Season " + season_key, tmp);
   }
-
-
-  /*
-  if (data.use_filepath != null) {
-    row += make_log("사용파일", '<pre>' + data.use_filepath.join('\n') + '</pre>');
-  }
-  if (data.remove_filepath != null) {
-    row += make_log("삭제파일", '<pre>' + data.remove_filepath.join('\n') + '</pre>');
-  }
-  */
   row += j_row_end();
   return row;
 }
 
 function make_status(data) {
-  console.log('status_div')
-  console.log(data)
   str = '';
-  if (data.is_working == 'run')  tmp = '실행중';
-  else if (data.is_working == 'wait')  tmp = '대기중';
-  else if (data.is_working == 'stop')  tmp = '사용자 중지';
+  if (data.is_working == 'run') {
+    tmp = '실행중';
+    if (data.seq_step) {
+      tmp = `[순차실행 ${data.seq_step}] ` + tmp;
+    }
+  } else if (data.is_working == 'wait') {
+    tmp = '대기중';
+  } else if (data.is_working == 'stop') {
+    tmp = '사용자 중지';
+  }
+
   if (data.count != null) tmp += '(' + data.current + '/' + data.count + ') ';
+
   str += '<h4>' + tmp;
   if (data.total_size != null && data.total_size != 0) {
     str += ' / 전체크기 : ' + color(humanFileSize(data.total_size), 'blue');
     str += ' / 삭제크기 : ' + color(humanFileSize(data.remove_size));
+  }
+
+  // 서버에서 전달된 직전 작업 정보가 있으면 저장 및 localStorage 동기화
+  if (data.last_work) {
+    save_last_work(data.last_work);
+  }
+
+  // 직전 작업 정보 표시 (대기 중일 때 항상 표기)
+  if (data.is_working == 'wait' && seq_state.last_work != null) {
+    str += ` <span style="font-size:13px; font-weight:normal; margin-left:12px; color:#28a745; background:rgba(40,167,69,0.15); padding:3px 8px; border-radius:4px; border:1px solid rgba(40,167,69,0.3);">` +
+           `<i class="fa fa-check-circle"></i> 직전 완료: <strong>[${seq_state.last_work.section_name}] ${seq_state.last_work.step_name}</strong> (${seq_state.last_work.time})` +
+           ` / 삭제: ${color(humanFileSize(seq_state.last_work.remove_size))}` +
+           `</span>`;
   }
   str += '</h4>';
   $('#status_div').html(str);
