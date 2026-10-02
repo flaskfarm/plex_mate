@@ -73,30 +73,92 @@ class PageClearLibraryBase(PluginPageBase):
 
     def task_interface2(self, *args):
         logger.info(f"시작: {args}")
+        command = args[0]
         library_section = PlexDBHandle.library_section(args[1])
         self.data['list'] = []
         self.data['status']['is_working'] = 'run'
+        self.current_seq_info = None
         self.refresh_data()
         P.ModelSetting.set(f'{self.parent.name}_{self.name}_task_stop_flag', 'False')
         try:
             config = P.load_config()
             if library_section['section_type'] == 1:
                 func = TaskMovie.start
+                all_steps = ['start1', 'start2', 'start3']
+                step_names = {'start1': '1단계', 'start2': '2단계', 'start3': '3단계'}
             elif library_section['section_type'] == 2:
                 func = TaskShow.start
+                all_steps = ['start1', 'start21', 'start22', 'start3']
+                step_names = {'start1': '1단계', 'start21': '2-1단계', 'start22': '2-2단계', 'start3': '3단계'}
             elif library_section['section_type'] == 8:
                 func = TaskMusic.start
+                all_steps = ['start1', 'start2', 'start3']
+                step_names = {'start1': '1단계', 'start2': '2단계', 'start3': '3단계'}
+            else:
+                all_steps = [command]
+                step_names = {command: command}
+
             try:
                 self.list_max = config['웹페이지에 표시할 세부 정보 갯수']
             except:
                 self.list_max = 200
-            ret = self.start_celery(func, self.receive_from_task, *args)
-            self.data['status']['is_working'] = ret
+
+            if command == 'start_all':
+                steps_to_run = all_steps
+            else:
+                steps_to_run = [command]
+
+            total_steps = len(steps_to_run)
+            for idx, cur_cmd in enumerate(steps_to_run):
+                if P.ModelSetting.get_bool(f'{self.parent.name}_{self.name}_task_stop_flag'):
+                    logger.warning(f"순차 실행 중 사용자에 의해 중지 플래그 감지: {cur_cmd}")
+                    self.data['status']['is_working'] = 'stop'
+                    break
+
+                step_title = step_names.get(cur_cmd, cur_cmd)
+                if command == 'start_all':
+                    logger.info(f"[순차 실행 {idx+1}/{total_steps}단계: {step_title}] 시작: {cur_cmd}")
+                    self.current_seq_info = {'idx': idx, 'total': total_steps, 'name': step_title}
+                    self.data['status']['seq_step'] = f'{idx+1}/{total_steps}단계: {step_title}'
+                else:
+                    self.current_seq_info = None
+                    self.data['status'].pop('seq_step', None)
+
+                if idx > 0:
+                    self.data['list'] = []
+                self.data['status']['is_working'] = 'run'
+                self.refresh_data()
+
+                step_args = (cur_cmd,) + args[1:]
+                ret = self.start_celery(func, self.receive_from_task, *step_args)
+                logger.info(f"{cur_cmd} 완료 결과: {ret}")
+
+                if ret == 'stop' or P.ModelSetting.get_bool(f'{self.parent.name}_{self.name}_task_stop_flag'):
+                    self.data['status']['is_working'] = 'stop'
+                    break
+
+                if idx + 1 < total_steps:
+                    time.sleep(2)
+
+            if self.data['status']['is_working'] != 'stop':
+                self.data['status']['is_working'] = 'wait'
         except Exception as e: 
             P.logger.error(f'Exception:{str(e)}')
             P.logger.error(traceback.format_exc())
             self.data['status']['is_working'] = 'wait'
-        self.refresh_data()
+        finally:
+            self.current_seq_info = None
+            self.data['status'].pop('seq_step', None)
+            import datetime
+            now_str = datetime.datetime.now().strftime('%m/%d %H:%M:%S')
+            sec_title = library_section.get('name', f"ID:{args[1]}") if library_section else f"ID:{args[1]}"
+            self.data['status']['last_work'] = {
+                'section_name': sec_title,
+                'step_name': '1~3단계 전체 순차' if command == 'start_all' else step_names.get(command, command),
+                'time': now_str,
+                'remove_size': self.data['status'].get('remove_size', 0)
+            }
+            self.refresh_data()
 
 
     def refresh_data(self, index=-1):
@@ -116,6 +178,9 @@ class PageClearLibraryBase(PluginPageBase):
                 result = arg
             if result is not None:
                 self.data['status'] = result['status']
+                if getattr(self, 'current_seq_info', None):
+                    info = self.current_seq_info
+                    self.data['status']['seq_step'] = f"{info['idx']+1}/{info['total']}단계: {info['name']}"
                 del result['status']
                 if self.list_max != 0:
                     if len(self.data['list']) == self.list_max:
