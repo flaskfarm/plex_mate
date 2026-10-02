@@ -4,7 +4,7 @@
   <div class='col-sm-1 set-left'>
     <strong>Library</strong>
   </div>
-  <div class="input-group col-sm-3">
+  <div class="input-group col-sm-2">
     <select id="library_select" name="library_select" class="form-control form-control-sm">
       {% if arg['library_list'] is not none %}
       {% for item in arg['library_list'] %}
@@ -20,16 +20,17 @@
   <div class='col-sm-1 set-left'>
     <strong>경로</strong>
   </div>
-  <div class="input-group col-sm-3">
+  <div class="input-group col-sm-2">
     <div id="section_location_div"></div>
   </div>
   
-  <div class="input-group col-sm-4" style="padding-left:0px; padding-top:5px">
+  <div class="col-sm-6" style="padding-left:0px; padding-top:5px">
     <div class="btn-group btn-group-sm flex-wrap mr-2" role="group" style="padding-left:5px; padding-top:0px">
-      <button id="stop_btn" class="btn btn-sm btn-outline-info">중지</button>
-      <button id="start0_btn" class="btn btn-sm btn-outline-info">시작</button>
-      <!--<button id="start0_btn" class="btn btn-sm btn-outline-info">파일시스템 기준</button>-->
-      <!--<button id="start1_btn" class="btn btn-sm btn-outline-info">DB 기준(개발중)</button>-->
+      <button id="stop_btn" class="btn btn-sm btn-outline-danger">중지</button>
+      <button id="start0_btn" class="btn btn-sm btn-outline-secondary">파일시스템 기준</button>
+      <button id="start2_btn" class="btn btn-sm btn-outline-primary">DB 죽은자막 정리 (1·2단계)</button>
+      <button id="start3_btn" class="btn btn-sm btn-outline-info">DB 외화자막 진단 (3단계)</button>
+      <button id="start1_btn" class="btn btn-sm btn-outline-success">DB 전체 실행</button>
     </div>
   </div>
 </div>
@@ -68,6 +69,16 @@ $("body").on('click', '#start0_btn', function(e){
   globalSendCommand('start0', $('#library_select').val(), $('#section_location').val());
 });
 
+$("body").on('click', '#start2_btn', function(e){
+  e.preventDefault();
+  globalSendCommand('start2', $('#library_select').val(), $('#section_location').val());
+});
+
+$("body").on('click', '#start3_btn', function(e){
+  e.preventDefault();
+  globalSendCommand('start3', $('#library_select').val(), $('#section_location').val());
+});
+
 $("body").on('click', '#start1_btn', function(e){
   e.preventDefault();
   globalSendCommand('start1', $('#library_select').val(), $('#section_location').val());
@@ -100,19 +111,51 @@ function make_locations_list(data) {
 
 
 function make_one(data) {
-  //if (data.ret.find_meta)
-  //  return
-  row = '';//j_row_start_hover();
+  row = '';
+  if (data.mode == 'db') {
+    ret_type = (data.ret && data.ret.log_type) ? data.ret.log_type : '';
+    if (ret_type == 'DEAD') {
+      row += j_info_text("구분", text_color("[죽은 자막 정리]", 'red'));
+      row += j_info_text("컨텐츠 제목", text_color(data.title, 'blue'));
+      row += j_info_text("비디오 파일", data.video_file);
+      row += j_info_text("삭제된 자막 경로", text_color(data.dead_subtitle_path, 'red'));
+      row += j_info_text("조치 내용", text_color("디스크 파일 부존재 확인 -> 쇼/영화 메타 새로고침 대기열 등록", 'gray'));
+    } else if (ret_type == 'MISSING_KOREAN') {
+      row += j_info_text("구분", text_color("[외화 한글자막 누락]", 'orange'));
+      row += j_info_text("컨텐츠 제목", text_color(data.title, 'blue'));
+      row += j_info_text("비디오 파일", data.video_file);
+      if (data.hardsub_tag) {
+        row += j_info_text("진단 결과", text_color("한글 자막 없음 ", 'darkorange') + text_color(`[파일명 '${data.hardsub_tag}' 감지: 영상 자체자막일 가능성 있음]`, 'teal'));
+      } else {
+        row += j_info_text("진단 결과", text_color("한글 자막 없음 (외부/내부 한글 자막 및 디스크 자막 부재)", 'darkorange'));
+      }
+    } else if (ret_type == 'FOUND_DISK_SUB') {
+      row += j_info_text("구분", text_color("[디스크 자막 발견 및 새로고침]", 'teal'));
+      row += j_info_text("컨텐츠 제목", text_color(data.title, 'blue'));
+      row += j_info_text("비디오 파일", data.video_file);
+      row += j_info_text("발견된 자막 파일", text_color(data.found_sub_path, 'green'));
+      row += j_info_text("조치 내용", text_color("영상 폴더에 자막 파일 존재 확인 -> Plex 메타 새로고침 즉시 지시 완료", 'darkcyan'));
+    } else if (ret_type == 'REFRESH') {
+      row += j_info_text("구분", text_color("[메타 새로고침]", 'green'));
+      row += j_info_text("대상 제목", text_color(data.title, 'blue'));
+      row += j_info_text("상세 안내", data.msg);
+    } else {
+      row += j_info_text("제목", data.title || '');
+      row += j_info_text("결과", j_pre(JSON.stringify(data, null, 2)));
+    }
+    return row;
+  }
+
+  // 기존 파일시스템 기준
   row += j_info_text("폴더", data.dir);
   row += j_info_text("파일", data.filename);
-  if (data.ret.find_meta) {
+  if (data.ret && data.ret.find_meta) {
     if (data.section_type == 'movie') {
       row += j_info_text('메타', text_color(data.meta_subtitle.title, 'blue'));
     } else {
       row += j_info_text('메타', text_color(data.meta_subtitle.show_title + ' 시즌:' + data.meta_subtitle.season_index + ' 에피소드:' + data.meta_subtitle.episode_index, 'blue'));
     }
-  } else {
-
+  } else if (data.ret) {
     ret = 'DB에 자막 정보 없음. ';
     if (data.ret.find_video) {
       ret += '비디오 파일 있음. '
@@ -133,7 +176,6 @@ function make_one(data) {
     row += j_info_text('결과', text_color(ret));
     row += j_info_text('JSON', j_pre(JSON.stringify(data, null, 2)));    
   }
-  
 
   if (data.smi2srt != null) {
     if (data.smi2srt['ret'] == 'success') {
@@ -142,10 +184,6 @@ function make_one(data) {
       row += j_info_text('smi2srt 결과', '<pre>' + text_color(JSON.stringify(data.smi2srt, null, 2)) + '</pre>');
     }
   }
-  //btn = '';
-  //btn += j_button('open_filemanager_btn', 'Open Filemanager', {'path':data.dir});
-  //row += j_info_text('', btn);
-  //row += j_row_end();
   return row;
 }
 
@@ -161,9 +199,6 @@ function j_info_text2(key, value, empty=0, left=6) {
 }
 
 
-
-
-
 function make_status(data) {
   str = '';
   if (data.is_working == 'run')  tmp = '실행중';
@@ -171,7 +206,31 @@ function make_status(data) {
   else tmp = '대기중';
   str += j_row_start_hover();
   str += j_info_text2("상태", text_color(tmp));
-  if (data.subtitle_count != null) {
+
+  if (data.mode == 'db') {
+    str += j_info_text2("진행 단계", text_color(data.current_step, 'blue'));
+
+    if (data.sub_mode != 'missing_sub') {
+      str += j_info_text2("외부 자막 검사", (data.db_checked_sub_count || 0) + ' / ' + (data.db_total_sub_count || 0));
+      str += j_info_text2("정상 자막 수", text_color(data.db_normal_sub_count || 0, 'green'), 1);
+      str += j_info_text2("죽은 자막 (디스크 없음)", text_color(data.db_dead_sub_count || 0, (data.db_dead_sub_count > 0 ? 'red' : 'black')), 1);
+      str += j_info_text2("메타 새로고침 수", text_color(data.db_meta_refresh_count || 0, 'primary'), 1);
+    }
+
+    if (data.sub_mode != 'dead_sub') {
+      if (data.db_total_media_count > 0 || data.db_checked_media_count > 0 || data.sub_mode == 'missing_sub') {
+        str += j_info_text2("영상 미디어 검사", (data.db_checked_media_count || 0) + ' / ' + (data.db_total_media_count || 0));
+        str += j_info_text2("디스크 자막 발견 (새로고침)", text_color(data.db_found_disk_sub_count || 0, 'info'), 1);
+        str += j_info_text2("외화 한글자막 누락", text_color(data.db_missing_korean_count || 0, (data.db_missing_korean_count > 0 ? 'danger' : 'black')), 1);
+        if (data.db_hardsub_count > 0) {
+          str += j_info_text2("- 자체자막(SW/ST/KOR) 추정", text_color(data.db_hardsub_count || 0, 'teal'), 2);
+        }
+        if (data.sub_mode == 'missing_sub') {
+          str += j_info_text2("메타 새로고침 수", text_color(data.db_meta_refresh_count || 0, 'primary'), 1);
+        }
+      }
+    }
+  } else if (data.subtitle_count != null) {
     str += j_info_text2("자막파일 수", data.subtitle_count);
     str += j_info_text2("DB에 자막 정보 있음", data.subtitle_exist_in_meta_count);
     str += j_info_text2("DB에 자막 정보 없음", data.not_subtitle_exist_in_meta_count);
@@ -206,26 +265,28 @@ function socket_init(package_name, sub) {
   
 
   socket.on('refresh_one', function(data){
-    one = make_one(data.one);
-    //if (row == null)
-    //  return;
     make_status(data.status);
-    id = 'data_'+data.one.index;
+    if (!data.one) return;
+
+    var one = make_one(data.one);
+    var id = 'data_' + data.one.index;
     if ($('#' + id).length) {
       $('#' + id).html(one);
-      current_data.list[parseInt(data.one.index)] = data.one;
-    } else {
-      if (id == 'data_0') {
-
+      if (current_data && current_data.list) {
+        current_data.list[parseInt(data.one.index)] = data.one;
       }
-      row = '<div id="' + id + '">' + row + '</div>';
-      document.getElementById("list_div").innerHTML += j_hr() + one;
-      if (current_data == null)
-          current_data = []
-      if (current_data.list == null)
-          current_data.list = []
+    } else {
+      var itemHtml = '<div id="' + id + '" style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed #666;">' + one + '</div>';
+      $('#list_div').prepend(itemHtml);
+
+      // DOM 노드 200개 초과 시 오래된 노드 삭제 (메모리 및 브라우저 프리징 방지)
+      if ($('#list_div > div').length > 200) {
+        $('#list_div > div:last-child').remove();
+      }
+
+      if (current_data == null) current_data = {};
+      if (current_data.list == null) current_data.list = [];
       current_data.list.push(data.one);
-      //[parseInt(data.index)] = data;
     }
   });
 
@@ -235,18 +296,19 @@ function socket_init(package_name, sub) {
 
 function make_list(data2) {
   current_data = data2;
-  
   data = data2.list;
+  if (!data || data.length == 0) {
+    document.getElementById("list_div").innerHTML = '';
+    return;
+  }
+  // 최신 순으로 최대 200개만 표시하여 브라우저 과부하 방지
+  var display_list = data.slice(-200).reverse();
   str = '';
-  //if (data == null || data.length == 0) str += '<br><h4>목록이 없습니다.</h4>'
-  for (i in data) {
-    row = make_one(data[i]);
-    //if (row == null) continue;
-    str += '<div id="data_' + data[i].index + '">';
+  for (i in display_list) {
+    row = make_one(display_list[i]);
+    str += '<div id="data_' + display_list[i].index + '" style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed #666;">';
     str += row;
     str += '</div>';
-    str += j_hr();
-    
   }
   document.getElementById("list_div").innerHTML = str;
 }

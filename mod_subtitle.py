@@ -22,7 +22,7 @@ class ModuleSubtitle(PluginModuleBase):
             'list' : [],
             'status' : {'is_working':'wait'}
         }
-        self.list_max = 3000
+        self.list_max = 500
         default_route_socketio_module(self, attach='/task')
 
 
@@ -107,7 +107,16 @@ class ModuleSubtitle(PluginModuleBase):
                 if self.list_max != 0:
                     if len(self.data['list']) == self.list_max:
                         self.data['list'] = []
-                if result['ret']['find_meta'] == False or ('smi2srt' in result['ret']):
+
+                is_log_item = False
+                if result.get('mode') == 'db':
+                    if result.get('ret', {}).get('log_type'):
+                        is_log_item = True
+                else:
+                    if result.get('ret', {}).get('find_meta') == False or ('smi2srt' in result.get('ret', {})):
+                        is_log_item = True
+
+                if is_log_item:
                     result['index'] = len(self.data['list'])
                     self.data['list'].append(result)
                     self.refresh_data(index=result['index'])
