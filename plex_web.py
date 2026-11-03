@@ -210,7 +210,7 @@ class PlexWebHandle(object):
                 plugin_instance.name = 'plex_mate'
             page_tool = PageToolSimple(P, plugin_instance)
 
-            page_tool.update_by_default_agent_tmdb(
+            return page_tool.update_by_default_agent_tmdb(
                 root_id,
                 title_lock=title_lock,
                 title_sort_lock=title_sort_lock,
@@ -218,7 +218,6 @@ class PlexWebHandle(object):
                 year_lock=year_lock,
             )
 
-            return {'ret': 'success', 'msg': 'TMDB 갱신 완료'}
         
         except Exception as e:
             P.logger.error(traceback.format_exc())
