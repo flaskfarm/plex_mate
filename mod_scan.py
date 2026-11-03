@@ -116,8 +116,7 @@ class ModuleScan(PluginModuleBase):
             meta_id = req.form.get('metadata_item_id')
             if not meta_id:
                 return jsonify({'ret': 'fail', 'msg': 'id 가 존재하지 않습니다.'})
-            ret = {'ret':'success', 'msg': f'{meta_id} 수신 성공'}
-            PlexWebHandle.manual_refresh(meta_id, plugin_instance=self)
+            ret = PlexWebHandle.manual_refresh(meta_id, plugin_instance=self)
         elif sub == 'vfs_refresh':
             target = req.form.get('target')
             recursive = (req.form.get('recursive') == 'true') or False
