@@ -20,6 +20,7 @@ from support import SupportSubprocess
 from support import AlchemyEncoder
 from plugin.create_plugin import PluginBase
 from plugin.logic_module_base import PluginModuleBase, PluginPageBase
+from plugin.route import default_route_socketio_page
 from framework.scheduler import Job as FrameworkJob
 
 from .setup import F, P
@@ -502,34 +503,6 @@ def format_file_size(size: int, decimals: int = 1, binary_system: bool = True) -
             return f'{size:.{decimals}f}{unit}'
         size /= step
     return f'{size:.{decimals}f}{largest_unit}'
-
-
-def default_route_socketio_page(page):
-    module = page.parent
-    page.socketio_list = page.socketio_list or []
-
-    @F.socketio.on('connect', namespace=f'/{P.package_name}/{module.name}/{page.name}')
-    @F.login_required
-    def connect():
-        P.logger.debug(f'socket_connect : {P.package_name}/{module.name}/{page.name}')
-        page.socketio_list.append(flask.request.sid)
-        socketio_callback('start', '')
-        page.socketio_connect()
-
-    @F.socketio.on('disconnect', namespace=f'/{P.package_name}/{module.name}/{page.name}')
-    def disconnect():
-        P.logger.debug(f'socket_disconnect : {P.package_name}/{module.name}/{page.name}')
-        page.socketio_list.remove(flask.request.sid)
-        page.socketio_disconnect()
-
-    def socketio_callback(cmd, data, encoding=True):
-        if page.socketio_list:
-            if encoding:
-                data = json.dumps(data, cls=AlchemyEncoder)
-                data = json.loads(data)
-            F.socketio.emit(cmd, data, namespace=f'/{P.package_name}/{module.name}/{page.name}')
-
-    page.socketio_callback = socketio_callback
 
 
 def celery_is_available() -> bool:
