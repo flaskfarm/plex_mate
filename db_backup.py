@@ -99,6 +99,62 @@ def backup(db_path, backup_dir, work_dir, stamp, max_count=0, sqlite_bin=None):
     return final, prune(backup_dir, stem, ext, max_count)
 
 
+def restore(backup_path, db_path, stamp, sqlite_bin=None):
+    """backup_path를 db_path 자리에 되돌린다. (되돌린 경로 목록, 옆에 남긴 이전 파일 목록)을 돌려준다.
+
+    Plex가 꺼져 있어야 한다(호출하는 쪽이 확인한다). 지금 DB와 -wal/-shm은 지우지 않고
+    `.before_restore_<stamp>`를 붙여 같은 폴더에 남긴다. 같은 시각의 blobs 백업이 옆에 있으면 함께 되돌린다.
+    """
+    root, ext = os.path.splitext(db_path)
+    stem = os.path.basename(root)
+    # 이름 규칙이 맞는 백업만 받는다. blobs 백업이나 엉뚱한 파일이 본 DB를 덮지 않게
+    matched = re.match(rf"^{re.escape(stem)}_(\d{{8}}_\d{{6}}){re.escape(ext)}$", os.path.basename(backup_path))
+    if not matched:
+        raise ValueError(f"백업 파일 이름이 {stem}_YYYYMMDD_HHMMSS{ext} 형식이 아닙니다.")
+    pairs = [(backup_path, db_path)]
+    blobs_backup = os.path.join(os.path.dirname(backup_path), f"{stem}.blobs_{matched.group(1)}{ext}")
+    if os.path.exists(blobs_backup):
+        pairs.append((blobs_backup, f"{root}.blobs{ext}"))
+
+    need = sum(os.path.getsize(source) for source, _ in pairs)
+    free = shutil.disk_usage(os.path.dirname(db_path)).free
+    if free < need * 1.1:
+        raise RuntimeError(f"공간 부족: {os.path.dirname(db_path)} (필요 {need >> 20}MB, 여유 {free >> 20}MB)")
+
+    restored, kept, staged = [], [], []
+    try:
+        # 전부 옆에 받아 놓은 뒤에 바꿔치기한다. 복사 중 실패하면 지금 DB는 그대로다
+        for source, target in pairs:
+            part = target + '.restore_part'
+            staged.append(part)
+            shutil.copyfile(source, part)
+            if os.path.getsize(part) != os.path.getsize(source):
+                raise RuntimeError(f"복사한 파일 크기가 다릅니다: {part}")
+            # 받아 놓은 로컬 사본을 검사한다(NFS 위 원본을 직접 검사하면 매우 느리다)
+            if sqlite_bin and not verify(part, sqlite_bin):
+                raise RuntimeError(f"백업 파일 무결성 검사 실패: {source}")
+            if os.path.exists(target):  # Plex가 읽을 수 있게 원래 파일의 권한·소유자를 따른다
+                st = os.stat(target)
+                os.chmod(part, st.st_mode & 0o7777)
+                try:
+                    os.chown(part, st.st_uid, st.st_gid)
+                except (AttributeError, OSError):  # 윈도우, 권한 없음
+                    pass
+        for (source, target), part in zip(pairs, staged):
+            for suffix in ('', '-wal', '-shm'):
+                if os.path.exists(target + suffix):
+                    aside = f"{target}{suffix}.before_restore_{stamp}"
+                    os.replace(target + suffix, aside)
+                    kept.append(aside)
+            os.replace(part, target)
+            restored.append(target)
+    finally:
+        for part in staged:
+            if os.path.exists(part):
+                os.remove(part)
+    return restored, kept
+
+
 if __name__ == '__main__':
     import sys
     import tempfile
@@ -160,4 +216,45 @@ if __name__ == '__main__':
         except OSError:
             pass
         assert len(os.listdir(out)) == 3 and os.listdir(work) == []
+
+        # 복원: 지금 DB는 옆에 남고, 같은 시각 blobs 백업도 함께 돌아온다
+        live = os.path.join(root, 'live', 'lib.db')
+        os.makedirs(os.path.dirname(live))
+        for path, value in ((live, 'now'), (live[:-3] + '.blobs.db', 'now-blobs')):
+            c = sqlite3.connect(path)
+            c.execute('PRAGMA journal_mode=WAL')
+            c.execute('CREATE TABLE v(x)')
+            c.execute('INSERT INTO v VALUES(?)', (value,))
+            c.commit()
+            c.close()
+        os.chmod(live, 0o666)
+        bdir = os.path.join(root, 'bk')
+        for path in (live, live[:-3] + '.blobs.db'):
+            backup(path, bdir, work, '20260202_000000', 0, cli)
+        for path, value in ((live, 'later'), (live[:-3] + '.blobs.db', 'later-blobs')):
+            c = sqlite3.connect(path)
+            c.execute('UPDATE v SET x = ?', (value,))
+            c.commit()
+            c.close()
+        open(live + '-wal', 'wb').close()  # 비정상 종료로 남은 WAL 흉내
+        for bad in ('lib.blobs_20260202_000000.db', 'lib_wrong.db'):
+            try:
+                restore(os.path.join(bdir, bad), live, '20260303_000000', cli)
+                raise AssertionError('이름이 틀린 백업은 거절해야 한다')
+            except ValueError:
+                pass
+        restored, kept = restore(os.path.join(bdir, 'lib_20260202_000000.db'), live, '20260303_000000', cli)
+        assert restored == [live, live[:-3] + '.blobs.db'], restored
+
+        def value_of(path):
+            c = sqlite3.connect(path)
+            try:
+                return c.execute('SELECT x FROM v').fetchone()[0]
+            finally:
+                c.close()
+        assert value_of(live) == 'now' and value_of(live[:-3] + '.blobs.db') == 'now-blobs'
+        assert live + '.before_restore_20260303_000000' in kept and live + '-wal.before_restore_20260303_000000' in kept, kept
+        assert value_of(live + '.before_restore_20260303_000000') == 'later'
+        assert os.stat(live).st_mode & 0o777 == 0o666
+        assert not [n for n in os.listdir(os.path.dirname(live)) if n.endswith('.restore_part')]
     print('ok' if cli else 'ok (sqlite3 명령이 없어 검사 단계는 빠짐)')

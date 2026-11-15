@@ -3,6 +3,7 @@ import time
 import pathlib
 import urllib.parse
 
+import requests
 from support import SupportFile, SupportOSCommand, SupportSubprocess
 
 from .setup import *
@@ -66,6 +67,34 @@ class Task(object):
             ret = {'ret':'fail', 'log':str(e)}
         return ret
          
+    @staticmethod
+    @celery.task()
+    def restore(args):
+        try:
+            logger.warning(args)
+            backup_path = args[0]
+            db_path = P.ModelSetting.get('base_path_db')
+            if not backup_path or not os.path.isfile(backup_path):
+                return {'ret':'fail', 'log':'백업 파일이 존재하지 않습니다.'}
+            if not db_path:
+                return {'ret':'fail', 'log':'DB 파일 경로가 설정되지 않았습니다.'}
+            # 실행 중인 Plex의 DB를 바꿔치기하면 깨진다. 응답이 하나라도 오면 실행 중으로 본다
+            try:
+                requests.get(P.ModelSetting.get('base_url').rstrip('/') + '/identity', timeout=5)
+                return {'ret':'fail', 'log':'Plex Media Server가 실행 중입니다. Plex를 중지한 뒤 다시 시도하세요.'}
+            except requests.exceptions.RequestException:
+                pass
+            sqlite_bin = P.ModelSetting.get('base_bin_sqlite')
+            if not sqlite_bin or not os.path.exists(sqlite_bin):
+                sqlite_bin = None
+            restored, kept = db_backup.restore(backup_path, db_path, datetime.now().strftime('%Y%m%d_%H%M%S'), sqlite_bin)
+            ret = {'ret':'success', 'restored':restored, 'kept':kept}
+        except Exception as e: 
+            logger.error(f'Exception:{str(e)}')
+            logger.error(traceback.format_exc())
+            ret = {'ret':'fail', 'log':str(e)}
+        return ret
+
     @staticmethod
     @celery.task()
     def clear(args):

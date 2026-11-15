@@ -38,6 +38,7 @@
   <div id="base_backup_location_mode_div" class="collapse">
   {{ macros.setting_input_text_and_buttons('base_backup_location_manual', '백업 경로', [['select_base_backup_location_manual_btn', '경로 선택']], value=arg['base_backup_location_manual'], desc=['DB  파일 백업 폴더']) }}
   </div>
+  {{ macros.setting_input_text_and_buttons('tmp_restore_file', 'DB 복원', [['select_restore_file_btn', '백업 파일 선택'], ['restore_db_btn', '복원']], value='', desc=['백업 파일로 Plex DB를 되돌립니다. Plex Media Server를 먼저 중지해야 합니다.', '현재 DB는 지우지 않고 같은 폴더에 .before_restore_날짜 이름으로 남깁니다.', '같은 시각의 blobs 백업이 있으면 함께 복원합니다.']) }}
   {{ macros.m_hr() }}
   {{ macros.global_setting_scheduler_button(arg['is_include'], arg['is_running']) }}
   {{ macros.setting_input_text('base_interval', '스케쥴링 실행 정보', value=arg['base_interval'], col='3', desc=['Interval(단위: 분)이나 Cron 설정 (예: 매일 새벽 4시 -> 0 4 * * *)']) }}
@@ -161,6 +162,28 @@ $("body").on('click', '#select_base_backup_location_manual_btn', function(e){
   if (path == '') path = '/';
   globalSelectLocalFolder("백업 폴더 선택", path, function(result){
     $('#base_backup_location_manual').val(result);
+  });
+});
+
+$("body").on('click', '#select_restore_file_btn', function(e){
+  e.preventDefault();
+  var path = $('#tmp_restore_file').val().trim();
+  if (path == '') path = $('#base_backup_location_manual').val().trim();
+  if (path == '' || $('#base_backup_location_mode').prop('checked')) path = $('#base_path_db').val().trim();
+  globalSelectLocalFile("복원할 백업 파일 선택", path, function(result){
+    $('#tmp_restore_file').val(result);
+  });
+});
+
+$("body").on('click', '#restore_db_btn', function(e){
+  e.preventDefault();
+  if ($('#tmp_restore_file').val().trim() == '') {
+    notify('복원할 백업 파일을 선택하세요.', 'warning');
+    return;
+  }
+  globalConfirmModal('DB 복원', 'Plex Media Server를 중지했습니까?<br>선택한 백업으로 현재 DB를 교체합니다.', function(){
+    // 확인 창 처리기가 누적되므로 경로는 실행 시점에 읽는다
+    globalSendCommand('restore', $('#tmp_restore_file').val().trim());
   });
 });
 
