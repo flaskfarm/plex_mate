@@ -4,6 +4,7 @@ from xml.parsers.expat import ExpatError
 import requests
 import xmltodict
 from support import SupportFile, SupportSubprocess, SupportYaml, d
+from tool import ToolNotify
 
 from .plex_db import PlexDBHandle
 from .plex_web import PlexWebHandle
@@ -140,6 +141,9 @@ class ModuleBase(PluginModuleBase):
             if arg1 == 'plex_db':
                 self.task_interface('backup', (arg2,))
                 ret = {'ret':'success', 'msg':'명령을 전달하였습니다. 잠시 후 결과 알림을 확인하세요.'}
+        elif command == 'restore':
+            self.task_interface('restore', (arg1,))
+            ret = {'ret':'success', 'msg':'복원을 시작합니다. 잠시 후 결과 알림을 확인하세요.'}
         elif command == 'db':
             if arg1 == 'library_sections':
                 data = PlexDBHandle.library_sections(arg2)
@@ -201,6 +205,8 @@ class ModuleBase(PluginModuleBase):
             func = Task.get_size
         elif command == 'backup':
             func = Task.backup
+        elif command == 'restore':
+            func = Task.restore
         elif command == 'clear' or command == 'clear_ret':
             func = Task.clear
         elif command == 'agent_update':
@@ -225,12 +231,23 @@ class ModuleBase(PluginModuleBase):
             return ret
         elif command == 'backup':
             if ret['ret'] == 'success':
-                msg = f"경로 : {ret['target']}<br>복사하였습니다."
+                msg = '<br>'.join(f"경로 : {x}" for x in ret.get('targets', [ret['target']]))
+                msg += "<br>백업하였습니다." + (" (무결성 검사 통과)" if ret.get('verified') else " (무결성 검사 생략)")
                 if ret.get('removed'):
                     msg += f"<br>오래된 백업 {len(ret['removed'])}개 삭제 완료."
                 noti_data = {'type':'info', 'msg' : msg}
             else:
                 noti_data = {'type':'danger', 'msg' : f"백업에 실패하였습니다.<br>{ret['log']}"}
+                self.notify_backup_fail(ret['log'])
+            F.socketio.emit("notify", noti_data, namespace='/framework')
+            return ret
+        elif command == 'restore':
+            if ret['ret'] == 'success':
+                msg = '<br>'.join(f"복원 : {x}" for x in ret['restored'])
+                msg += f"<br>이전 파일 {len(ret['kept'])}개는 같은 폴더에 .before_restore_ 이름으로 남겼습니다.<br>Plex를 시작하세요."
+                noti_data = {'type':'info', 'msg' : msg}
+            else:
+                noti_data = {'type':'danger', 'msg' : f"복원에 실패하였습니다.<br>{ret['log']}"}
             F.socketio.emit("notify", noti_data, namespace='/framework')
             return ret
         elif command == 'clear':
@@ -269,6 +286,13 @@ class ModuleBase(PluginModuleBase):
         else:
             F.socketio.emit("notify", {'type': 'info', 'msg': f'작업을 완료했습니다: {command}'}, namespace='/framework')
 
+    def notify_backup_fail(self, log):
+        # 시스템 알림 설정(텔레그램 등)으로 보낸다. 알림 설정이 꺼져 있으면 아무 일도 없다
+        try:
+            ToolNotify.send_message(f"[plex_mate] Plex DB 백업 실패\n{log}", message_id='plex_mate_db_backup_fail')
+        except Exception as e:
+            logger.error(f"[{self.P.package_name}] 백업 실패 알림 전송 예외: {str(e)}")
+
     def scheduler_function(self):
         logger.info(f"[{self.P.package_name}] Plex DB 자동 백업 시작")
         try:
@@ -277,10 +301,14 @@ class ModuleBase(PluginModuleBase):
                 logger.error(f"[{self.P.package_name}] DB 경로가 올바르지 않거나 파일이 없습니다: {db_path}")
                 return
             ret = self.task_interface2('backup', (db_path,))
-            logger.info(f"[{self.P.package_name}] Plex DB 자동 백업 완료: {ret}")
+            if ret['ret'] == 'success':
+                logger.info(f"[{self.P.package_name}] Plex DB 자동 백업 완료: {ret}")
+            else:
+                logger.error(f"[{self.P.package_name}] Plex DB 자동 백업 실패: {ret['log']}")
         except Exception as e:
             logger.error(f"[{self.P.package_name}] scheduler_function 예외: {str(e)}")
             logger.error(traceback.format_exc())
+            self.notify_backup_fail(str(e))
 
     def setting_save_after(self, change_list):
         try:
