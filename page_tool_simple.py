@@ -156,7 +156,7 @@ class PageToolSimple(PluginPageBase):
                     GROUP BY mei2.metadata_item_id, mp2.file 
                     HAVING cnt > 1
                 ) AS ttt ON mei.metadata_item_id = ttt.metadata_item_id AND mp.file = ttt.file
-                ORDER BY meta_id, media_id, media_parts_id;
+                ORDER BY meta_id, mp.file, media_id, media_parts_id;
                 """
                 data = PlexDBHandle.select(query)
                 if command == 'duplicate_list':
@@ -195,8 +195,9 @@ class PageToolSimple(PluginPageBase):
                             prev = current
                     if query != '':
                         logger.warning(query)
-                        result = PlexDBHandle.execute_query(query)
-                        if result != False:
+                        # 중간에 실패하면(.bail) 열린 트랜잭션째 버려져 일부만 지워지는 일이 없다
+                        result = PlexDBHandle.execute_query(f".bail on\nBEGIN IMMEDIATE;\n{query}COMMIT;\n")
+                        if result != False and 'rror' not in result:
                             ret = {'ret':'success', 'msg':'정상적으로 처리되었습니다.'}
                         else:
                             ret = {'ret':'warning', 'msg':'실패'}
