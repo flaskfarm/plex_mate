@@ -8,6 +8,7 @@
 <form id='setting'>
   {{ macros.setting_checkbox('subtitle_use_smi_to_srt', 'smi to srt', value=arg['subtitle_use_smi_to_srt'], desc=['설정 : smi 파일은 .ko.srt 변환 생성. 한글 포함 단순 .srt 파일은 .ko.srt 로 복사 생성']) }}
   {{ macros.setting_checkbox('subtitle_use_vfs_refresh', 'Rclone VFS Refresh', value=arg['subtitle_use_vfs_refresh'], desc=['설정 : Plex 메타 새로고침 전 해당 자막 폴더에 대해 Rclone vfs/refresh를 먼저 호출 (스캔 설정의 VFS 경로 변경 규칙 사용)']) }}
+  {{ macros.setting_input_text('subtitle_missing_skip_sections', '한글 자막 누락 진단 제외 섹션', value=arg['subtitle_missing_skip_sections'], desc=['한국 컨텐츠 라이브러리의 섹션 ID 또는 이름을 쉼표로 구분해 입력 (예: 5, 9, 10, 11)', 'TV 쇼에는 국가 정보가 없어 자동으로 구분되지 않습니다. 이름에 한국·국내가 들어간 섹션은 입력하지 않아도 제외됩니다.']) }}
 </form>
 
 <script type="text/javascript">

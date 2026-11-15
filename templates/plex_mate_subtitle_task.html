@@ -259,6 +259,9 @@ function make_status(data) {
       str += j_info_text2("외부 자막 검사", (data.db_checked_sub_count || 0) + ' / ' + (data.db_total_sub_count || 0));
       str += j_info_text2("정상 자막 수", text_color(data.db_normal_sub_count || 0, 'green'), 1);
       str += j_info_text2("죽은 자막 (디스크 없음)", text_color(data.db_dead_sub_count || 0, (data.db_dead_sub_count > 0 ? 'red' : 'black')), 1);
+      if (data.db_unknown_sub_count > 0) {
+        str += j_info_text2("확인 불가 (영상도 없음/응답 없음, 건너뜀)", text_color(data.db_unknown_sub_count, 'orange'), 1);
+      }
       if (data.db_smi2srt_count > 0) {
         str += j_info_text2("SMI/한글 변환 수", text_color(data.db_smi2srt_count || 0, 'orange'), 1);
       }

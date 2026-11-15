@@ -64,10 +64,14 @@ class PlexWebHandle(object):
     def refresh_by_id(cls, id):
         try:
             url = f"{P.ModelSetting.get('base_url')}/library/metadata/{id}/refresh?X-Plex-Token={P.ModelSetting.get('base_token')}"
-            ret = requests.put(url)
+            ret = requests.put(url, timeout=30)
+            if ret.status_code == 200:
+                return True
+            logger.error(f"메타 새로고침 실패: {id} (HTTP {ret.status_code})")
         except Exception as e: 
             logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())
+        return False
     
 
     @classmethod

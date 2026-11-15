@@ -7,8 +7,8 @@ import time
 import traceback
 import urllib.parse
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 
+from . import fs_probe
 from .extensions import vfs_refresh
 from .plex_bin_scanner import PlexBinaryScanner
 from .plex_db import PlexDBHandle, dict_factory
@@ -213,6 +213,7 @@ class Task(object):
             'db_checked_sub_count': 0,
             'db_normal_sub_count': 0,
             'db_dead_sub_count': 0,
+            'db_unknown_sub_count': 0,
             'db_smi2srt_count': 0,
             'db_meta_refresh_count': 0,
             'db_refreshed_items': [],
@@ -331,7 +332,7 @@ class Task(object):
                 JOIN metadata_items ON media_items.metadata_item_id = metadata_items.id
                 WHERE media_streams.stream_type_id = 3
                   AND media_streams.url IS NOT NULL 
-                  AND media_streams.url != ''
+                  AND media_streams.url LIKE 'file://%'
                   AND metadata_items.library_section_id = ?
                 """
                 params = [section_id]
@@ -353,23 +354,11 @@ class Task(object):
                 refresh_show_reasons = {}  # {show_id: set()}
                 refresh_show_dirs = {}  # {show_id: set()}
 
-                def check_sub_exist(sub_row):
-                    disk_path = None
-                    try:
-                        disk_path = get_disk_path(sub_row.get('stream_url', ''))
-                        if not disk_path:
-                            return sub_row, disk_path, False
-                        exists = os.path.exists(disk_path)
-                        return sub_row, disk_path, exists
-                    except Exception as e:
-                        logger.error(f"[DB기준] 자막 경로 검사 오류: {disk_path} - {str(e)}")
-                        return sub_row, disk_path, False
-
                 chunk_size = 50
-                max_workers = 8
-                timeout_sec = 5
-
-                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                chunk_timeout = 30
+                hung_chunks = 0
+                pool = fs_probe.executor(8)
+                try:
                     for i in range(0, len(subtitle_rows), chunk_size):
                         if P.ModelSetting.get_bool('subtitle_task_stop_flag'):
                             status['is_working'] = 'stop'
@@ -377,24 +366,28 @@ class Task(object):
                             return 'stop'
 
                         chunk = subtitle_rows[i:i+chunk_size]
-                        future_to_row = {executor.submit(check_sub_exist, row): row for row in chunk}
+                        states, hung = fs_probe.probe_many(
+                            pool,
+                            [(idx, get_disk_path(row.get('stream_url', '')), row.get('video_file')) for idx, row in enumerate(chunk)],
+                            chunk_timeout)
+                        if hung:
+                            hung_chunks += 1
+                            logger.warning(f"[DB기준] 자막 파일 검사 {hung}건이 {chunk_timeout}초 안에 응답하지 않아 건너뜁니다.")
+                            if hung_chunks >= 3:
+                                raise RuntimeError('스토리지가 응답하지 않습니다. 마운트 상태를 확인하세요.')
+                        else:
+                            hung_chunks = 0
 
-                        for future in as_completed(future_to_row):
-                            sub_row = future_to_row[future]
+                        for idx, sub_row in enumerate(chunk):
                             status['db_checked_sub_count'] += 1
+                            disk_path = get_disk_path(sub_row.get('stream_url', ''))
+                            state = states[idx]
+                            exists = state == fs_probe.OK
 
-                            try:
-                                _, disk_path, exists = future.result(timeout=timeout_sec)
-                            except TimeoutError:
-                                logger.warning(f"[DB기준] 자막 파일 검사 타임아웃(5초 초과): {sub_row.get('stream_url')}")
-                                disk_path = get_disk_path(sub_row.get('stream_url', ''))
-                                exists = False
-                            except Exception as e:
-                                logger.error(f"[DB기준] 자막 future 예외: {str(e)}")
-                                disk_path = get_disk_path(sub_row.get('stream_url', ''))
-                                exists = False
-
-                            if exists:
+                            if state == fs_probe.UNKNOWN:
+                                # 영상도 안 보이거나 응답이 없다: 마운트 문제일 수 있어 죽은 자막으로 치지 않는다
+                                status['db_unknown_sub_count'] += 1
+                            elif exists:
                                 status['db_normal_sub_count'] += 1
                                 # smi to srt 옵션 활성화 시 정상 외부 자막에 대해서도 변환/리네임 수행
                                 if P.ModelSetting.get_bool('subtitle_use_smi_to_srt'):
@@ -475,6 +468,8 @@ class Task(object):
                             # 10개마다 또는 마지막에 실시간 진행 상황 브로드캐스트
                             if status['db_checked_sub_count'] % 10 == 0 or status['db_checked_sub_count'] == status['db_total_sub_count']:
                                 notify({'status': status, 'mode': 'db', 'ret': {}})
+                finally:
+                    pool.shutdown(wait=False)
 
                 # 2단계: 메타 새로고침 (쇼/영화 단위 중복 없이 일괄 호출)
                 if refresh_movie_ids or refresh_show_ids:
@@ -492,7 +487,8 @@ class Task(object):
                                 if Task.try_vfs_refresh(d_path):
                                     vfs_done = True
                             logger.warning(f"[DB기준] 영화 메타 새로고침: {m_title} (ID: {m_id})")
-                            PlexWebHandle.refresh_by_id(m_id)
+                            if not PlexWebHandle.refresh_by_id(m_id):
+                                raise RuntimeError('Plex가 새로고침 요청을 받지 않았습니다.')
                             status['db_meta_refresh_count'] += 1
 
                             vfs_tag = " (VFS 갱신)" if vfs_done else ""
@@ -564,7 +560,8 @@ class Task(object):
                                 if Task.try_vfs_refresh(d_path):
                                     vfs_done = True
                             logger.warning(f"[DB기준] TV쇼 메타 새로고침: {s_title} (ID: {s_id})")
-                            PlexWebHandle.refresh_by_id(s_id)
+                            if not PlexWebHandle.refresh_by_id(s_id):
+                                raise RuntimeError('Plex가 새로고침 요청을 받지 않았습니다.')
                             status['db_meta_refresh_count'] += 1
 
                             vfs_tag = " (VFS 갱신)" if vfs_done else ""
@@ -630,7 +627,10 @@ class Task(object):
             # -----------------------------------------------------------------
             if mode in ['all', 'missing_sub']:
                 step_prefix = '3단계: ' if mode == 'all' else ''
-                is_korean_section = ('한국' in section_name or '국내' in section_name)
+                # 쇼·에피소드에는 국가 정보가 없어서 한국 컨텐츠 섹션은 이름 규칙과 사용자 지정 목록으로 거른다
+                skip_sections = [x.strip() for x in (P.ModelSetting.get('subtitle_missing_skip_sections') or '').split(',') if x.strip()]
+                is_korean_section = ('한국' in section_name or '국내' in section_name
+                                     or str(section_id) in skip_sections or section_name.strip() in skip_sections)
                 if is_korean_section:
                     status['current_step'] = f"{step_prefix}한국 컨텐츠 라이브러리('{section_name}')이므로 자막 누락 진단을 건너뜁니다."
                     notify({'status': status, 'mode': 'db', 'ret': {}})
@@ -863,18 +863,20 @@ class Task(object):
                                         try:
                                             vfs_done = Task.try_vfs_refresh(found_disk_sub)
                                             logger.warning(f"[DB기준] 디스크 자막 발견으로 메타 새로고침: {full_title} (ID: {refresh_target_id}, 자막: {found_disk_sub})")
-                                            PlexWebHandle.refresh_by_id(refresh_target_id)
+                                            if not PlexWebHandle.refresh_by_id(refresh_target_id):
+                                                raise RuntimeError('Plex가 새로고침 요청을 받지 않았습니다.')
                                             status['db_meta_refresh_count'] += 1
                                             time.sleep(0.1)
                                         except Exception as e:
                                             logger.error(f"[DB기준] 메타 새로고침 실패: {str(e)}")
                                             ref_status = 'fail'
+                                            fail_reason = str(e)  # except 블록을 나가면 e는 사라진다
 
                                         vfs_tag = " (VFS 갱신)" if vfs_done else ""
                                         if ref_status == 'success':
                                             ref_detail = f"{action_prefix}({os.path.basename(found_disk_sub)}) 감지{vfs_tag} ➔ 메타 새로고침 지시 완료"
                                         else:
-                                            ref_detail = f"메타 새로고침 실패: {str(e)}"
+                                            ref_detail = f"메타 새로고침 실패: {fail_reason}"
 
                                         refresh_item = {
                                             'time': datetime.now().strftime('%H:%M:%S'),
