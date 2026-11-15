@@ -225,7 +225,8 @@ class ModuleBase(PluginModuleBase):
             return ret
         elif command == 'backup':
             if ret['ret'] == 'success':
-                msg = f"경로 : {ret['target']}<br>복사하였습니다."
+                msg = '<br>'.join(f"경로 : {x}" for x in ret.get('targets', [ret['target']]))
+                msg += "<br>백업하였습니다." + (" (무결성 검사 통과)" if ret.get('verified') else " (무결성 검사 생략)")
                 if ret.get('removed'):
                     msg += f"<br>오래된 백업 {len(ret['removed'])}개 삭제 완료."
                 noti_data = {'type':'info', 'msg' : msg}
@@ -277,7 +278,10 @@ class ModuleBase(PluginModuleBase):
                 logger.error(f"[{self.P.package_name}] DB 경로가 올바르지 않거나 파일이 없습니다: {db_path}")
                 return
             ret = self.task_interface2('backup', (db_path,))
-            logger.info(f"[{self.P.package_name}] Plex DB 자동 백업 완료: {ret}")
+            if ret['ret'] == 'success':
+                logger.info(f"[{self.P.package_name}] Plex DB 자동 백업 완료: {ret}")
+            else:
+                logger.error(f"[{self.P.package_name}] Plex DB 자동 백업 실패: {ret['log']}")
         except Exception as e:
             logger.error(f"[{self.P.package_name}] scheduler_function 예외: {str(e)}")
             logger.error(traceback.format_exc())
