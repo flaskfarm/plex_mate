@@ -38,6 +38,10 @@ jobs:
             exit 1
           }
 
+      # 병합 결과가 문법 오류 없이 읽히는지 확인한 뒤에만 올린다 (서버가 이 저장소를 그대로 받아 쓴다)
+      - name: Python syntax check
+        run: python3 -m compileall -q -x '/\.git/' .
+
       - name: Push changes
         run: |
           git push origin main
