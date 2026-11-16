@@ -1,4 +1,5 @@
 import threading
+import time
 
 from .model_scan import ModelScanItem
 from .setup import *
@@ -104,14 +105,22 @@ class ModuleScan(PluginModuleBase):
                 })
             else:
                 #P.logger.warning(d(req.form))
-                ModelScanItem(
+                item = ModelScanItem(
                     target,
                     mode = mode,
                     target_section_id = target_section_id,
                     callback_id = callback_id,
                     callback_url = callback_url,
-                ).save()
-                ret['msg'] = f'{mode=} {target=}'
+                )
+                # DB가 잠겨 있으면 save()는 예외 없이 None을 돌려주고 요청이 사라진다. 다시 시도하고, 끝내 안 되면 실패로 답한다
+                for _ in range(3):
+                    if item.save() is not None:
+                        ret['msg'] = f'{mode=} {target=}'
+                        break
+                    time.sleep(1)
+                else:
+                    P.logger.error(f'스캔 요청 저장 실패: {mode=} {target=}')
+                    ret = {'ret': 'fail', 'msg': f'스캔 요청을 저장하지 못했습니다: {target}'}
         elif sub == 'manual_refresh':
             meta_id = req.form.get('metadata_item_id')
             if not meta_id:
