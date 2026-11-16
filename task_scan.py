@@ -1,6 +1,7 @@
 import re
 
 from support import SupportSubprocess
+from tool import ToolNotify
 
 from .extensions import check_scanning, vfs_forget, vfs_refresh
 from .model_scan import ModelScanItem
@@ -19,6 +20,7 @@ class Task:
     scan_queue = None
     scan_thread = None
     filecheck_thread = None
+    filecheck_heartbeat = time.time()
     current_scan_count = 0
 
     @F.celery.task
@@ -34,6 +36,9 @@ class Task:
             Task.filecheck_thread = threading.Thread(target=Task.filecheck_thread_function, args=())
             Task.filecheck_thread.daemon = True
             Task.filecheck_thread.start()
+            watchdog = threading.Thread(target=Task.watchdog_thread_function, args=())
+            watchdog.daemon = True
+            watchdog.start()
             P.logger.info("PLEX SCAN 대기")
             Task.scan_thread.join()
 
@@ -54,11 +59,43 @@ class Task:
 
 
     def filecheck_thread_function():
+        # 주기 하나에서 난 예외(DB 잠금 등)로 스레드가 죽으면 재시작 전까지 모든 스캔 요청이
+        # READY로 쌓이기만 한다. 기록하고 반복문을 다시 돌린다
         while True:
+            try:
+                Task.filecheck_loop()
+            except Exception:
+                logger.exception("파일 체크 스레드 오류, 60초 뒤 다시 시작합니다")
+            time.sleep(60)
+
+
+    def watchdog_thread_function():
+        # 예외 없이 멈춰 있는 경우(응답 없는 마운트·외부 호출)는 위에서 못 잡는다. 조용히 멈추지 않게 알린다
+        notified = False
+        while True:
+            time.sleep(60)
+            try:
+                limit = max(600, (P.ModelSetting.get_int(f"{name}_filecheck_thread_interval") or 60) * 5)
+                idle = time.time() - Task.filecheck_heartbeat
+                stalled = idle > limit
+                if stalled and not notified:
+                    logger.error(f"파일 체크가 {int(idle / 60)}분째 멈춰 있습니다. 스캔 요청이 처리되지 않습니다")
+                    ToolNotify.send_message(f"[plex_mate] 스캔 파일 체크가 {int(idle / 60)}분째 멈춰 있습니다. FlaskFarm 재시작이 필요할 수 있습니다.", message_id='plex_mate_scan_stalled')
+                elif notified and not stalled:
+                    logger.info("파일 체크가 다시 동작합니다")
+                notified = stalled
+            except Exception:
+                logger.exception("스캔 감시 스레드 오류")
+
+
+    def filecheck_loop():
+        while True:
+            Task.filecheck_heartbeat = time.time()
             items = ModelScanItem.get_list_by_status('READY')
             vfs_rules = P.ModelSetting.get_list('scan_vfs_change_rule')
             #logger.info(f"filecheck_thread_function : {len(items)}")
             for item in items:
+                Task.filecheck_heartbeat = time.time()
                 try:
                     if item.mode == 'ADD':
                         item.filecheck_count += 1
@@ -244,14 +281,14 @@ class Task:
                     logger.error(traceback.format_exc())
                 finally:
                     item.save()
-            max_scan_time = P.ModelSetting.get_int('scan_max_scan_time')
+            max_scan_time = P.ModelSetting.get_int('scan_max_scan_time') or 0
             if max_scan_time > 0:
                 scannings = ModelScanItem.get_list_by_status('SCANNING')
                 check_scanning(scannings, max_scan_time)
             # 샤이니 대상 job 상태 확정(F-4) — 주기당 1회 폴링
             ShyniBackend.poll_running()
             #P.logger.warning("파일체크 대기")
-            for i in range(P.ModelSetting.get_int(f"{name}_filecheck_thread_interval")):
+            for i in range(P.ModelSetting.get_int(f"{name}_filecheck_thread_interval") or 60):
                 time.sleep(1)
                 #print(i)
             #time.sleep(60)
@@ -261,7 +298,7 @@ class Task:
         while True:
             try:
                 while True:
-                    if Task.current_scan_count < (max_scan_count := P.ModelSetting.get_int(f"{name}_max_scan_count")):
+                    if Task.current_scan_count < (max_scan_count := P.ModelSetting.get_int(f"{name}_max_scan_count") or 1):
                         break
                     # 스캔 카운터의 정상 여부 확인
                     logger.debug(f"최대 스캔 수 도달: {Task.current_scan_count} / {max_scan_count}")
