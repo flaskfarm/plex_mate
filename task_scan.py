@@ -150,8 +150,8 @@ class Task:
                                         logger.error(traceback.format_exc())
                                 '''
 
-                            for queue_item in ModelScanItem.queue_list:
-                                if queue_item.scan_folder == item.scan_folder and queue_item.mode == item.mode:
+                            for _, queued_scan_folder, queued_mode in ModelScanItem.queue_list:
+                                if queued_scan_folder == item.scan_folder and queued_mode == item.mode:
                                     item.set_status("FINISH_ALREADY_IN_QUEUE")
                                     break
                             else:
@@ -228,8 +228,8 @@ class Task:
                                 item.scan_folder = item.target.rsplit('/', 1)[0]
                             else:
                                 item.scan_folder = item.target.rsplit('\\', 1)[0]
-                        for queue_item in ModelScanItem.queue_list:
-                            if queue_item.scan_folder == item.scan_folder and queue_item.mode == item.mode:
+                        for _, queued_scan_folder, queued_mode in ModelScanItem.queue_list:
+                            if queued_scan_folder == item.scan_folder and queued_mode == item.mode:
                                 item.set_status("FINISH_ALREADY_IN_QUEUE")
                                 break
                         else:
