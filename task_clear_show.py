@@ -116,7 +116,12 @@ class Task(object):
         if data['command'] == 'start0':
             return
         combined_xmlpath = os.path.join(data['meta']['metapath'], 'Contents', '_combined', 'Info.xml')
-        
+        # 같은 guid의 쇼가 다른 섹션에도 있으면 메타데이터 폴더(hash)를 함께 쓴다.
+        # 이 쇼 기준으로 폴더 파일을 지우면 다른 쪽 쇼가 가리키는 이미지가 사라진다.
+        data['shared_with'] = [row[0] for row in con.execute(
+            'SELECT id FROM metadata_items WHERE metadata_type = 2 AND hash = ? AND id != ?', (data['db']['hash'], data['db']['id']))]
+        data['pending_media'] = []
+
         data['use_filepath'] = []
         data['remove_filepath'] = []
         data['seasons'] = {}
@@ -210,6 +215,9 @@ class Task(object):
 
                             mediapath = os.path.join(P.ModelSetting.get('base_path_media'), 'localhost', media_hash[0], f"{media_hash[1:]}.bundle", 'Contents', 'Thumbnails', 'thumb1.jpg')
                             if os.path.exists(mediapath):
+                                # 다른 영상과 같은 미디어 번들이면 이 에피소드 기준으로 지우지 않는다
+                                if con.execute('SELECT count(*) FROM media_parts WHERE hash = ?', (media_hash,)).fetchone()[0] > 1:
+                                    continue
                                 #P.logger.warning("미디오 썸네일 있음")
                                 episode['media_list'].append(mediapath)
                                 data['media']['total'] = os.path.getsize(mediapath)
@@ -255,11 +263,10 @@ class Task(object):
                         except: pass
                         if data['command'] in ['start3', 'start4']:
                             for mediafilepath in episode['media_list']:
-                                if os.path.exists(mediapath):
-                                    data['media']['remove'] += os.path.getsize(mediapath)
-                                    if data['dryrun'] == False:
-                                        #P.logger.debug(f"미디어 썸네일 삭제 : {mediapath}")
-                                        os.remove(mediapath)
+                                if os.path.exists(mediafilepath):
+                                    data['media']['remove'] += os.path.getsize(mediafilepath)
+                                    # DB가 http 주소로 바뀐 뒤에만 지운다 (아래 쿼리 실행 결과 확인 후)
+                                    data['pending_media'].append(mediafilepath)
                     elif episode['process']['thumb']['db'] == '':
                         if len(episode['media_list']) > 0:
                             tmp = f"media://{episode['media_list'][0].split('localhost/')[1]}"
@@ -267,18 +274,26 @@ class Task(object):
                             query += f'UPDATE metadata_items SET user_thumb_url = "{tmp}" WHERE id = {episode["db"]["id"]};\n'
 
                     
-                    if data['dryrun'] == False and data['command'] in ['start3', 'start4']:
-                        for mediafilepath in episode['media_list']:
-                            content_folder = os.path.dirname(os.path.dirname(mediafilepath))
-                            for base, folders, files in os.walk(content_folder):
-                                if not folders and not files:
-                                    os.removedirs(base)
 
 
         #P.logger.error(data['command'])
         #P.logger.error(query)
+        data['db_updated'] = True
         if query != '' and data['dryrun'] == False:
-            PlexDBHandle.execute_query(query)
+            ret = PlexDBHandle.execute_query(query)
+            # 성공하면 빈 문자열. 'database is locked' 등 오류가 남으면 파일을 지우지 않는다.
+            data['db_updated'] = ret == ''
+            if not data['db_updated']:
+                P.logger.warning(f"DB 갱신 실패로 파일 삭제를 건너뜀: {data['db']['title']} ({data['db']['id']}) {str(ret)[:200]}")
+
+        if data['dryrun'] == False and data['db_updated']:
+            for mediafilepath in data['pending_media']:
+                if os.path.exists(mediafilepath):
+                    os.remove(mediafilepath)
+                content_folder = os.path.dirname(os.path.dirname(mediafilepath))
+                for base, folders, files in os.walk(content_folder, topdown=False):
+                    if not folders and not files:
+                        os.removedirs(base)
 
 
         # 2022-11-22 
@@ -352,6 +367,12 @@ class Task(object):
 
         #P.logger.error(data['meta']['remove'] )
         #P.logger.error(data['use_filepath'] )
+
+        if data['shared_with'] or not data['db_updated']:
+            reason = f"다른 쇼와 메타데이터 폴더 공유 {data['shared_with']}" if data['shared_with'] else 'DB 갱신 실패'
+            P.logger.warning(f"메타데이터 파일 삭제 건너뜀 ({reason}): {data['db']['title']} ({data['db']['id']})")
+            data['skipped_reason'] = reason
+            return
 
         for base, folders, files in os.walk(data['meta']['metapath']):
             for f in files:

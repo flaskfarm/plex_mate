@@ -75,6 +75,10 @@ class Task(object):
         if data['command'] == 'start1':
             return
         
+        # 같은 guid의 영화가 다른 섹션에도 있으면 메타데이터 폴더(hash)를 함께 쓴다 → 폴더 파일은 지우지 않는다
+        shared_with = [row[0] for row in con.execute(
+            'SELECT id FROM metadata_items WHERE metadata_type = 1 AND hash = ? AND id != ?', (data['db']['hash'], data['db']['id']))]
+
         # 2단계 TAG별 URL 로 세팅하고 xml 파일만 남기고 제거
         if data['dryrun'] == False:
             sql = 'UPDATE metadata_items SET '
@@ -87,10 +91,18 @@ class Task(object):
                 sql = sql.strip().rstrip(',')
                 sql += '  WHERE id = {} ;'.format(data['db']['id'])
                 sql_filepath = os.path.join(path_data, 'tmp', f"movie_{data['db']['id']}.sql")
-                PlexDBHandle.execute_query(sql, sql_filepath=sql_filepath)
+                ret = PlexDBHandle.execute_query(sql, sql_filepath=sql_filepath)
+                if ret != '':
+                    # DB가 http 주소로 바뀌지 않았는데 파일을 지우면 포스터가 사라진다
+                    logger.warning(f"DB 갱신 실패로 파일 삭제를 건너뜀: {data['db']['title']} ({data['db']['id']}) {str(ret)[:200]}")
+                    return
             else:
                 Task.process_agent_none(data, con, cur)
         
+        if shared_with:
+            logger.warning(f"메타데이터 파일 삭제 건너뜀 (다른 영화와 폴더 공유 {shared_with}): {data['db']['title']} ({data['db']['id']})")
+            return
+
         c_upload_path = os.path.join(data['meta']['metapath'], 'Uploads')
         if os.path.exists(c_upload_path):
             if data['dryrun'] == False:
