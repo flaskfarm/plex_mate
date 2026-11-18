@@ -124,22 +124,22 @@ class ModelScanItem(ModelBase):
 
     ### only for queue
     def init_for_queue(self):
-        self.queue_list.append(self)
+        # 전역 큐에는 Session 수명에 종속되는 ORM 객체 대신 식별 정보만 보관
+        self.queue_list.append((self.id, self.scan_folder, self.mode))
 
     @classmethod
-    def get_by_id_in_queue(cls, id):
-        for _ in cls.queue_list:
-            if _.id == int(id):
-                return _
+    def get_by_id_in_queue(cls, item_id):
+        item_id = int(item_id)
+        if any(queued_id == item_id for queued_id, _, _ in cls.queue_list):
+            return cls.get_by_id(item_id)
 
     @classmethod
-    def remove_in_queue(cls, db_item):
-        ret = []
-        for _ in cls.queue_list:
-            if _.id == db_item.id:
-                continue
-            ret.append(_)
-        cls.queue_list = ret
+    def remove_in_queue(cls, item_id):
+        item_id = int(item_id)
+        cls.queue_list = [
+            entry for entry in cls.queue_list
+            if entry[0] != item_id
+        ]
 
 
 
@@ -162,7 +162,7 @@ class ModelScanItem(ModelBase):
                 except Exception as e:
                     logger.error(f'Exception:{str(e)}')
                     #logger.error(traceback.format_exc())
-            self.remove_in_queue(self)
+            self.remove_in_queue(self.id)
         if save:
             self.save()
 

@@ -455,7 +455,7 @@ def check_scanning(scannings: list, max_scan_time: int) -> None:
         if int((datetime.datetime.now() - scan.process_start_time).total_seconds() / 60) >= max_scan_time:
             P.logger.warning(f'스캔 시간 {max_scan_time}분 초과: {scan.target}')
             P.logger.warning(f'스캔 QUEUE에서 제외: {scan.target}')
-            scan.remove_in_queue(scan)
+            scan.remove_in_queue(scan.id)
             scan.set_status('FINISH_TIMEOVER', save=True)
 
 
