@@ -265,8 +265,7 @@ def plex_api(func: Callable) -> Callable:
         params: dict = func(*args, **kwds)
         key = params.pop('key', '/identity')
         method = params.pop('method', 'GET')
-        params['X-Plex-Token'] = P.ModelSetting.get('base_token')
-        headers = {'Accept': 'application/json'}
+        headers = {'Accept': 'application/json', 'x-plex-token': P.ModelSetting.get('base_token')}
         return parse_json_response(request(method, f'{P.ModelSetting.get("base_url")}{key}', params=params, headers=headers))
     return wrapper
 
@@ -275,7 +274,7 @@ def plex_api(func: Callable) -> Callable:
 def plex_refresh(section: int, path: Optional[str] = None, force: bool = False) -> dict[str, str]:
     params = {
         'key': f'/library/sections/{section}/refresh',
-        'method': 'GET',
+        'method': 'POST',
     }
     if force:
         params['force'] = 1

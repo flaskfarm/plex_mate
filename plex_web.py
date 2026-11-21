@@ -12,30 +12,14 @@ class PlexWebHandle(object):
     @classmethod
     def system_agents(cls, url=None, token=None):
         if url is None:
-                url = P.ModelSetting.get('base_plex_url')
+            url = P.ModelSetting.get('base_plex_url')
         if token is None:
             token = P.ModelSetting.get('base_token')
         #url = f'{url}/:/prefs?X-Plex-Token={token}'
-        url = f'{url}/system/agents?X-Plex-Token={token}'
+        url = f'{url}/system/agents'
         logger.warning(url)
-        res = requests.get(url, headers={'Accept':'application/json'})
+        res = requests.get(url, headers=cls.get_headers_with_token(headers={'Accept':'application/json'}))
         return res.text
-
-
-
-    @classmethod
-    def get_sjva_version(cls, url=None, token=None):
-        try:
-            if url is None:
-                url = P.ModelSetting.get('base_plex_url')
-            if token is None:
-                token = P.ModelSetting.get('base_token')
-            url = f'{url}/:/plugins/com.plexapp.plugins.SJVA/function/version?X-Plex-Token={token}'
-            page = requests.get(url)
-            return page.text
-        except Exception as e: 
-            logger.error(f"Exception:{str(e)}")
-            logger.error(traceback.format_exc())
 
     @classmethod
     def get_sjva_agent_version(cls, url, token):
@@ -44,50 +28,49 @@ class PlexWebHandle(object):
                 url = P.ModelSetting.get('base_plex_url')
             if token is None:
                 token = P.ModelSetting.get('base_token')
-            url = f'{url}/:/plugins/com.plexapp.agents.sjva_agent/function/version?X-Plex-Token={token}'
-            page = requests.get(url)
+            url = f'{url}/:/plugins/com.plexapp.agents.sjva_agent/function/version'
+            page = requests.get(url, headers=cls.get_headers_with_token(headers={'x-plex-token': token}))
             return page.text
-        except Exception as e: 
-            logger.error(f"Exception:{str(e)}")
-            logger.error(traceback.format_exc())
+        except Exception:
+            logger.exception("url='%s", url)
     
     @classmethod
     def refresh(cls, movie_item):
         try:
-            url = f"{P.ModelSetting.get('base_url')}/library/metadata/{movie_item['id']}/refresh?X-Plex-Token={P.ModelSetting.get('base_token')}"
-            ret = requests.put(url)
-        except Exception as e: 
-            logger.error(f"Exception:{str(e)}")
-            logger.error(traceback.format_exc())
+            url = f"{P.ModelSetting.get('base_url')}/library/metadata/{movie_item['id']}/refresh"
+            ret = requests.put(url, headers=cls.get_headers_with_token())
+            ret.raise_for_status()
+        except Exception:
+            logger.exception("item=%s", getattr(movie_item, "id"))
     
     @classmethod
     def refresh_by_id(cls, id):
         try:
-            url = f"{P.ModelSetting.get('base_url')}/library/metadata/{id}/refresh?X-Plex-Token={P.ModelSetting.get('base_token')}"
-            ret = requests.put(url)
-        except Exception as e: 
-            logger.error(f"Exception:{str(e)}")
-            logger.error(traceback.format_exc())
+            url = f"{P.ModelSetting.get('base_url')}/library/metadata/{id}/refresh"
+            ret = requests.put(url, headers=cls.get_headers_with_token())
+            ret.raise_for_status()
+        except Exception:
+            logger.exception("id=%s", id)
     
 
     @classmethod
     def analyze_by_id(cls, id):
         try:
-            url = f"{P.ModelSetting.get('base_url')}/library/metadata/{id}/analyze?X-Plex-Token={P.ModelSetting.get('base_token')}"
-            ret = requests.put(url)
-        except Exception as e: 
-            logger.error(f"Exception:{str(e)}")
-            logger.error(traceback.format_exc())
+            url = f"{P.ModelSetting.get('base_url')}/library/metadata/{id}/analyze"
+            ret = requests.put(url, headers=cls.get_headers_with_token())
+            ret.raise_for_status()
+        except Exception:
+            logger.exception("id=%s", id)
 
 
     @classmethod
     def section_scan(cls, library_section_id):
         try:
-            url = f"{P.ModelSetting.get('base_url')}/library/sections/{library_section_id}/refresh?X-Plex-Token={P.ModelSetting.get('base_token')}"
-            ret = requests.get(url)
-        except Exception as e: 
-            logger.error(f"Exception:{str(e)}")
-            logger.error(traceback.format_exc())
+            url = f"{P.ModelSetting.get('base_url')}/library/sections/{library_section_id}/refresh"
+            ret = requests.post(url, headers=cls.get_headers_with_token())
+            ret.raise_for_status()
+        except Exception:
+            logger.exception("section_id=%s", library_section_id)
     
 
     @classmethod
@@ -102,13 +85,13 @@ class PlexWebHandle(object):
                 'uri':f"server://{P.ModelSetting.get('base_machine')}/com.plexapp.plugins.library/library/metadata/{metadata_id}",
             }
             url += urllib.parse.urlencode(data)
-            ret = requests.post(url, headers={'X-Plex-Token': P.ModelSetting.get('base_token')}, data=data)
+            ret = requests.post(url, headers=cls.get_headers_with_token(), data=data)
+            ret.raise_for_status()
             query = f"SELECT id FROM metadata_items WHERE title = '{playlist_title}' AND metadata_type = 15"
             data = PlexDBHandle.select(query)
             return data[-1]['id']
-        except Exception as e: 
-            logger.error(f"Exception:{str(e)}")
-            logger.error(traceback.format_exc())
+        except Exception:
+            logger.exception("metadata_id=%s", metadata_id)
     
     @classmethod
     def add_playlist(cls, metadata_id, playlist_title=None, playlist_id=None):
@@ -128,37 +111,33 @@ class PlexWebHandle(object):
                 'uri':f"server://{P.ModelSetting.get('base_machine')}/com.plexapp.plugins.library/library/metadata/{metadata_id}",
             }
             url += urllib.parse.urlencode(data)
-            ret = requests.put(url, headers={'X-Plex-Token': P.ModelSetting.get('base_token')})
-            #logger.error(d(ret))
+            ret = requests.put(url, headers=cls.get_headers_with_token())
+            ret.raise_for_status()
             return playlist_id
-        except Exception as e: 
-            logger.error(f"Exception:{str(e)}")
-            logger.error(traceback.format_exc())
+        except Exception:
+            logger.exception("metadata_id=%s", metadata_id)
 
     @classmethod
     def path_scan(cls, library_section_id, path: str) -> None:
         try:
             url = f"{P.ModelSetting.get('base_url')}/library/sections/{library_section_id}/refresh"
             params = {
-                'X-Plex-Token': P.ModelSetting.get('base_token'),
                 'path': path,
             }
-            response = requests.request('GET', url, params=params)
-            if not str(response.status_code)[0] == '2':
-                logger.error(f'스캔 전송 실패: {response.text}')
-        except Exception as e: 
-            logger.error(f"Exception:{str(e)}")
-            logger.error(traceback.format_exc())
+            response = requests.request('POST', url, params=params, headers=cls.get_headers_with_token())
+            response.raise_for_status()
+        except Exception:
+            logger.exception("section_id=%s", library_section_id)
     
     # 2024.10.10 섹션 모든메타새로고침 
     @classmethod
     def refresh_section_force(cls, section_id):
         try:
-            url = f"{P.ModelSetting.get('base_url')}/library/sections/{section_id}/refresh?force=1&X-Plex-Token={P.ModelSetting.get('base_token')}"
-            res = requests.get(url)
-        except Exception as e: 
-            logger.error(f"Exception:{str(e)}")
-            logger.error(traceback.format_exc())
+            url = f"{P.ModelSetting.get('base_url')}/library/sections/{section_id}/refresh"
+            res = requests.post(url, params={'force': 1}, headers=cls.get_headers_with_token())
+            res.raise_for_status()
+        except Exception:
+            logger.exception("section_id=%s", section_id)
 
     @classmethod
     def manual_refresh(cls, meta_id: int, plugin_instance=None) -> dict:
@@ -232,7 +211,7 @@ class PlexWebHandle(object):
             headers = {'accept': 'application/json'}
         else:
             url = f"{P.ModelSetting.get('base_url')}/library/metadata/{meta_id}/matches?manual=1&title={quoted_title}&year={year}&agent={provider}&language={lang}"
-            headers = {'x-plex-token': P.ModelSetting.get('base_token'), 'accept': 'application/json'}
+            headers = cls.get_headers_with_token(headers={'accept': 'application/json'})
         try:
             response = requests.get(url, headers=headers)
             if response.status_code == 200:
@@ -252,8 +231,8 @@ class PlexWebHandle(object):
     @classmethod
     def get_metadata(cls, guid) -> dict | None:
         try:
-            url = f"https://metadata.provider.plex.tv/library/metadata/{guid.rsplit('/')[-1]}?X-Plex-Token={P.ModelSetting.get('base_token')}"
-            response = requests.get(url, headers={'Accept': 'application/json'})
+            url = f"https://metadata.provider.plex.tv/library/metadata/{guid.rsplit('/')[-1]}"
+            response = requests.get(url, headers=cls.get_headers_with_token(headers={'accept': 'application/json'}))
             if response.status_code == 200:
                 data = response.json()
                 return ((data.get('MediaContainer') or {}).get('Metadata') or [{}])[0]
@@ -261,3 +240,10 @@ class PlexWebHandle(object):
                 P.logger.error(f"플렉스 메타데이터를 가져올 수 없습니다: status={response.status_code}")
         except Exception:
             P.logger.exception(f"{guid=}")
+
+    @classmethod
+    def get_headers_with_token(cls, headers: dict | None = None) -> dict:
+        base_headers = {'x-plex-token': P.ModelSetting.get('base_token')}
+        if headers:
+            base_headers |= headers
+        return base_headers
