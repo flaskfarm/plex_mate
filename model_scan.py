@@ -122,23 +122,6 @@ class ModelScanItem(ModelBase):
         self.filecheck_count = 0
 
 
-
-    @classmethod
-    def make_query(cls, req, order='desc', search='', option1='all', option2='all'):
-        with F.app.app_context():
-            query = F.db.session.query(cls)
-            query = cls.make_query_search(query, search, cls.target)
-            if option1 == 'completed':
-                query = query.filter_by(completed=True)
-            elif option1 == 'incompleted':
-                query = query.filter_by(completed=False)
-            if order == 'desc':
-                query = query.order_by(desc(cls.id))
-            else:
-                query = query.order_by(cls.id)
-            return query
-
-
     @classmethod
     def get_incompleted(cls):
         with F.app.app_context():
