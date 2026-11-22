@@ -1,8 +1,33 @@
+from urllib.parse import urlsplit, urlunsplit
+
 from sqlalchemy import and_, desc, func, not_, or_
 
 from .setup import *
 
 logger = P.logger
+
+_API_PATH_RE = re.compile(r'/[\w-]+/api(?:/[\w-]+){1,2}', re.ASCII)
+
+
+def _origin(url: str):
+    try:
+        p = urlsplit(url or '')
+        if p.scheme.lower() not in ('http', 'https') or not p.hostname:
+            return None
+        if p.username or p.password:
+            return None
+        port = p.port or (443 if p.scheme.lower() == 'https' else 80)
+    except ValueError:
+        return None
+    return (p.scheme.lower(), p.hostname.lower(), port)
+
+
+def _is_api_url(url: str) -> bool:
+    try:
+        path = urlsplit(url or '').path
+    except ValueError:
+        return False
+    return _API_PATH_RE.fullmatch(path) is not None
 
 
 class ModelScanItem(ModelBase):
@@ -157,10 +182,25 @@ class ModelScanItem(ModelBase):
             self.completed_time = datetime.now()
             if self.callback_id != None and self.callback_url != None:
                 try:
-                    ret = requests.post(self.callback_url, data=self.as_dict()).text
-                    logger.debug(f'scan callback : {ret}')
+                    data = self.as_dict()
+                    url = self.callback_url
+                    if F.SystemModelSetting.get_bool('use_apikey'):
+                        server_url = F.SystemModelSetting.get('ddns')
+                        server_origin = _origin(server_url)
+                        callback_origin = _origin(url)
+                        if callback_origin and server_origin and callback_origin == server_origin and _is_api_url(url):
+                            callback = urlsplit(url)
+                            server = urlsplit(server_url)
+                            url = urlunsplit((server.scheme, server.netloc, callback.path, callback.query, ''))
+                            data['apikey'] = F.SystemModelSetting.get('apikey')
+                    response = requests.post(url, data=data, allow_redirects=False, timeout=10)
+                    if response.is_redirect or response.is_permanent_redirect:
+                        logger.warning('scan callback redirected (%s), not followed', response.status_code)
+                    else:
+                        response.raise_for_status()
+                        logger.debug('scan callback : %s', response.text)
                 except Exception as e:
-                    logger.error(f'Exception:{str(e)}')
+                    logger.error('Exception="%s" callback_id=%s', str(e), self.callback_id)
                     #logger.error(traceback.format_exc())
             self.remove_in_queue(self.id)
         if save:
