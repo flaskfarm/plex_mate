@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from .setup import *
 from .extensions import check_scanning, vfs_forget, vfs_refresh
 from .model_scan import ModelScanItem
@@ -15,6 +17,24 @@ class Task:
     scan_thread = None
     filecheck_thread = None
     current_scan_count = 0
+    scan_count_lock = threading.Lock()
+    counted_scan_ids = set()
+
+    @staticmethod
+    def _start_scan(scan_id):
+        scan_id = str(scan_id)
+        with Task.scan_count_lock:
+            if scan_id not in Task.counted_scan_ids:
+                Task.counted_scan_ids.add(scan_id)
+                Task.current_scan_count += 1
+
+    @staticmethod
+    def _finish_scan(scan_id):
+        scan_id = str(scan_id)
+        with Task.scan_count_lock:
+            if scan_id in Task.counted_scan_ids:
+                Task.counted_scan_ids.remove(scan_id)
+                Task.current_scan_count = max(Task.current_scan_count - 1, 0)
 
     @F.celery.task
     def start():
@@ -57,7 +77,6 @@ class Task:
                     try:
                         if item.mode == 'ADD':
                             item.filecheck_count += 1
-                            now = datetime.now()
                             # 샤이니 대상 분기(F절) — FF 마운트의 파일 존재/Plex 준비와 무관하게
                             # 즉시 요청. 파일이 안 보이면 샤이니 서버가 자체적으로 부모 폴더를
                             # non-recursive refresh 하며 대기한다(mode=add + wait).
@@ -105,11 +124,10 @@ class Task:
                                 max_wait_time = P.ModelSetting.get_int("scan_max_wait_time")
                                 if max_wait_time is None:
                                     max_wait_time = 10
-                                if item.created_time + timedelta(minutes=max_wait_time) < now:
+                                if item.created_time + timedelta(minutes=max_wait_time) < datetime.now():
                                     item.set_status("FINISH_TIMEOVER")
                         elif item.mode == 'REFRESH':
                             item.filecheck_count += 1
-                            now = datetime.now()
                             # 샤이니 대상 refresh — Plex 처리와 독립, 존재 게이트 없이 요청
                             ShyniBackend.request_refresh(item)
                             if not P.ModelSetting.get_bool('scan_plex_use'):
@@ -123,29 +141,28 @@ class Task:
                                 else:
                                     item.set_status('FINISH_NOT_FIND_LIBRARY', save=True)
                                     continue
-                                if P.ModelSetting.get_bool('scan_use_vfs_refresh'):
-                                    vfs_refresh(item.target)
-                                if os.path.exists(item.target):
-                                    if os.path.isdir(item.target):
-                                        refresh_target = item.target
-                                    else:
-                                        refresh_target = os.path.dirname((item.target))
-                                    metaid = PlexDBHandle.get_metaid_by_directory(item.section_id, refresh_target)
-                                    if metaid != None:
-                                        PlexWebHandle.refresh_by_id(metaid)
-                                        if item.target.endswith('show.yaml'):
-                                            logger.info(f"[REFRESH] show.yaml 감지 → manual_refresh(meta_id={metaid})")
-                                            PlexWebHandle.manual_refresh(metaid)
-                                        item.set_status('FINISH_REFRESH', save=True)
-                                        continue
-                                    else:
-                                        item.set_status('FINISH_NOT_FIND_IN_LIBRARY', save=True)
+                            if P.ModelSetting.get_bool('scan_use_vfs_refresh'):
+                                vfs_refresh(item.target)
+                            if os.path.exists(item.target):
+                                if os.path.isdir(item.target):
+                                    refresh_target = item.target
                                 else:
-                                    item.set_status('NOT_EXIST', save=True)
+                                    refresh_target = os.path.dirname((item.target))
+                                metaid = PlexDBHandle.get_metaid_by_directory(item.section_id, refresh_target)
+                                if metaid != None:
+                                    PlexWebHandle.refresh_by_id(metaid)
+                                    if item.target.endswith('show.yaml'):
+                                        logger.info(f"[REFRESH] show.yaml 감지 → manual_refresh(meta_id={metaid})")
+                                        PlexWebHandle.manual_refresh(metaid)
+                                    item.set_status('FINISH_REFRESH', save=True)
+                                    continue
+                                else:
+                                    item.set_status('FINISH_NOT_FIND_IN_LIBRARY', save=True)
+                            else:
+                                item.set_status('NOT_EXIST', save=True)
 
                         elif item.mode in ['REMOVE_FILE', 'REMOVE_FOLDER']:
                             item.filecheck_count += 1
-                            now = datetime.now()
                             # 샤이니 대상 분기 — 삭제도 서버별 독립 작업(F-4)
                             ShyniBackend.request_scan(item)
                             if not P.ModelSetting.get_bool('scan_plex_use'):
@@ -181,9 +198,9 @@ class Task:
                                 item.set_status("ENQUEUE_REMOVE")
                                 item.init_for_queue()
                                 Task.scan_queue.put(item)
-                            #else:
-                            #    if item.created_time + timedelta(minutes=P.ModelSetting.get_int("scan_max_wait_time")) < now:
-                            #        item.set_status("FINISH_TIMEOVER")
+                        else:
+                            logger.error(f"지원하지 않는 스캔 모드: item={item.id} mode={item.mode}")
+                            item.set_status('FINISH_INVALID_MODE')
                     except Exception as e:
                         logger.error(f"Exception:{str(e)}")
                         logger.error(traceback.format_exc())
@@ -246,53 +263,61 @@ class Task:
         return items
 
     def process_item_add_on_queue(db_item:ModelScanItem):
+        callback_id = f"pm_scan_{uuid4().hex}_{db_item.id}"
         try:
             if db_item.mode == 'ADD' and Task.__check_media_part_data(db_item):
-                pass
+                return
+            Task._start_scan(callback_id)
+            use_web_request = P.ModelSetting.get_bool('scan_use_web_request')
+            scan_web_sections = Task.get_int_list('scan_web_sections')
+            if use_web_request and db_item.section_id and (not scan_web_sections or int(db_item.section_id) in scan_web_sections):
+                threading.Thread(
+                    target=Task.handle_web_scan,
+                    args=(db_item,),
+                    kwargs={'callback_id': callback_id},
+                ).start()
             else:
-                # 기존처럼 웹, 바이너리 구분 없이 스캔 카운터를 증가 (웹 스캔의 증가 여부는 제고 필요)
-                Task.current_scan_count += 1
-                use_web_request = P.ModelSetting.get_bool('scan_use_web_request')
-                scan_web_sections = Task.get_int_list('scan_web_sections')
-                if use_web_request and db_item.section_id and (not scan_web_sections or int(db_item.section_id) in scan_web_sections):
-                    threading.Thread(target=Task.handle_web_scan, args=(db_item,)).start()
-                else:
-                    PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.scan_folder, callback_function=Task.subprcoess_callback_function, callback_id=f"pm_scan_{db_item.id}")
+                PlexBinaryScanner.scan_refresh(db_item.section_id, db_item.scan_folder, callback_function=Task.subprcoess_callback_function, callback_id=callback_id)
         except Exception as e:
             logger.error(f"Exception:{str(e)}")
             logger.error(traceback.format_exc())
+            Task.subprcoess_callback_function(callback_id, "ERROR", str(e))
 
 
-    def handle_web_scan(db_item, max_wait=300, interval=30):
-        Task.subprcoess_callback_function(f"pm_scan_{db_item.id}", "START", "Web scan started")
-        web_target = db_item.scan_folder
-        section_type = db_item.section_type or None
-        if section_type and str(section_type) == "2":
-            try:
-                escaped_folder = db_item.scan_folder.replace("'", "''")
-                query = f"""SELECT root_path FROM section_locations WHERE '{escaped_folder}' LIKE root_path || '%' ORDER BY LENGTH(root_path) DESC LIMIT 1;"""
-                result = PlexDBHandle.select(query)
-                root_path = result[0]['root_path'] if result else None
-                if root_path and os.path.normpath(db_item.scan_folder) != os.path.normpath(root_path):
-                    rel_path = os.path.relpath(db_item.scan_folder, root_path)
-                    parts = rel_path.split(os.sep)
-                    show_name = parts[0]
-                    web_target =  os.path.join(root_path, show_name)
-                    P.logger.debug(f"[handle_web_scan] Adjusted web_target: {web_target}")
-            except Exception as e:
-                logger.error(f"Exception:{str(e)}")
-                logger.error(traceback.format_exc())
-        PlexWebHandle.path_scan(db_item.section_id, web_target)
+    def handle_web_scan(db_item, max_wait=300, interval=30, callback_id=None):
+        callback_id = callback_id or f"pm_scan_{uuid4().hex}_{db_item.id}"
+        try:
+            Task.subprcoess_callback_function(callback_id, "START", "Web scan started")
+            web_target = db_item.scan_folder
+            section_type = db_item.section_type or None
+            if section_type and str(section_type) == "2":
+                try:
+                    escaped_folder = db_item.scan_folder.replace("'", "''")
+                    query = f"""SELECT root_path FROM section_locations WHERE '{escaped_folder}' LIKE root_path || '%' ORDER BY LENGTH(root_path) DESC LIMIT 1;"""
+                    result = PlexDBHandle.select(query)
+                    root_path = result[0]['root_path'] if result else None
+                    if root_path and os.path.normpath(db_item.scan_folder) != os.path.normpath(root_path):
+                        rel_path = os.path.relpath(db_item.scan_folder, root_path)
+                        parts = rel_path.split(os.sep)
+                        show_name = parts[0]
+                        web_target = os.path.join(root_path, show_name)
+                        P.logger.debug(f"[handle_web_scan] Adjusted web_target: {web_target}")
+                except Exception:
+                    logger.exception("웹 스캔 경로 조정 오류")
+            PlexWebHandle.path_scan(db_item.section_id, web_target)
 
-        waited = 0
-        while waited < max_wait:
-            if Task.__check_media_part_data(db_item):
-                Task.subprcoess_callback_function(f"pm_scan_{db_item.id}", "END", "Web scan completed (media found)", web=True)
-                return
-            time.sleep(interval)
-            waited += interval
+            waited = 0
+            while waited < max_wait:
+                if Task.__check_media_part_data(db_item):
+                    Task.subprcoess_callback_function(callback_id, "END", "Web scan completed (media found)", web=True)
+                    return
+                time.sleep(interval)
+                waited += interval
 
-        Task.subprcoess_callback_function(f"pm_scan_{db_item.id}", "END", "Web scan timeout - media not found", web=False)
+            Task.subprcoess_callback_function(callback_id, "END", "Web scan timeout - media not found", web=False)
+        except Exception as e:
+            logger.exception("웹 스캔 오류")
+            Task.subprcoess_callback_function(callback_id, "ERROR", str(e))
 
     def subprcoess_callback_function(call_id, mode, log, web=False):
         logger.debug(f"[{mode}] [{log}]")
@@ -375,4 +400,4 @@ class Task:
         finally:
             match mode:
                 case 'END' | 'ERROR':
-                    Task.current_scan_count = max(Task.current_scan_count - 1, 0)
+                    Task._finish_scan(call_id)
