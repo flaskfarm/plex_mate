@@ -306,6 +306,7 @@ class Task:
                     logger.exception("웹 스캔 경로 조정 오류")
             PlexWebHandle.path_scan(db_item.section_id, web_target)
 
+            # 웹 스캔은 ADD 모드만 고려되어 있음. REMOVE/REFRESH 모드 구현 필요
             waited = 0
             while waited < max_wait:
                 if Task.__check_media_part_data(db_item):
