@@ -12,6 +12,13 @@
   * 스캔
 
 ## Changelog
+- 1.2.35 (2026.10.02)
+    - 기본 설정: Plex DB 자동 백업 스케쥴링 및 보관 주기 관리 기능 추가
+        - 크론(Cron) 표현식 및 주기 기반 DB 자동 백업 스케줄러 등록 지원
+        - 플러그인 시작 시 스케줄러 자동 실행 옵션 추가
+        - DB 백업 최대 보관 개수 설정 및 초과 시 가장 오래된 백업 파일 자동 정리(retention) 기능 구현
+        - DB 백업 즉시 실행 버튼 추가
+
 - 1.2.34 (2026.03.28)
     - DB 툴: Plex slug 및 clear logo 업데이트 추가
         - API endpoint: `/plex_mate/api/tool/plex_exclusive`

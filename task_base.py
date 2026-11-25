@@ -1,3 +1,4 @@
+import re
 import time
 import pathlib
 import urllib.parse
@@ -33,11 +34,47 @@ class Task(object):
                 tmp = os.path.splitext(basename)
                 newfilename = f"{tmp[0]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{tmp[1]}"
                 if P.ModelSetting.get_bool('base_backup_location_mode'):
-                    newpath = os.path.join(dirname, newfilename)
+                    backup_dir = dirname
                 else:
-                    newpath = os.path.join(P.ModelSetting.get('base_backup_location_manual'), newfilename)
+                    backup_dir = P.ModelSetting.get('base_backup_location_manual')
+                    if not backup_dir or not os.path.exists(backup_dir):
+                        backup_dir = dirname
+                os.makedirs(backup_dir, exist_ok=True)
+                newpath = os.path.join(backup_dir, newfilename)
                 shutil.copy(db_path, newpath)
-                ret = {'ret':'success', 'target':newpath}
+
+                removed_files = []
+                try:
+                    max_count = P.ModelSetting.get_int('base_db_backup_max_count')
+                except Exception:
+                    max_count = 0
+
+                if max_count > 0 and os.path.exists(backup_dir):
+                    try:
+                        pattern = re.compile(rf"^{re.escape(tmp[0])}_\d{{8}}_\d{{6}}{re.escape(tmp[1])}$")
+                        backup_files = []
+                        for fname in os.listdir(backup_dir):
+                            if pattern.match(fname):
+                                fpath = os.path.join(backup_dir, fname)
+                                if os.path.isfile(fpath):
+                                    backup_files.append((fpath, fname, os.path.getmtime(fpath)))
+                        # 최신순 정렬 (수정일시 및 파일명 기준 내림차순)
+                        backup_files.sort(key=lambda x: (x[2], x[1]), reverse=True)
+                        if len(backup_files) > max_count:
+                            for fpath, fname, _ in backup_files[max_count:]:
+                                try:
+                                    os.remove(fpath)
+                                    removed_files.append(fpath)
+                                    logger.info(f"오래된 백업 삭제: {fpath}")
+                                except Exception as rm_e:
+                                    logger.error(f"오래된 백업 삭제 실패 ({fpath}): {rm_e}")
+                    except Exception as clean_e:
+                        logger.error(f"오래된 백업 정리 중 오류 발생: {clean_e}")
+                        logger.error(traceback.format_exc())
+
+                ret = {'ret':'success', 'target':newpath, 'removed':removed_files}
+            else:
+                ret = {'ret':'fail', 'log':'DB 파일이 존재하지 않습니다.'}
         except Exception as e: 
             logger.error(f'Exception:{str(e)}')
             logger.error(traceback.format_exc())
